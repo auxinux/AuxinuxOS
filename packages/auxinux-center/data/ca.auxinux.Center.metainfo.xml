@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>ca.auxinux.Center</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <name>AuxiNux OS Center</name>
+  <name xml:lang="fr">AuxiNux OS Center</name>
+  <summary>Software store, sources and system information for AuxiNux OS</summary>
+  <summary xml:lang="fr">Magasin d'applications, sources et infos système pour AuxiNux OS</summary>
+  <description>
+    <p>
+      AuxiNux OS Center is the home application store for AuxiNux OS. It searches
+      and installs applications with Flathub as the default source and the AuxiNux
+      DEB repository as an alternative, manages software sources (enable, disable,
+      add repositories such as Docker), and reports system information.
+    </p>
+    <p xml:lang="fr">
+      AuxiNux OS Center est le magasin d'applications maison d'AuxiNux OS. Il
+      recherche et installe des applications avec Flathub comme source par défaut
+      et le dépôt AuxiNux DEB en alternative, gère les sources logicielles
+      (activer, désactiver, ajouter un dépôt comme Docker) et affiche les
+      informations système.
+    </p>
+  </description>
+  <launchable type="desktop-id">ca.auxinux.Center.desktop</launchable>
+  <categories>
+    <category>System</category>
+    <category>Settings</category>
+  </categories>
+  <provides>
+    <binary>auxinux-center</binary>
+  </provides>
+  <url type="homepage">https://auxinux.ca/</url>
+  <developer id="ca.auxinux">
+    <name>AuxiNux</name>
+  </developer>
+  <content_rating type="oars-1.1" />
+  <releases>
+    <release version="0.1.0" date="2026-06-26">
+      <description>
+        <p>First release: Apps, Sources, Configuration and System sections.</p>
+      </description>
+    </release>
+  </releases>
+</component>

@@ -1,0 +1,16 @@
+{
+  "MetricsReportingEnabled": false,
+  "UrlKeyedAnonymizedDataCollectionEnabled": false,
+  "SafeBrowsingExtendedReportingEnabled": false,
+  "SearchSuggestEnabled": false,
+  "SpellCheckServiceEnabled": false,
+  "PasswordLeakDetectionEnabled": false,
+  "BraveP3AEnabled": false,
+  "BraveStatsPingEnabled": false,
+  "BraveWebDiscoveryEnabled": false,
+  "SyncDisabled": true,
+  "BraveRewardsDisabled": true,
+  "BraveWalletDisabled": true,
+  "BraveVPNDisabled": true,
+  "BraveAIChatEnabled": false
+}

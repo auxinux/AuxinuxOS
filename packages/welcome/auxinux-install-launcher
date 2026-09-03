@@ -1,0 +1,48 @@
+#!/bin/sh
+# Launches the Calamares installer from the AuxiNuxOS live COSMIC (Wayland)
+# session.
+#
+# The Debian wrapper `calamares-install-debian` was written for X11: it runs
+# `pkexec calamares` and grants access with `xhost`. Under COSMIC/Wayland that
+# fails silently -- pkexec scrubs the environment, so Calamares starts as root
+# with no DISPLAY/WAYLAND_DISPLAY and never shows a window (the reported "the
+# icon does nothing when clicked"). We instead:
+#   * run Calamares through Xwayland (QT_QPA_PLATFORM=xcb), which COSMIC
+#     provides;
+#   * elevate with sudo -- the live user has passwordless sudo, so this needs
+#     no polkit agent (COSMIC ships none in the session);
+#   * forward DISPLAY and grant the root user access to the X server.
+set -eu
+
+export QT_AUTO_SCREEN_SCALE_FACTOR=1
+
+# COSMIC starts Xwayland lazily; DISPLAY is normally :0 in the session.
+DISPLAY="${DISPLAY:-:0}"
+export DISPLAY
+
+# Make sure an X server is actually answering before we grant access and
+# elevate; otherwise tell the user instead of failing invisibly.
+if ! xset q >/dev/null 2>&1; then
+    # Give Xwayland a moment in case the session just started.
+    sleep 2
+    if ! xset q >/dev/null 2>&1; then
+        notify-send "Installateur AuxiNuxOS" \
+            "Impossible de joindre l'affichage graphique (Xwayland)." 2>/dev/null || true
+        echo "no X display available (Xwayland)" >&2
+        exit 1
+    fi
+fi
+
+# Stale fstab left by live-boot confuses Calamares partitioning.
+sudo mv /etc/fstab /etc/fstab.orig.calamares 2>/dev/null || true
+
+# Let the root-owned Calamares process connect to our X server.
+xhost +SI:localuser:root >/dev/null 2>&1 || xhost + >/dev/null 2>&1 || true
+
+sudo -E env DISPLAY="${DISPLAY}" QT_QPA_PLATFORM=xcb \
+    QT_AUTO_SCREEN_SCALE_FACTOR=1 calamares || true
+
+xhost -SI:localuser:root >/dev/null 2>&1 || true
+
+# Restore the fstab we moved aside.
+sudo mv /etc/fstab.orig.calamares /etc/fstab 2>/dev/null || true

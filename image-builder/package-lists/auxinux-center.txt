@@ -1,0 +1,7 @@
+# Dependances d'execution QML d'AuxiNux OS Center (Kirigami / Qt6 Quick).
+# Generalement deja tirees par le bureau Plasma 6; listees ici pour reference.
+# Installees de maniere toleree par install-auxinux-center.sh.
+qml6-module-org-kde-kirigami
+qml6-module-qtquick-controls
+qml6-module-qtquick-layouts
+qml6-module-qtquick-window

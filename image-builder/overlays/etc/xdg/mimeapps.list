@@ -1,0 +1,4 @@
+[Default Applications]
+application/x-ms-dos-executable=auxinux-windows-wizard.desktop
+application/x-msi=auxinux-windows-wizard.desktop
+application/x-ms-shortcut=auxinux-windows-wizard.desktop

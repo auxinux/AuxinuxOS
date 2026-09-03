@@ -1,0 +1,5 @@
+[FlatpakBackend]
+Enabled=true
+
+[PackageKitBackend]
+Enabled=true

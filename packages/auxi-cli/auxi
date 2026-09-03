@@ -1,0 +1,284 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+APT_CONF="/etc/auxinux/apt.conf"
+APT_REAL_DIR="/usr/lib/auxinux/apt-real"
+
+is_english() {
+  local locale_chain="${LC_ALL:-}|${LC_MESSAGES:-}|${LANGUAGE:-}|${LANG:-}"
+  [[ "${locale_chain}" =~ (^|[|:])en([_.]|$) ]]
+}
+
+say() {
+  local fr="$1"
+  local en="$2"
+  if is_english; then
+    printf '%s\n' "${en}"
+  else
+    printf '%s\n' "${fr}"
+  fi
+}
+
+say_err() {
+  local fr="$1"
+  local en="$2"
+  if is_english; then
+    printf '%s\n' "${en}" >&2
+  else
+    printf '%s\n' "${fr}" >&2
+  fi
+}
+
+usage() {
+  if is_english; then
+    cat <<'EOF'
+auxi - AuxiNux OS Edition-Normal administration command
+
+Usage:
+  auxi update [--deb|--flatpak]
+  auxi upgrade [--deb|--flatpak]
+  auxi search [--deb|--flatpak] TERM
+  auxi install [--deb|--flatpak] PACKAGE_OR_APP
+  auxi uninstall [--deb|--flatpak] PACKAGE_OR_APP
+  auxi purge PACKAGE
+  auxi clean
+  auxi autoclean
+  auxi set apt=true|false
+  auxi status
+EOF
+  else
+    cat <<'EOF'
+auxi - commande d'administration AuxiNux OS Edition-Normal
+
+Usage:
+  auxi update [--deb|--flatpak]
+  auxi upgrade [--deb|--flatpak]
+  auxi search [--deb|--flatpak] TERME
+  auxi install [--deb|--flatpak] PAQUET_OU_APP
+  auxi uninstall [--deb|--flatpak] PAQUET_OU_APP
+  auxi purge PAQUET
+  auxi clean
+  auxi autoclean
+  auxi set apt=true|false
+  auxi status
+EOF
+  fi
+}
+
+require_root_for_config() {
+  if [[ "${EUID}" -ne 0 ]]; then
+    say_err \
+      "Cette action doit etre executee avec sudo: sudo auxi $*" \
+      "This action must be run with sudo: sudo auxi $*"
+    exit 1
+  fi
+}
+
+require_root_for_deb() {
+  if [[ "${EUID}" -ne 0 ]]; then
+    say_err \
+      "Les operations DEB doivent etre executees avec sudo." \
+      "DEB operations must be run with sudo."
+    say_err \
+      "Exemple: sudo auxi $*" \
+      "Example: sudo auxi $*"
+    exit 1
+  fi
+}
+
+apt_real() {
+  # Toujours appeler le vrai binaire APT directement.
+  # Ne jamais retomber sur command -v: cela resoudrait le wrapper
+  # /usr/bin/apt-get qui, avec APT_ENABLED=0, bloquerait auxi lui-meme.
+  local name="$1"
+  if [[ -x "${APT_REAL_DIR}/${name}" ]]; then
+    echo "${APT_REAL_DIR}/${name}"
+  else
+    say_err \
+      "Binaire APT introuvable: ${APT_REAL_DIR}/${name}" \
+      "APT binary not found: ${APT_REAL_DIR}/${name}"
+    say_err \
+      "Installation auxi incomplete; verifiez install-auxi-cli.sh." \
+      "Incomplete auxi installation; check install-auxi-cli.sh."
+    exit 70
+  fi
+}
+
+apt_enabled() {
+  [[ -r "${APT_CONF}" ]] && grep -Eq '^APT_ENABLED=1$' "${APT_CONF}"
+}
+
+set_apt() {
+  require_root_for_config set "apt=$1"
+  install -d -m 0755 /etc/auxinux
+  case "$1" in
+    true|1|yes)
+      printf 'APT_ENABLED=1\n' >"${APT_CONF}"
+      say \
+        "APT direct reactive. La commande recommandee reste auxi." \
+        "Direct APT re-enabled. The recommended command remains auxi."
+      ;;
+    false|0|no)
+      printf 'APT_ENABLED=0\n' >"${APT_CONF}"
+      say \
+        "APT direct masque. Utilisez auxi pour les operations utilisateur." \
+        "Direct APT hidden. Use auxi for user package operations."
+      ;;
+    *)
+      say_err \
+        "Valeur invalide: apt=$1" \
+        "Invalid value: apt=$1"
+      exit 64
+      ;;
+  esac
+}
+
+select_mode() {
+  MODE="both"
+  if [[ "${1:-}" == "--deb" ]]; then
+    MODE="deb"
+    shift
+  elif [[ "${1:-}" == "--flatpak" ]]; then
+    MODE="flatpak"
+    shift
+  fi
+  ARGS=("$@")
+}
+
+run_update() {
+  select_mode "$@"
+  if [[ "${MODE}" == "both" || "${MODE}" == "flatpak" ]]; then
+    flatpak update --appstream -y || true
+  fi
+  if [[ "${MODE}" == "both" || "${MODE}" == "deb" ]]; then
+    require_root_for_deb update "$@"
+    "$(apt_real apt-get)" update
+  fi
+}
+
+run_upgrade() {
+  select_mode "$@"
+  if [[ "${MODE}" == "both" || "${MODE}" == "flatpak" ]]; then
+    flatpak update -y
+  fi
+  if [[ "${MODE}" == "both" || "${MODE}" == "deb" ]]; then
+    require_root_for_deb upgrade "$@"
+    "$(apt_real apt-get)" upgrade
+  fi
+}
+
+run_search() {
+  select_mode "$@"
+  local term="${ARGS[0]:-}"
+  if [[ -z "${term}" ]]; then
+    say_err "Recherche manquante." "Missing search term."
+    exit 64
+  fi
+  if [[ "${MODE}" == "both" || "${MODE}" == "flatpak" ]]; then
+    echo "== Flatpak =="
+    flatpak search "${term}" || true
+  fi
+  if [[ "${MODE}" == "both" || "${MODE}" == "deb" ]]; then
+    echo "== DEB =="
+    "$(apt_real apt-cache)" search "${term}" || true
+  fi
+}
+
+run_install() {
+  select_mode "$@"
+  local item="${ARGS[0]:-}"
+  if [[ -z "${item}" ]]; then
+    say_err \
+      "Element a installer manquant." \
+      "Missing package or application to install."
+    exit 64
+  fi
+  if [[ "${MODE}" == "flatpak" ]]; then
+    flatpak install -y flathub "${item}"
+  elif [[ "${MODE}" == "deb" ]]; then
+    require_root_for_deb install "$@"
+    "$(apt_real apt-get)" install "${item}"
+  else
+    if flatpak remote-ls flathub --app 2>/dev/null | awk '{print $1}' | grep -Fxq "${item}"; then
+      flatpak install -y flathub "${item}"
+    else
+      say \
+        "Aucun Flatpak exact trouve pour ${item}; installation DEB." \
+        "No exact Flatpak found for ${item}; using DEB installation."
+      require_root_for_deb install "$@"
+      "$(apt_real apt-get)" install "${item}"
+    fi
+  fi
+}
+
+run_uninstall() {
+  select_mode "$@"
+  local item="${ARGS[0]:-}"
+  if [[ -z "${item}" ]]; then
+    say_err \
+      "Element a desinstaller manquant." \
+      "Missing package or application to uninstall."
+    exit 64
+  fi
+  if [[ "${MODE}" == "flatpak" ]]; then
+    flatpak uninstall -y "${item}"
+  elif [[ "${MODE}" == "deb" ]]; then
+    require_root_for_deb uninstall "$@"
+    "$(apt_real apt-get)" remove "${item}"
+  else
+    require_root_for_deb uninstall "$@"
+    flatpak uninstall -y "${item}" || "$(apt_real apt-get)" remove "${item}"
+  fi
+}
+
+case "${1:-}" in
+  update)
+    shift; run_update "$@"
+    ;;
+  upgrade)
+    shift; run_upgrade "$@"
+    ;;
+  search)
+    shift; run_search "$@"
+    ;;
+  install)
+    shift; run_install "$@"
+    ;;
+  uninstall|remove)
+    shift; run_uninstall "$@"
+    ;;
+  purge)
+    shift; require_root_for_deb purge "$@"; "$(apt_real apt-get)" purge "$@"
+    ;;
+  clean)
+    require_root_for_deb clean
+    "$(apt_real apt-get)" clean
+    ;;
+  autoclean)
+    require_root_for_deb autoclean
+    "$(apt_real apt-get)" autoclean
+    ;;
+  set)
+    shift
+    case "${1:-}" in
+      apt=*) set_apt "${1#apt=}" ;;
+      *) say_err "Usage: auxi set apt=true|false" "Usage: auxi set apt=true|false"; exit 64 ;;
+    esac
+    ;;
+  status)
+    echo "AuxiNux OS EN 0.1-BETA"
+    if apt_enabled; then
+      say "APT direct: actif" "Direct APT: enabled"
+    else
+      say "APT direct: masque, utilisez auxi" "Direct APT: hidden, use auxi"
+    fi
+    ;;
+  -h|--help|help|"")
+    usage
+    ;;
+  *)
+    say_err "Commande inconnue: $1" "Unknown command: $1"
+    usage >&2
+    exit 64
+    ;;
+esac

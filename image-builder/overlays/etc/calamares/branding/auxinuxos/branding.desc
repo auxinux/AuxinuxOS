@@ -1,0 +1,40 @@
+# Branding Calamares — AuxiNux OS EN 0.1-BETA
+---
+componentName: auxinuxos
+
+# welcomeStyleCalamares: true => texte sombre sur fond clair Breeze (lisible).
+# welcomeExpandingLogo: false => pas de gros logo central etire.
+welcomeStyleCalamares: true
+welcomeExpandingLogo: false
+
+windowExpanding: normal
+windowSize: 800px,520px
+windowPlacement: center
+
+strings:
+    productName:         AuxiNux OS EN
+    shortProductName:    AuxiNux OS
+    version:             0.1-BETA
+    shortVersion:        0.1
+    versionedName:       AuxiNux OS EN 0.1-BETA
+    shortVersionedName:  AuxiNux OS 0.1
+    bootloaderEntryName: AuxiNuxOS
+    productUrl:          https://auxinux.ca/
+    supportUrl:          https://auxinux.ca/
+    releaseNotesUrl:     https://auxinux.ca/
+
+# productWelcome = bandeau affiche en haut de la page d'accueil (pas de fond).
+# productWallpaper VOLONTAIREMENT absent: sinon l'image remplit l'arriere-plan
+# et rend le texte illisible.
+images:
+    productLogo:         "logo-AuxiNux-square.png"
+    productIcon:         "logo-AuxiNux-square.png"
+    productWelcome:      "banner-AuxiNuxOS.png"
+
+slideshow:               "show.qml"
+
+style:
+   SidebarBackground:        "#263242"
+   SidebarText:              "#f8fafc"
+   SidebarTextCurrent:       "#1d2631"
+   SidebarBackgroundCurrent: "#f4bf97"

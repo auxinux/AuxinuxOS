@@ -1,0 +1,17 @@
+# GRUB par defaut - AuxiNux OS EN. Cet overlay est copie dans le rootfs (donc
+# le squashfs), puis le module Calamares `grubcfg`/`bootloader` execute
+# grub-mkconfig sur le systeme INSTALLE en s'appuyant sur ces valeurs.
+GRUB_DEFAULT=0
+GRUB_TIMEOUT=5
+GRUB_DISTRIBUTOR="AuxiNux OS EN"
+
+# pci=noaer + pcie_aspm=off: certaines cartes WiFi Atheros (pilote ath10k)
+# declenchent une tempete d'erreurs PCIe AER corrigibles
+# ("ath10k_pci ... AER: Error of this Agent is reported first") qui inonde la
+# console et bloque le demarrage a l'infini. On coupe le report AER et la
+# gestion d'energie ASPM PCIe: le WiFi reste fonctionnel, seule la remontee
+# d'erreurs (souvent spurious) et l'economie d'energie PCIe sont desactivees.
+GRUB_CMDLINE_LINUX="pci=noaer pcie_aspm=off"
+GRUB_CMDLINE_LINUX_DEFAULT="quiet splash"
+
+GRUB_TERMINAL_OUTPUT=gfxterm

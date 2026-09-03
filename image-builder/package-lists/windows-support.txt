@@ -1,0 +1,4 @@
+wine
+wine64
+winetricks
+q4wine

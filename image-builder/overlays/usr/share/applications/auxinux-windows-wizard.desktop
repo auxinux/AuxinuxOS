@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=AuxiNux Windows App Wizard
+Comment=Open Windows applications with guidance
+Exec=auxinux-windows-wizard %f
+Icon=wine
+NoDisplay=true
+MimeType=application/x-ms-dos-executable;application/x-msi;application/x-ms-shortcut;
+Categories=Utility;

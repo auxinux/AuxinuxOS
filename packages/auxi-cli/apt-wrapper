@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+name="$(basename "$0")"
+real="/usr/lib/auxinux/apt-real/${name}"
+conf="/etc/auxinux/apt.conf"
+
+is_english() {
+  local locale_chain="${LC_ALL:-}|${LC_MESSAGES:-}|${LANGUAGE:-}|${LANG:-}"
+  [[ "${locale_chain}" =~ (^|[|:])en([_.]|$) ]]
+}
+
+if [[ -r "${conf}" ]] && grep -Eq '^APT_ENABLED=1$' "${conf}"; then
+  exec "${real}" "$@"
+fi
+
+if is_english; then
+cat >&2 <<EOF
+AuxiNux OS uses the user-facing auxi command to manage applications and packages.
+
+Examples:
+  auxi update
+  auxi upgrade
+  auxi search firefox
+  auxi install org.mozilla.firefox
+  auxi install --deb package-name
+
+To explicitly re-enable apt in the CLI:
+  sudo auxi set apt=true
+EOF
+else
+cat >&2 <<EOF
+AuxiNux OS utilise la commande utilisateur auxi pour gerer les applications et paquets.
+
+Exemples:
+  auxi update
+  auxi upgrade
+  auxi search firefox
+  auxi install org.mozilla.firefox
+  auxi install --deb nom-du-paquet
+
+Pour reactiver explicitement apt en CLI:
+  sudo auxi set apt=true
+EOF
+fi
+exit 1

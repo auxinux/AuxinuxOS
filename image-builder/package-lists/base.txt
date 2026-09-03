@@ -1,0 +1,44 @@
+# `login` is not Essential on Debian 13 and mmdebstrap --variant=apt won't
+# pull it in on its own. Without it, /etc/pam.d/login is missing, and
+# cosmic-greeter's PAM service (/etc/pam.d/greetd-greeter, `@include login`)
+# aborts on startup (pam_start: ABORT) -- greetd crash-loops silently, the
+# installed system shows a black/frozen screen forever after boot (the live
+# session hid this because its autologin bypasses the greeter's PAM path
+# entirely). Confirmed root cause via a real install+boot repro; do not
+# remove.
+systemd
+systemd-sysv
+dbus
+sudo
+login
+locales
+locales-all
+ca-certificates
+curl
+wget
+gnupg
+gpg
+apt-transport-https
+network-manager
+live-boot
+live-config
+flatpak
+appstream
+packagekit
+polkitd
+pkexec
+nano
+btop
+htop
+vim-tiny
+less
+rsync
+unzip
+p7zip-full
+zip
+zstd
+file
+xdg-utils
+shared-mime-info
+manpages-fr
+manpages-fr-dev

@@ -1,0 +1,18 @@
+# Desktop base for AuxiNux OS EN. COSMIC replaced KDE Plasma (2026-07,
+# aligned with the ATOMIC ADR-0006 migration). These are the Debian-native
+# desktop dependencies only; the COSMIC packages themselves come from the
+# OBS repository and are installed in-chroot by build-image.sh, because they
+# do not exist on the deb.debian.org mirror that mmdebstrap uses.
+greetd
+xwayland
+x11-xserver-utils
+libnotify-bin
+qt6-wayland
+pipewire
+pipewire-pulse
+wireplumber
+bluez
+cups
+xdg-desktop-portal
+fonts-noto-color-emoji
+gnome-disk-utility

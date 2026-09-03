@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=AuxiNuxOS Welcome
+Name[fr]=Bienvenue AuxiNuxOS
+Comment=Choose language and learn about AuxiNuxOS
+Comment[fr]=Choisir la langue et decouvrir AuxiNuxOS
+Exec=auxinux-welcome
+Icon=auxinuxos
+OnlyShowIn=KDE;
+X-KDE-autostart-after=panel
+X-KDE-StartupNotify=false

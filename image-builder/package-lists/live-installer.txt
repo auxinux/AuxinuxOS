@@ -1,0 +1,16 @@
+calamares
+calamares-settings-debian
+dosfstools
+e2fsprogs
+parted
+gdisk
+squashfs-tools
+grub-efi-amd64-bin
+grub-efi-amd64-signed
+grub-pc-bin
+shim-signed
+grub-common
+grub2-common
+efibootmgr
+os-prober
+initramfs-tools

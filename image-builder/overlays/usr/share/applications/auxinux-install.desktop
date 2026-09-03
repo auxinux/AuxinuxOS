@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Install AuxiNuxOS
+Comment=Install AuxiNuxOS EN 0.1-BETA
+Exec=/usr/lib/auxinux/auxinux-install-launcher
+Icon=system-software-install
+Terminal=false
+StartupWMClass=calamares
+Categories=System;

@@ -1,0 +1,15 @@
+# Firmware materiel (composant non-free-firmware, deja active dans les
+# sources APT). Sans ces paquets, de nombreuses cartes WiFi/Bluetooth et
+# GPU ne sont pas detectees dans le live ni sur le systeme installe.
+firmware-linux
+firmware-linux-nonfree
+firmware-misc-nonfree
+firmware-iwlwifi
+firmware-realtek
+firmware-atheros
+firmware-brcm80211
+firmware-libertas
+# Pile WiFi userspace requise par NetworkManager
+wpasupplicant
+iw
+wireless-regdb

@@ -1,0 +1,11 @@
+hunspell-fr
+hunspell-en-ca
+hyphen-fr
+hyphen-en-us
+mythes-fr
+mythes-en-us
+libreoffice-l10n-fr
+libreoffice-help-fr
+libreoffice-help-en-us
+thunderbird-l10n-fr
+thunderbird-l10n-en-ca

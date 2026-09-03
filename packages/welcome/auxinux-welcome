@@ -1,0 +1,158 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+STATE_DIR="${HOME}/.config/auxinux"
+STATE_FILE="${STATE_DIR}/welcome-seen"
+CHOICE_FILE="${STATE_DIR}/language"
+RESTART_FILE="${STATE_DIR}/session-restarted"
+PLASMA_LOCALE="${HOME}/.config/plasma-localerc"
+PLASMA_ENV_DIR="${HOME}/.config/plasma-workspace/env"
+PLASMA_ENV_FILE="${PLASMA_ENV_DIR}/auxinux-locale.sh"
+WALLPAPER_FILE="/usr/share/wallpapers/AuxiNuxOS/contents/images/default.png"
+
+if [[ -e "${STATE_FILE}" ]]; then
+  exit 0
+fi
+
+mkdir -p "${STATE_DIR}" "$(dirname "${PLASMA_LOCALE}")" "${PLASMA_ENV_DIR}"
+
+choose_language() {
+  if command -v kdialog >/dev/null 2>&1; then
+    kdialog \
+      --title "AuxiNuxOS / Welcome" \
+      --radiolist "Choisissez la langue pour poursuivre / Choose your language" \
+      fr "Francais" on \
+      en "English" off
+    return
+  fi
+
+  printf '1) Francais\n2) English\n> ' >&2
+  read -r choice
+  case "${choice}" in
+    2|en|EN|english|English) printf 'en\n' ;;
+    *) printf 'fr\n' ;;
+  esac
+}
+
+write_live_locale() {
+  local lang="$1"
+  case "${lang}" in
+    en)
+      cat >"${PLASMA_LOCALE}" <<'EOF'
+[Formats]
+LANG=en_CA.UTF-8
+
+[Translations]
+LANGUAGE=en_CA:en:fr_CA:fr
+EOF
+      cat >"${PLASMA_ENV_FILE}" <<'EOF'
+export LANG=en_CA.UTF-8
+export LANGUAGE=en_CA:en:fr_CA:fr
+export LC_TIME=en_CA.UTF-8
+export LC_MONETARY=en_CA.UTF-8
+export LC_PAPER=en_CA.UTF-8
+export LC_MEASUREMENT=en_CA.UTF-8
+EOF
+      ;;
+    *)
+      cat >"${PLASMA_LOCALE}" <<'EOF'
+[Formats]
+LANG=fr_CA.UTF-8
+
+[Translations]
+LANGUAGE=fr_CA:fr:en_CA:en
+EOF
+      cat >"${PLASMA_ENV_FILE}" <<'EOF'
+export LANG=fr_CA.UTF-8
+export LANGUAGE=fr_CA:fr:en_CA:en
+export LC_TIME=fr_CA.UTF-8
+export LC_MONETARY=fr_CA.UTF-8
+export LC_PAPER=fr_CA.UTF-8
+export LC_MEASUREMENT=fr_CA.UTF-8
+EOF
+      ;;
+  esac
+  chmod 0755 "${PLASMA_ENV_FILE}"
+}
+
+apply_wallpaper() {
+  if command -v plasma-apply-wallpaperimage >/dev/null 2>&1 && [[ -f "${WALLPAPER_FILE}" ]]; then
+    plasma-apply-wallpaperimage "${WALLPAPER_FILE}" >/dev/null 2>&1 || true
+  fi
+}
+
+restart_session() {
+  touch "${RESTART_FILE}"
+  if command -v kdialog >/dev/null 2>&1; then
+    if [[ "$1" == "en" ]]; then
+      kdialog --title "AuxiNuxOS" --msgbox "The live session will restart once to apply English to the full KDE interface."
+    else
+      kdialog --title "AuxiNuxOS" --msgbox "La session live va redemarrer une seule fois pour appliquer le francais a toute l'interface KDE."
+    fi
+  fi
+
+  if command -v qdbus6 >/dev/null 2>&1; then
+    qdbus6 org.kde.Shutdown /Shutdown logout >/dev/null 2>&1 && exit 0
+    qdbus6 org.kde.ksmserver /KSMServer logout 0 0 0 >/dev/null 2>&1 && exit 0
+  fi
+
+  if command -v loginctl >/dev/null 2>&1; then
+    (sleep 2; loginctl terminate-user "${USER}") >/dev/null 2>&1 &
+    exit 0
+  fi
+}
+
+show_intro() {
+  local lang="$1"
+  if command -v kdialog >/dev/null 2>&1; then
+    if [[ "${lang}" == "en" ]]; then
+      kdialog --title "Welcome to AuxiNuxOS" --msgbox \
+"AuxiNuxOS is a Canadian desktop Linux project based on Debian, KDE Plasma and a privacy-first software selection.
+
+This live environment lets you test the system before installing it.
+
+The goal is simple: a familiar desktop, no AuxiNux telemetry, Flatpak first for applications, and DEB packages available when needed."
+    else
+      kdialog --title "Bienvenue dans AuxiNuxOS" --msgbox \
+"AuxiNuxOS est un projet Linux de bureau canadien base sur Debian, KDE Plasma et une selection logicielle orientee vie privee.
+
+Cet environnement live permet d'essayer le systeme avant de l'installer.
+
+Le but est simple: un bureau familier, aucune telemetrie AuxiNux, Flatpak en priorite pour les applications, et les paquets DEB disponibles au besoin."
+    fi
+    return
+  fi
+
+  if [[ "${lang}" == "en" ]]; then
+    printf '%s\n' "Welcome to AuxiNuxOS. Privacy-first Debian/KDE desktop, Flatpak first, DEB available." >&2
+  else
+    printf '%s\n' "Bienvenue dans AuxiNuxOS. Bureau Debian/KDE oriente vie privee, Flatpak en premier, DEB disponible." >&2
+  fi
+}
+
+if [[ -f "${CHOICE_FILE}" ]]; then
+  selected="$(cat "${CHOICE_FILE}")"
+else
+  language="$(choose_language || true)"
+  case "${language}" in
+    en) selected="en" ;;
+    *) selected="fr" ;;
+  esac
+  printf '%s\n' "${selected}" >"${CHOICE_FILE}"
+fi
+
+write_live_locale "${selected}"
+apply_wallpaper
+
+current_lang="${LANG:-fr_CA.UTF-8}"
+desired_lang="fr_CA.UTF-8"
+if [[ "${selected}" == "en" ]]; then
+  desired_lang="en_CA.UTF-8"
+fi
+
+if [[ ! -f "${RESTART_FILE}" && "${current_lang}" != "${desired_lang}" ]]; then
+  restart_session "${selected}"
+fi
+
+show_intro "${selected}"
+date -u +"%Y-%m-%dT%H:%M:%SZ" >"${STATE_FILE}"

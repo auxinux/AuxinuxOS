@@ -1,0 +1,26 @@
+# Compilation Rust
+**/target/
+
+# Images et repertoires de construction
+/image-builder/output/
+/image-builder/work/
+/image-builder/cache/
+*.iso
+*.img
+*.qcow2
+*.raw
+*.squashfs
+
+# Rapports locaux
+*.log
+
+# Fichiers locaux et artefacts generes
+.DS_Store
+._*
+*.log
+*.tmp
+*.swp
+*~
+.env
+.env.*
+!.env.example
