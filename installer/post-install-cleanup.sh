@@ -18,11 +18,22 @@ LIVE_USER="auxinux"
 # Normalise: "/" => prefixe vide pour des chemins absolus propres.
 prefix="${TARGET_ROOT%/}"
 
-# 1. Icone d'installation (live uniquement).
+# 1. Artefacts de l'installateur (live uniquement).
+#
+#    Le fichier d'AUTODEMARRAGE etait oublie: l'installateur se relancait donc
+#    a CHAQUE ouverture de session du systeme installe. Pire, son lanceur
+#    commence par « sudo mv /etc/fstab /etc/fstab.orig.calamares »: sur un
+#    systeme en service, cela deplace le fstab et rouvre un partitionneur.
 rm -f "${prefix}/home"/*/Desktop/"Install AuxiNuxOS.desktop"
 rm -f "${prefix}/usr/share/applications/auxinux-install.desktop"
+rm -f "${prefix}/etc/xdg/autostart/auxinux-install.desktop"
+rm -f "${prefix}/usr/lib/auxinux/auxinux-install-launcher"
 rm -f "${prefix}/etc/xdg/autostart/auxinux-welcome.desktop"
 rm -f "${prefix}/usr/bin/auxinux-welcome"
+
+#    Un fstab mis de cote par un lancement precedent du lanceur ne doit pas
+#    rester dans la cible: il ferait croire a une sauvegarde valide.
+rm -f "${prefix}/etc/fstab.orig.calamares"
 
 # 2. Sudo NOPASSWD du live.
 rm -f "${prefix}/etc/sudoers.d/90-auxinux-live"
@@ -87,6 +98,15 @@ fi
 chroot "${TARGET_ROOT}" apt-get purge -y \
   live-boot live-boot-initramfs-tools live-config live-config-systemd \
   2>/dev/null || true
+
+# 6a. Installateur lui-meme. Calamares partitionne et formate des disques; le
+#     laisser sur le systeme installe, avec son entree de menu, revient a
+#     livrer un outil capable d'effacer la machine a un utilisateur qui vient
+#     d'en terminer l'installation. Il n'a plus aucune raison d'etre presente.
+chroot "${TARGET_ROOT}" apt-get purge -y \
+  calamares calamares-settings-debian 2>/dev/null || true
+rm -f "${prefix}/usr/share/applications/calamares.desktop" \
+      "${prefix}/usr/share/applications/calamares-install-debian.desktop"
 
 # 6b. Regenere l'initramfs maintenant que live-boot est purge. Le module
 #     Calamares `initramfs` a deja tourne plus tot dans la sequence (avec

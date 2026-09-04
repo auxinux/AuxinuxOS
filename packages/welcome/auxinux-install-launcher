@@ -37,7 +37,14 @@ fi
 sudo mv /etc/fstab /etc/fstab.orig.calamares 2>/dev/null || true
 
 # Let the root-owned Calamares process connect to our X server.
-xhost +SI:localuser:root >/dev/null 2>&1 || xhost + >/dev/null 2>&1 || true
+#
+# The `xhost +` fallback was removed: it disables X access control entirely,
+# letting ANY local process read this session's keystrokes and windows --
+# including the disk password typed into the installer. Only the root user is
+# granted access; if even that fails we say so instead of widening it.
+if ! xhost +SI:localuser:root >/dev/null 2>&1; then
+    echo "warning: could not grant X access to root (xhost)" >&2
+fi
 
 sudo -E env DISPLAY="${DISPLAY}" QT_QPA_PLATFORM=xcb \
     QT_AUTO_SCREEN_SCALE_FACTOR=1 calamares || true

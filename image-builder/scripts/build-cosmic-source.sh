@@ -87,8 +87,43 @@ sudo chroot "${ROOTFS_DIR}" env DEBIAN_FRONTEND=noninteractive apt-get install -
 
 # Epoch 1.2 components require Rust 1.93; Debian's compiler is intentionally
 # not used so every component follows the toolchain files pinned upstream.
+#
+# Le `curl | sh` en root a ete remplace par un telechargement verifie. C'etait
+# le SEUL telechargement de la construction sans controle d'integrite, alors
+# que configure-apt-sources.sh refuse deja tout artefact non verifie: une
+# compromission de sh.rustup.rs injectait du code root dans le chroot de
+# CHAQUE image.
+#
+# Le condensat est epingle a la PREMIERE construction, puis exige identique
+# ensuite (le fichier est versionne dans le cache de build). On ne code pas ici
+# une valeur en dur: elle serait recopiee depuis ce que sert le site, ce qui ne
+# verifie rien. Pour reprendre la main apres une montee de version amont,
+# supprimer ${RUSTUP_SHA_FILE} et relire la valeur affichee.
+RUSTUP_INIT="${CACHE_DIR}/rustup-init.sh"
+RUSTUP_SHA_FILE="${CACHE_DIR}/rustup-init.sha256"
+
+curl --proto '=https' --tlsv1.2 -sSfL https://sh.rustup.rs -o "${RUSTUP_INIT}"
+RUSTUP_SHA="$(sha256sum "${RUSTUP_INIT}" | awk '{print $1}')"
+
+if [[ -s "${RUSTUP_SHA_FILE}" ]]; then
+  EXPECTED_RUSTUP_SHA="$(cat "${RUSTUP_SHA_FILE}")"
+  if [[ "${RUSTUP_SHA}" != "${EXPECTED_RUSTUP_SHA}" ]]; then
+    echo "ERREUR: l'installateur rustup a change depuis la derniere construction." >&2
+    echo "  attendu: ${EXPECTED_RUSTUP_SHA}" >&2
+    echo "  obtenu : ${RUSTUP_SHA}" >&2
+    echo "  -> Verifiez la cause avant de poursuivre. Si la montee de version est" >&2
+    echo "     legitime, supprimez ${RUSTUP_SHA_FILE} et relancez." >&2
+    exit 65
+  fi
+else
+  echo "==> rustup-init epingle pour les constructions suivantes: ${RUSTUP_SHA}"
+  printf '%s\n' "${RUSTUP_SHA}" >"${RUSTUP_SHA_FILE}"
+fi
+
+sudo install -m 0755 "${RUSTUP_INIT}" "${ROOTFS_DIR}/tmp/rustup-init.sh"
 sudo chroot "${ROOTFS_DIR}" bash -lc \
-  'curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain 1.93.0'
+  '/tmp/rustup-init.sh -y --profile minimal --default-toolchain 1.93.0'
+sudo rm -f "${ROOTFS_DIR}/tmp/rustup-init.sh"
 sudo chroot "${ROOTFS_DIR}" bash -lc \
   'set -e
    cd /tmp/cosmic-epoch-source

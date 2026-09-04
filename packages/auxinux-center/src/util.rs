@@ -2,7 +2,9 @@
 //!
 //! Le Center delegue tout le travail aux outils systeme deja presents:
 //! `flatpak`, la CLI `auxi` (politique APT maison) et `apt-cache`. Les
-//! operations privilegiees passent par `pkexec` (agent polkit KDE).
+//! operations privilegiees passent par `pkexec`, TOUJOURS sur un programme
+//! installe a un emplacement fixe appartenant a root -- jamais sur un script
+//! genere a la volee dans un repertoire temporaire.
 
 use std::process::Command;
 
@@ -32,17 +34,4 @@ pub fn run(cmd: &str, args: &[&str]) -> Output {
 /// `args[0]` est le programme a lancer en root, le reste ses arguments.
 pub fn run_pkexec(args: &[&str]) -> Output {
     run("pkexec", args)
-}
-
-/// Execute un script bash genere, en root, en une seule invite polkit.
-/// Le script est ecrit dans un fichier temporaire appartenant a l'utilisateur
-/// puis execute par `pkexec bash`. Usage reserve aux operations sur /etc/apt.
-pub fn run_pkexec_script(script: &str) -> Output {
-    let path = std::env::temp_dir().join(format!("auxinux-center-{}.sh", std::process::id()));
-    if let Err(e) = std::fs::write(&path, script) {
-        return Output { ok: false, stdout: String::new(), stderr: format!("ecriture script: {e}") };
-    }
-    let out = run("pkexec", &["bash", &path.to_string_lossy()]);
-    let _ = std::fs::remove_file(&path);
-    out
 }

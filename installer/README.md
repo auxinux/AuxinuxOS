@@ -21,9 +21,16 @@ La configuration est versionnee dans les overlays et embarquee dans l'image:
 
 `post-install-cleanup.sh` est installe dans l'image a
 `/usr/lib/auxinux/post-install-cleanup.sh` (voir `install-auxi-cli.sh`) et
-retire: icone d'installation, `sudoers.d/90-auxinux-live` (NOPASSWD),
-autologin COSMIC/greetd live et compte live `auxinux`.
-Les limites du nettoyage sont documentées dans `docs/limitations.md`.
+retire : icone d'installation **et son autodémarrage**, lanceur Calamares,
+`sudoers.d/90-auxinux-live` (NOPASSWD), autologin COSMIC/greetd live, compte
+live `auxinux`, paquets live-boot **et Calamares lui-même**.
+
+Le retrait de l'autodémarrage et de Calamares n'est pas cosmétique : sans lui,
+l'installateur se relançait à chaque ouverture de session du système installé,
+après avoir déplacé `/etc/fstab`.
+
+Couvert par `tests/test-post-install.sh`. Les limites du nettoyage sont
+documentées dans `docs/limitations.md`.
 
 Le nom de compte `auxinux` est réservé au live et interdit par la
 configuration des utilisateurs de Calamares. A valider en VM avant
@@ -48,6 +55,13 @@ Il doit rester le **dernier** job de la séquence `exec`, après
 l'initramfs, et ce script termine par `update-grub`. Dans l'ordre inverse, les
 entrées de restauration du menu GRUB pointeraient sur un initrd encore
 contaminé par les hooks live-boot.
+
+Le modèle de configuration snapper est cherché sous `/usr/share` **puis**
+`/etc` : Debian 13 ne le livre qu'au premier emplacement. Ne chercher que dans
+`/etc` faisait sortir le script en code 0 avec un simple avertissement, et le
+rollback était absent de **chaque** système installé — sans aucun signal.
+À défaut de modèle, une configuration minimale est écrite plutôt que
+d'abandonner la fonction.
 
 Le script est non bloquant par conception : une racine ext4 choisie en
 partitionnement manuel le fait sortir en code 0 sans configurer le rollback.

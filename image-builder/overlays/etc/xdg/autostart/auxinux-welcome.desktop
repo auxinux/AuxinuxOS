@@ -6,6 +6,6 @@ Comment=Choose language and learn about AuxiNuxOS
 Comment[fr]=Choisir la langue et decouvrir AuxiNuxOS
 Exec=auxinux-welcome
 Icon=auxinuxos
-OnlyShowIn=KDE;
-X-KDE-autostart-after=panel
-X-KDE-StartupNotify=false
+# OnlyShowIn=KDE et les cles X-KDE-* ont ete retirees: sous COSMIC, elles
+# empechaient purement et simplement le lancement de l'ecran d'accueil.
+StartupNotify=false

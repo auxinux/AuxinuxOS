@@ -1,5 +1,0 @@
-[Desktop Entry]
-Name=AuxiNux Set Wallpaper
-Type=Application
-Exec=/bin/bash -c 'plasma-apply-wallpaperimage /usr/share/wallpapers/AuxiNuxOS/contents/images/default.png && rm -f "$HOME/.config/autostart/auxinux-set-wallpaper.desktop"'
-X-KDE-autostart-after=panel

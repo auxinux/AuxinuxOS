@@ -1,6 +1,6 @@
 //! Section SYSTEME: informations de base et avancees.
 
-use sysinfo::{Disks, System};
+use sysinfo::{CpuRefreshKind, Disks, MemoryRefreshKind, RefreshKind, System};
 
 use crate::model::{DiskInfo, SystemReport};
 use crate::util::run;
@@ -9,8 +9,17 @@ pub const MB: u64 = 1024 * 1024;
 pub const GB: u64 = 1024 * 1024 * 1024;
 
 pub fn info(advanced: bool) -> SystemReport {
-    let mut sys = System::new_all();
-    sys.refresh_all();
+    // Rafraichissement CIBLE. `System::new_all()` enumere TOUS les processus,
+    // avec leurs lignes de commande et leurs cartes memoire, puis
+    // `refresh_all()` recommencait le meme travail: deux parcours complets de
+    // /proc pour n'afficher au final qu'un modele de CPU, une quantite de
+    // memoire et des disques. Le rapport de sante appelle cette fonction a
+    // chaque analyse.
+    let sys = System::new_with_specifics(
+        RefreshKind::new()
+            .with_cpu(CpuRefreshKind::new())
+            .with_memory(MemoryRefreshKind::everything()),
+    );
 
     let cpu = sys
         .cpus()

@@ -80,7 +80,9 @@ pub fn view(app: &App) -> Element<'_, Message> {
                     .spacing(2)
                     .push(widget::text::heading("Depots connus"))
                     .push(widget::text::caption(
-                        "Ajout en un clic, avec verification de la signature du depot.",
+                        "Ajout en un clic. La cle de signature est telechargee depuis le \
+                         domaine officiel de l'editeur, verifiee comme cle OpenPGP valide, \
+                         puis epinglee: un changement ulterieur est refuse.",
                     )),
             );
             for preset in &app.presets {

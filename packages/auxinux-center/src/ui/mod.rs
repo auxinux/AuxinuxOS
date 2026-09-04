@@ -39,6 +39,18 @@ pub enum Page {
     Settings,
 }
 
+/// Contenu actuellement affiche dans la page Applications.
+///
+/// Sans cette memoire, la page ne pouvait pas etre rechargee apres une
+/// installation: la liste restait telle quelle, l'application installee
+/// s'affichait toujours comme absente, et l'utilisateur relancait l'operation.
+#[derive(Clone, Debug, PartialEq)]
+pub enum AppsView {
+    Featured,
+    Installed,
+    Search(String),
+}
+
 /// Etat de chargement d'une section. Distinguer « en cours » de « vide »
 /// evite d'afficher « aucun resultat » pendant qu'une recherche tourne encore,
 /// message qui faisait croire a un echec.
@@ -124,6 +136,7 @@ pub struct App {
     // Applications
     query: String,
     apps: Loading<Vec<AppEntry>>,
+    apps_view: AppsView,
     /// Source retenue pour chaque fiche, quand l'utilisateur en change.
     chosen_source: std::collections::HashMap<String, String>,
 
@@ -178,9 +191,19 @@ impl App {
     }
 
     fn load_apps_featured(&mut self) -> Task<Message> {
+        self.apps_view = AppsView::Featured;
+        self.reload_apps()
+    }
+
+    /// Recharge la page Applications dans la vue courante.
+    fn reload_apps(&mut self) -> Task<Message> {
         self.apps = Loading::Busy;
         self.start();
-        background(crate::apps::featured, Message::AppsLoaded)
+        match self.apps_view.clone() {
+            AppsView::Featured => background(crate::apps::featured, Message::AppsLoaded),
+            AppsView::Installed => background(crate::apps::list_installed, Message::AppsLoaded),
+            AppsView::Search(q) => background(move || crate::apps::search(&q), Message::AppsLoaded),
+        }
     }
 
     fn load_updates(&mut self) -> Task<Message> {
@@ -221,7 +244,7 @@ impl App {
     /// est la premiere source de confusion signalee sur ce genre d'outil.
     fn reload_current_page(&mut self) -> Task<Message> {
         match self.page {
-            Page::Apps => Task::none(),
+            Page::Apps => self.reload_apps(),
             Page::Updates => self.load_updates(),
             Page::Health => self.load_health(),
             Page::Recovery => self.load_recovery(),
@@ -269,6 +292,7 @@ impl Application for App {
             page: Page::Apps,
             query: String::new(),
             apps: Loading::Idle,
+            apps_view: AppsView::Featured,
             chosen_source: std::collections::HashMap::new(),
             updates: Loading::Idle,
             os_version: crate::updates::os_version(),
@@ -342,9 +366,8 @@ impl Application for App {
                 if q.len() < 2 {
                     return self.load_apps_featured();
                 }
-                self.apps = Loading::Busy;
-                self.start();
-                background(move || crate::apps::search(&q), Message::AppsLoaded)
+                self.apps_view = AppsView::Search(q);
+                self.reload_apps()
             }
             Message::ShowFeatured => {
                 self.query.clear();
@@ -352,9 +375,8 @@ impl Application for App {
             }
             Message::ShowInstalled => {
                 self.query.clear();
-                self.apps = Loading::Busy;
-                self.start();
-                background(crate::apps::list_installed, Message::AppsLoaded)
+                self.apps_view = AppsView::Installed;
+                self.reload_apps()
             }
             Message::AppsLoaded(list) => {
                 self.finish();

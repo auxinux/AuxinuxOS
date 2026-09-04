@@ -1,0 +1,72 @@
+#!/bin/sh
+# Rend inscriptible un instantane demarre depuis le menu GRUB.
+#
+# POURQUOI: les instantanes snapper sont crees en LECTURE SEULE. L'entree
+# « AuxiNux OS - instantanes (restauration) » montait donc une racine
+# immuable: systemd echoue des ses premieres ecritures (/etc, /var/lib) et le
+# demarrage n'aboutit jamais. Le menu de restauration -- l'argument decisif
+# retenu contre LVM -- ne menait en pratique nulle part.
+#
+# CE QUE FAIT CE SCRIPT: il superpose un espace inscriptible EN MEMOIRE sur
+# l'instantane. Le systeme demarre normalement, les modifications sont
+# volatiles, et l'utilisateur peut lancer `sudo auxi rollback NUMERO` pour
+# rendre la restauration permanente.
+#
+# DECLENCHEMENT: uniquement sur `auxinux.snapshot=1`, parametre ajoute aux
+# seules entrees d'instantane par grub-btrfs (GRUB_BTRFS_SNAPSHOT_KERNEL_-
+# PARAMETERS, voir installer/setup-btrfs-rollback.sh). Un demarrage normal ne
+# porte jamais ce marqueur: ce script n'y touche donc a rien.
+set -e
+
+PREREQ=""
+prereqs() { echo "${PREREQ}"; }
+
+case "${1}" in
+  prereqs)
+    prereqs
+    exit 0
+    ;;
+esac
+
+. /scripts/functions
+
+for param in $(cat /proc/cmdline); do
+  case "${param}" in
+    auxinux.snapshot=1) AUXINUX_SNAPSHOT=1 ;;
+  esac
+done
+
+[ "${AUXINUX_SNAPSHOT:-0}" = "1" ] || exit 0
+
+OVERLAY_DIR="/run/auxinux-snapshot"
+
+# /run de l'initramfs est deplace dans ${rootmnt}/run juste avant switch_root:
+# les montages poses ici survivent donc au passage au systeme reel.
+mkdir -p "${OVERLAY_DIR}"
+if ! mount -t tmpfs -o size=50%,mode=0755 auxinux-snapshot "${OVERLAY_DIR}"; then
+  log_warning_msg "auxinux: tmpfs de superposition impossible; instantane en lecture seule."
+  exit 0
+fi
+
+mkdir -p "${OVERLAY_DIR}/upper" "${OVERLAY_DIR}/work" "${OVERLAY_DIR}/lower"
+
+modprobe overlay >/dev/null 2>&1 || true
+
+# L'instantane est d'abord rattache ailleurs: overlayfs refuse une couche
+# basse qui serait le point de montage lui-meme.
+if ! mount --bind "${rootmnt}" "${OVERLAY_DIR}/lower"; then
+  log_warning_msg "auxinux: instantane non rattachable; demarrage en lecture seule."
+  umount "${OVERLAY_DIR}" >/dev/null 2>&1 || true
+  exit 0
+fi
+
+if ! mount -t overlay auxinux-snapshot \
+    -o "lowerdir=${OVERLAY_DIR}/lower,upperdir=${OVERLAY_DIR}/upper,workdir=${OVERLAY_DIR}/work" \
+    "${rootmnt}"; then
+  log_warning_msg "auxinux: superposition impossible; demarrage en lecture seule."
+  umount "${OVERLAY_DIR}/lower" >/dev/null 2>&1 || true
+  umount "${OVERLAY_DIR}" >/dev/null 2>&1 || true
+  exit 0
+fi
+
+log_success_msg "auxinux: instantane rendu inscriptible (modifications volatiles)."

@@ -31,6 +31,19 @@ pub struct AppEntry {
     /// lieu de "vlc".
     #[serde(default)]
     pub deb_name: Option<String>,
+
+    /// Application deja installee, PAR SOURCE.
+    ///
+    /// L'interface affichait « Installer » ET « Desinstaller » sur chaque
+    /// fiche, sans jamais dire laquelle des deux s'appliquait: l'utilisateur
+    /// ne pouvait pas savoir si une application etait deja presente, et
+    /// « Installer » sur une application deja installee ne produisait qu'un
+    /// message d'erreur d'apt. Ces deux champs sont remplis en deux appels
+    /// pour toute une liste, jamais un par fiche.
+    #[serde(default)]
+    pub installed_flathub: bool,
+    #[serde(default)]
+    pub installed_deb: bool,
 }
 
 impl AppEntry {
@@ -46,6 +59,15 @@ impl AppEntry {
 
     pub fn has_source(&self, source: &str) -> bool {
         self.sources.iter().any(|s| s == source)
+    }
+
+    /// Vrai si l'application est installee VIA `source`.
+    pub fn is_installed(&self, source: &str) -> bool {
+        if source == SOURCE_DEB {
+            self.installed_deb
+        } else {
+            self.installed_flathub
+        }
     }
 }
 
@@ -230,6 +252,8 @@ mod tests {
             default_source: SOURCE_FLATHUB.into(),
             icon: String::new(),
             deb_name: Some("vlc".into()),
+            installed_flathub: false,
+            installed_deb: false,
         }
     }
 

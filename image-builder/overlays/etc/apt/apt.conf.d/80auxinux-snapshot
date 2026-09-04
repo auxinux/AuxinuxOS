@@ -1,0 +1,10 @@
+// Instantane de securite autour de chaque transaction dpkg.
+//
+// Attache a dpkg et non a la commande `auxi`: c'est ce qui rend la promesse
+// « un instantane avant chaque transaction DEB » vraie pour TOUS les chemins
+// (apt reactive, PackageKit, dpkg direct), et non pour le seul `auxi`.
+//
+// Le hook sort toujours en 0: un echec de DPkg::Pre-Invoke avorterait la
+// transaction apt.
+DPkg::Pre-Invoke  { "/usr/lib/auxinux/apt-snapshot-hook pre || true"; };
+DPkg::Post-Invoke { "/usr/lib/auxinux/apt-snapshot-hook post || true"; };

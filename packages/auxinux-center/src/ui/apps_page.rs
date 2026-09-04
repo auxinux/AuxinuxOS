@@ -98,15 +98,23 @@ fn card<'a>(app: &'a App, index: usize, entry: &'a AppEntry) -> Element<'a, Mess
         }
     }
 
-    actions = actions
-        .push(
+    // Un seul bouton, celui qui a un sens. Afficher « Installer » ET
+    // « Desinstaller » sur toutes les fiches laissait l'utilisateur deviner ce
+    // qui etait deja present -- et « Installer » sur une application deja
+    // installee ne rendait qu'un message d'erreur d'apt.
+    if entry.is_installed(&source) {
+        actions = actions
+            .push(widget::text::caption("Installee"))
+            .push(
+                widget::button::destructive("Desinstaller")
+                    .on_press(Message::Remove(index)),
+            );
+    } else {
+        actions = actions.push(
             widget::button::suggested("Installer")
                 .on_press(Message::Install(index)),
-        )
-        .push(
-            widget::button::destructive("Desinstaller")
-                .on_press(Message::Remove(index)),
         );
+    }
 
     widget::container(
         widget::Row::new()

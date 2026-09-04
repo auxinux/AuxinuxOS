@@ -80,6 +80,37 @@ cleanup_chroot_api_filesystems() {
 
 trap cleanup_chroot_api_filesystems EXIT
 
+# Refuse de supprimer un repertoire de construction qui porte encore des
+# montages.
+#
+# `--force` faisait `rm -rf` sans rien demonter. Si une construction
+# precedente avait ete interrompue en laissant /dev rbind-monte dans le
+# rootfs, la suppression TRAVERSAIT ce montage et effacait les noeuds de
+# peripheriques de l'HOTE de build. On demonte donc d'abord, et on abandonne
+# plutot que d'effacer si un montage resiste.
+purge_build_dir() {
+  local target="$1" mnt
+
+  [[ -e "${target}" ]] || return 0
+
+  while IFS= read -r mnt; do
+    [[ -n "${mnt}" ]] || continue
+    sudo umount -R "${mnt}" >/dev/null 2>&1 || sudo umount -Rl "${mnt}" >/dev/null 2>&1 || true
+  done < <(findmnt -rno TARGET | awk -v d="${target}" \
+             'index($0, d "/") == 1 || $0 == d' | LC_ALL=C sort -r)
+
+  local remaining
+  remaining="$(findmnt -rno TARGET | awk -v d="${target}" \
+                 'index($0, d "/") == 1 || $0 == d' | head -n1)"
+  if [[ -n "${remaining}" ]]; then
+    echo "montage encore actif sous ${target}: ${remaining}" >&2
+    echo "demontez-le manuellement avant de relancer avec --force" >&2
+    exit 73
+  fi
+
+  sudo rm -rf "${target}"
+}
+
 BUILD_DIR="${WORK_DIR}/${PROFILE}"
 ROOTFS_DIR="${BUILD_DIR}/rootfs"
 ISO_ROOT="${BUILD_DIR}/iso-root"
@@ -91,7 +122,7 @@ if [[ "${FORCE}" -eq 1 && "${REUSE_ROOTFS}" -eq 1 ]]; then
 fi
 
 if [[ "${FORCE}" -eq 1 ]]; then
-  sudo rm -rf "${BUILD_DIR}"
+  purge_build_dir "${BUILD_DIR}"
 fi
 
 if [[ -e "${BUILD_DIR}" && "${REUSE_ROOTFS}" -ne 1 ]]; then
@@ -154,26 +185,22 @@ INSTALL_PACKAGES="$(package_csv \
   "${PROJECT_DIR}/image-builder/package-lists/auxinux-system.txt" \
   "${PROJECT_DIR}/image-builder/package-lists/apps-privacy.txt" \
   | tr ',' ' ')"
-sudo chroot "${ROOTFS_DIR}" apt-get install -y --no-install-recommends ${INSTALL_PACKAGES}
-
-# Reuse builds must also keep the installer formatting stack available for EFI
-# partition creation, even when the rootfs predates new package-list entries.
-sudo chroot "${ROOTFS_DIR}" apt-get install -y --no-install-recommends dosfstools
-
-# Idem pour la pile de rollback: sans btrfs-progs dans le LIVE, Calamares ne
-# peut pas formater la cible en BTRFS et le rollback est perdu des l'install.
-sudo chroot "${ROOTFS_DIR}" apt-get install -y --no-install-recommends \
-  btrfs-progs snapper inotify-tools
-
-# Idem pour la couche Windows et la fluidite. Sur un rootfs reutilise, i386
-# peut manquer: on l'ajoute avant, sinon wine32 est introuvable.
+# i386 doit exister AVANT l'installation: le metapaquet `wine` tire wine32,
+# introuvable sans cette architecture. mmdebstrap l'ajoute sur un rootfs neuf,
+# mais un rootfs reutilise (--reuse-rootfs) peut en etre depourvu.
 if ! sudo chroot "${ROOTFS_DIR}" dpkg --print-foreign-architectures | grep -qx i386; then
   sudo chroot "${ROOTFS_DIR}" dpkg --add-architecture i386
   sudo chroot "${ROOTFS_DIR}" apt-get update
 fi
-sudo chroot "${ROOTFS_DIR}" apt-get install -y --no-install-recommends \
-  wine winetricks mesa-vulkan-drivers libvulkan1 vulkan-tools gamemode mangohud \
-  zram-tools zenity
+
+# Une SEULE installation, pilotee par les listes de paquets.
+#
+# Les blocs `apt-get install` qui suivaient reprenaient a la main dosfstools,
+# btrfs-progs, snapper, inotify-tools, wine, la pile Vulkan, zram-tools et
+# zenity -- tous deja presents dans les listes. Deux sources de verite pour le
+# meme contenu: un paquet retire d'une liste restait installe, un paquet ajoute
+# a une liste manquait aux rootfs reutilises, et rien ne le signalait.
+sudo chroot "${ROOTFS_DIR}" apt-get install -y --no-install-recommends ${INSTALL_PACKAGES}
 
 # q4wine a ete retire de la couche Windows (interface abandonnee en amont, et
 # gestion brute des prefixes). Sur un rootfs reutilise il resterait installe.
@@ -257,8 +284,13 @@ sudo tee "${ROOTFS_DIR}/etc/hosts" >/dev/null <<'EOF'
 127.0.1.1 auxinuxos-live
 EOF
 
+# UID 60000 et non le 1000 par defaut: le compte live occupe sinon le premier
+# UID libre, et le compte cree par Calamares herite du 1001. Apres la
+# suppression du compte live, l'utilisateur reel garde un UID decale, ce qui
+# casse silencieusement toute restauration de donnees ou tout disque partage
+# entre deux installations.
 if ! sudo chroot "${ROOTFS_DIR}" id -u auxinux >/dev/null 2>&1; then
-  sudo chroot "${ROOTFS_DIR}" useradd -m -s /bin/bash auxinux
+  sudo chroot "${ROOTFS_DIR}" useradd -m -s /bin/bash -u 60000 auxinux
 fi
 printf 'auxinux:auxinux\n' | sudo chroot "${ROOTFS_DIR}" chpasswd
 sudo install -d -m 0755 "${ROOTFS_DIR}/etc/sudoers.d" "${ROOTFS_DIR}/home/auxinux/Desktop"
@@ -317,8 +349,14 @@ sudo rm -f "${ROOTFS_DIR}/etc/systemd/system/multi-user.target.wants/tor.service
 
 # Package operations should be user-visible through auxi, not automatic apt
 # timers that may run in the background and hit the apt wrapper policy.
-sudo rm -f "${ROOTFS_DIR}/etc/systemd/system/timers.target.wants/apt-daily.timer"
-sudo rm -f "${ROOTFS_DIR}/etc/systemd/system/timers.target.wants/apt-daily-upgrade.timer"
+#
+# `mask` et non la suppression du lien: un `systemctl preset` ou une mise a
+# jour du paquet apt recreait le lien, et les timers repartaient sans que rien
+# ne le signale. Le masque est un lien vers /dev/null, que rien ne restaure.
+for timer in apt-daily.timer apt-daily-upgrade.timer; do
+  sudo chroot "${ROOTFS_DIR}" systemctl mask "${timer}" >/dev/null 2>&1 || \
+    sudo ln -sf /dev/null "${ROOTFS_DIR}/etc/systemd/system/${timer}"
+done
 
 # Fluidite: zram (echange compresse en RAM), systemd-oomd (evite le gel total
 # en saturation memoire) et fstrim (entretien des SSD). Les fichiers de
@@ -340,6 +378,11 @@ cleanup_chroot_api_filesystems
 sudo install -d -m 0755 "${ROOTFS_DIR}/etc/auxinux"
 printf 'APT_ENABLED=0\n' | sudo tee "${ROOTFS_DIR}/etc/auxinux/apt.conf" >/dev/null
 
+# Verification AVANT la compression: chaque fonction annoncee a l'utilisateur
+# doit etre reellement presente dans l'image. C'est le controle le moins cher
+# qui aurait intercepte l'absence de rollback sur tous les systemes installes.
+"${PROJECT_DIR}/image-builder/scripts/check-rootfs.sh" "${ROOTFS_DIR}"
+
 echo "==> Cleaning rootfs"
 sudo rm -rf "${ROOTFS_DIR}/var/cache/apt/archives"/*.deb
 sudo rm -rf "${ROOTFS_DIR}/tmp/"* "${ROOTFS_DIR}/var/tmp/"*
@@ -359,8 +402,11 @@ sudo install -d -m 0755 \
 echo "==> Preparing ISO tree"
 rm -rf "${ISO_ROOT}"
 mkdir -p "${ISO_ROOT}/live" "${ISO_ROOT}/boot/grub"
-KERNEL_PATH="$(find "${ROOTFS_DIR}/boot" -maxdepth 1 -type f -name 'vmlinuz-*' | sort | tail -n1)"
-INITRD_PATH="$(find "${ROOTFS_DIR}/boot" -maxdepth 1 -type f -name 'initrd.img-*' | sort | tail -n1)"
+# `sort -V` et non `sort`: en tri alphabetique, vmlinuz-6.9 passe APRES
+# vmlinuz-6.12, et l'ISO embarquerait l'ancien noyau des qu'une version a deux
+# chiffres cohabite avec une version a un chiffre.
+KERNEL_PATH="$(find "${ROOTFS_DIR}/boot" -maxdepth 1 -type f -name 'vmlinuz-*' | sort -V | tail -n1)"
+INITRD_PATH="$(find "${ROOTFS_DIR}/boot" -maxdepth 1 -type f -name 'initrd.img-*' | sort -V | tail -n1)"
 
 if [[ -z "${KERNEL_PATH}" || -z "${INITRD_PATH}" ]]; then
   echo "kernel or initrd not found" >&2

@@ -4,7 +4,7 @@
 //! clair. Un centre de controle qui affiche "swap: 94%" sans dire quoi faire
 //! ne sert qu'a ceux qui savaient deja.
 
-use crate::model::{HealthCheck, HealthReport, Severity};
+use crate::model::{HealthCheck, HealthReport, Severity, SystemReport};
 use crate::util::run;
 
 /// Seuils d'occupation disque. Au-dela de 95%, APT et les instantanes
@@ -27,9 +27,13 @@ fn check(id: &str, title: &str, detail: impl Into<String>, severity: Severity, a
 /// cet appel peut durer plusieurs secondes: il doit toujours etre lance depuis
 /// une tache de fond, jamais depuis le fil de l'interface.
 pub fn report() -> HealthReport {
+    // Un SEUL releve systeme pour tout le rapport. `disk_checks` et
+    // `memory_check` en declenchaient chacun un, soit deux inventaires
+    // complets du materiel par analyse, pour des donnees identiques.
+    let info = crate::system::info(false);
     let mut checks = Vec::new();
-    checks.extend(disk_checks());
-    checks.push(memory_check());
+    checks.extend(disk_checks(&info));
+    checks.push(memory_check(&info));
     checks.push(failed_services_check());
     checks.push(updates_check());
     checks.push(rollback_check());
@@ -38,10 +42,9 @@ pub fn report() -> HealthReport {
     HealthReport { checks }
 }
 
-fn disk_checks() -> Vec<HealthCheck> {
-    let info = crate::system::info(false);
+fn disk_checks(info: &SystemReport) -> Vec<HealthCheck> {
     let mut out = Vec::new();
-    for disk in info.disks {
+    for disk in &info.disks {
         // Les montages minuscules (ESP, tmpfs divers) polluent le diagnostic
         // sans rien apprendre a l'utilisateur.
         if disk.total_gb < 2 {
@@ -89,8 +92,7 @@ fn disk_checks() -> Vec<HealthCheck> {
     out
 }
 
-fn memory_check() -> HealthCheck {
-    let info = crate::system::info(false);
+fn memory_check(info: &SystemReport) -> HealthCheck {
     if info.memory_total_mb == 0 {
         return check("memory", "Memoire", "indisponible", Severity::Ok, "");
     }

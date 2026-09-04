@@ -7,8 +7,10 @@ le rootfs, les sources COSMIC, les caches Rust et l’ISO.
 
 Outils : `mmdebstrap`, `mksquashfs` (squashfs-tools), `grub-mkrescue`,
 `xorriso`, `rsync`, `curl`, `mformat` (mtools), `git` et les outils GRUB BIOS/EFI.
-Le centre nécessite Rust, Qt6 et leurs dépendances de développement : voir
-[son README](../packages/auxinux-center/README.md).
+Le centre nécessite Rust ≥ 1.93 et les dépendances de développement de
+libcosmic (`libxkbcommon-dev`, `libwayland-dev`, `libudev-dev`,
+`libinput-dev`) : voir [son README](../packages/auxinux-center/README.md).
+Qt6 et KF6 ne sont plus nécessaires depuis la 0.2.
 
 ## Commandes
 
@@ -32,6 +34,11 @@ ensuite retiré des sources APT de l’image.
 
 Les clés publiques et les ressources graphiques sont versionnées. Les caches
 et ISO ne le sont pas. Les empreintes des téléchargements sont définies dans
-`scripts/configure-apt-sources.sh`.
+`scripts/configure-apt-sources.sh` ; `rustup-init` est épinglé à la première
+construction dans `rustup-init.sha256`, à côté du cache COSMIC.
+
+Avant la compression du squashfs, `scripts/check-rootfs.sh` vérifie que chaque
+fonction annoncée est réellement présente dans l’image et **interrompt la
+construction** sinon.
 
 Avant une reconstruction, lire les [limites du cache et du binaire du centre](../docs/limitations.md).

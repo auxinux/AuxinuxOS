@@ -43,9 +43,13 @@ disque** : c'est un gain de réactivité, pas seulement d'espace.
 
 ## Quand un instantané est créé
 
-- **Automatiquement, avant chaque transaction DEB** (`install`, `upgrade`,
-  `uninstall`, `purge`) faite via `auxi` ou le centre d'applications. C'est le
-  filet principal : l'utilisateur n'a rien à demander.
+- **Automatiquement, avant chaque transaction DEB**, quel que soit le chemin
+  emprunté : `auxi`, le centre de contrôle, `apt` réactivé, ou `dpkg` appelé
+  par un script tiers. L'instantané est posé par un hook branché sur dpkg
+  lui-même (`/etc/apt/apt.conf.d/80auxinux-snapshot` →
+  `/usr/lib/auxinux/apt-snapshot-hook`), et non plus par la commande `auxi`.
+  Tant qu'il vivait dans `auxi`, la promesse était fausse pour tout autre point
+  d'entrée. C'est le filet principal : l'utilisateur n'a rien à demander.
 - **Toutes les heures** (`snapper-timeline.timer`), pour les dégâts qui ne
   viennent pas d'une transaction de paquets.
 - **Manuellement**, avec `auxi snapshot`.
@@ -89,9 +93,21 @@ restauré.
 ### Le système ne démarre plus
 
 1. Au démarrage, choisir **« AuxiNux OS - instantanés (restauration) »**.
-2. Sélectionner un instantané antérieur à la panne. Le système démarre dessus
-   en lecture seule.
+2. Sélectionner un instantané antérieur à la panne.
 3. `sudo auxi rollback NUMERO`, puis redémarrer.
+
+Les instantanés snapper sont en **lecture seule**, et un système dont la racine
+n'accepte aucune écriture ne démarre pas : systemd s'arrête dès qu'il touche
+`/etc` ou `/var/lib`. Ces entrées de menu portent donc le paramètre
+`auxinux.snapshot=1`, qui déclenche un hook initramfs
+(`auxinux-snapshot-overlay`) superposant un espace inscriptible **en mémoire**
+sur l'instantané. Le système démarre normalement ; les modifications faites
+dans cette session sont volatiles, ce qui est précisément ce que l'on veut : la
+seule action qui doit persister est `auxi rollback`, qui agit sur les
+sous-volumes et non sur la session en cours.
+
+Un démarrage normal ne porte jamais ce paramètre et n'est donc jamais
+concerné.
 
 ## Ce que fait réellement la restauration
 
@@ -107,13 +123,17 @@ par chemin (`subvol=@`). `auxi rollback` échange donc les sous-volumes :
 C'est entre les étapes 1 et 2 que la machine n'a temporairement plus de racine
 amorçable. La reprise sur échec est vérifiée par `tests/test-rollback.sh`.
 
-L'ancien système reste sur le disque jusqu'à suppression explicite :
+L'ancien système reste sur le disque jusqu'à suppression explicite. Chaque
+restauration en laisse un : sans nettoyage, ils occupent le disque jusqu'à
+saturation.
 
 ```bash
-sudo mount -o subvolid=5 /dev/VOTRE_DISQUE /mnt
-sudo btrfs subvolume delete /mnt/@.rollback-20260903-101500
-sudo umount /mnt
+sudo auxi rollback-cleanup        # liste, demande confirmation, supprime
+sudo auxi rollback-cleanup --yes  # sans confirmation
 ```
+
+Ne les supprimer qu'**après** avoir vérifié que le système restauré démarre :
+c'est le seul recours si la restauration s'avère pire que la panne.
 
 ## Provenance de grub-btrfs
 

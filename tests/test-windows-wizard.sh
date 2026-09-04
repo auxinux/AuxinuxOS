@@ -26,6 +26,7 @@ cat > "${STUBS}/wine" <<'STUB'
 printf 'WINEPREFIX=%s\n' "${WINEPREFIX:-<absent>}" >> "${WINE_LOG}"
 printf 'OVERRIDES=%s\n' "${WINEDLLOVERRIDES:-<absent>}" >> "${WINE_LOG}"
 printf 'TARGET=%s\n' "$1" >> "${WINE_LOG}"
+printf 'ARGS=%s\n' "$*" >> "${WINE_LOG}"
 STUB
 chmod +x "${STUBS}/wine"
 
@@ -85,7 +86,25 @@ check "nom de prefixe assaini" "$(basename "${prefix}")" "Setup-Jeu--v2"
 check "le prefixe existe" "$([[ -d "${prefix}" ]] && echo oui)" "oui"
 check "mono/gecko desactives" "$(grep '^OVERRIDES=' "${WINE_LOG}" | cut -d= -f2-)" "mscoree,mshtml="
 
-echo "== 6. Wine: refus de la confirmation =="
+echo "== 6. Wine: un paquet .msi passe par msiexec =="
+: > "${WINE_LOG}"
+printf 'MZ' > "${WORK}/Installeur.msi"
+ZENITY_LIST="Lancer directement avec Wine (dernier recours)" ZENITY_ANSWER=0 \
+  run_wizard "${WORK}/Installeur.msi" >/dev/null 2>&1
+# `wine fichier.msi` echoue: un paquet MSI n'est pas un executable. Le type est
+# pourtant associe a cet assistant dans /etc/xdg/mimeapps.list.
+check "msiexec /i utilise" \
+  "$(grep '^ARGS=' "${WINE_LOG}" | head -1 | cut -d= -f2- | cut -d' ' -f1-2)" "msiexec /i"
+
+echo "== 7. Wine: un raccourci .lnk passe par start /unix =="
+: > "${WINE_LOG}"
+printf 'L' > "${WORK}/Raccourci.lnk"
+ZENITY_LIST="Lancer directement avec Wine (dernier recours)" ZENITY_ANSWER=0 \
+  run_wizard "${WORK}/Raccourci.lnk" >/dev/null 2>&1
+check "start /unix utilise" \
+  "$(grep '^ARGS=' "${WINE_LOG}" | head -1 | cut -d= -f2- | cut -d' ' -f1-2)" "start /unix"
+
+echo "== 8. Wine: refus de la confirmation =="
 : > "${WINE_LOG}"
 ZENITY_LIST="Lancer directement avec Wine (dernier recours)" ZENITY_ANSWER=1 \
   run_wizard "${WORK}/Setup Jeu (v2).exe" >/dev/null 2>&1

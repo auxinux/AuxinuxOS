@@ -1,0 +1,110 @@
+#!/usr/bin/env bash
+# Instantane de securite pose autour de CHAQUE transaction dpkg.
+#
+# POURQUOI UN HOOK APT ET NON `auxi`: la promesse « un instantane avant chaque
+# transaction DEB » n'etait tenue que par la commande `auxi`. Tout autre chemin
+# vers dpkg -- `apt` reactive par `auxi set apt=true`, PackageKit, le module
+# `packages` de Calamares, `dpkg` appele par un script tiers -- modifiait le
+# systeme SANS filet, alors que l'interface et la documentation affirmaient le
+# contraire. Le hook s'attache a dpkg lui-meme: le filet devient reel quel que
+# soit le point d'entree.
+#
+# Appele par /etc/apt/apt.conf.d/80auxinux-snapshot:
+#   apt-snapshot-hook pre    (DPkg::Pre-Invoke)
+#   apt-snapshot-hook post   (DPkg::Post-Invoke)
+#
+# Ce script SORT TOUJOURS EN 0. Un echec de DPkg::Pre-Invoke avorte la
+# transaction apt: rendre l'instantane obligatoire transformerait une
+# indisponibilite de snapper en impossibilite d'installer quoi que ce soit.
+set -uo pipefail
+
+SNAPPER_CONFIG="root"
+
+# Chemins surchargeables: la suite de tests (tests/test-apt-snapshot-hook.sh)
+# fait tourner ce hook sur une arborescence factice, avec snapper et findmnt
+# remplaces par des stubs. Sans cela, le seul chemin qui porte reellement la
+# promesse « un instantane avant chaque transaction » ne serait couvert par
+# aucun test.
+SNAPPER_CONFIG_FILE="${AUXI_SNAPPER_CONFIG_FILE:-/etc/snapper/configs/${SNAPPER_CONFIG}}"
+STATE_FILE="${AUXI_SNAPSHOT_STATE:-/run/auxinux-apt-snapshot}"
+SNAPSHOT_OVERLAY_LOWER="${AUXI_SNAPSHOT_OVERLAY_LOWER:-/run/auxinux-snapshot/lower}"
+CMDLINE_FILE="${AUXI_CMDLINE_FILE:-/proc/cmdline}"
+
+trap 'exit 0' ERR
+
+booted_from_snapshot() {
+  [[ -d "${SNAPSHOT_OVERLAY_LOWER}" ]] || return 1
+  grep -qw 'auxinux.snapshot=1' "${CMDLINE_FILE}" 2>/dev/null
+}
+
+root_mount_ref() {
+  if booted_from_snapshot; then
+    printf '%s' "${SNAPSHOT_OVERLAY_LOWER}"
+  else
+    printf '/'
+  fi
+}
+
+# Silencieusement inactif partout ou les instantanes n'ont pas de sens: racine
+# ext4, snapper absent, chroot d'installation (la configuration snapper n'est
+# ecrite qu'en toute fin de sequence Calamares), conteneur de construction.
+usable() {
+  [[ "${AUXI_NO_SNAPSHOT:-0}" != "1" ]] || return 1
+  command -v snapper >/dev/null 2>&1 || return 1
+  [[ -f "${SNAPPER_CONFIG_FILE}" ]] || return 1
+  [[ "$(findmnt -no FSTYPE "$(root_mount_ref)" 2>/dev/null)" == "btrfs" ]] || return 1
+  return 0
+}
+
+# Un instantane demarre depuis GRUB est deja une superposition volatile: y
+# poser un instantane capturerait l'overlay, pas le systeme.
+if booted_from_snapshot; then
+  exit 0
+fi
+
+# Description lisible dans `snapper list`: la commande qui a declenche la
+# transaction. apt ne transmet rien au hook, on la lit donc sur le processus
+# appelant.
+invoking_command() {
+  local raw=""
+  if [[ -r "/proc/${PPID}/cmdline" ]]; then
+    raw="$(tr '\0' ' ' <"/proc/${PPID}/cmdline" 2>/dev/null)"
+  fi
+  raw="$(printf '%s' "${raw}" | tr -d '\n' | tr -s ' ')"
+  raw="${raw#"${raw%%[![:space:]]*}"}"
+  raw="${raw%"${raw##*[![:space:]]}"}"
+  # La virgule casserait la sortie CSV relue par le centre de controle.
+  raw="${raw//,/ }"
+  if [[ -z "${raw}" ]]; then
+    raw="transaction de paquets"
+  fi
+  printf '%.180s' "${raw}"
+}
+
+case "${1:-}" in
+  pre)
+    usable || exit 0
+    rm -f "${STATE_FILE}"
+    number="$(snapper -c "${SNAPPER_CONFIG}" create \
+      --type pre --print-number --cleanup-algorithm number \
+      --description "$(invoking_command)" \
+      --userdata "auxi=1" 2>/dev/null)" || exit 0
+    if [[ "${number}" =~ ^[0-9]+$ ]]; then
+      printf '%s\n' "${number}" >"${STATE_FILE}" 2>/dev/null || true
+      echo "AuxiNuxOS: instantane de securite ${number} cree avant cette operation."
+    fi
+    ;;
+  post)
+    [[ -r "${STATE_FILE}" ]] || exit 0
+    number="$(cat "${STATE_FILE}" 2>/dev/null)"
+    rm -f "${STATE_FILE}"
+    [[ "${number}" =~ ^[0-9]+$ ]] || exit 0
+    usable || exit 0
+    snapper -c "${SNAPPER_CONFIG}" create \
+      --type post --pre-number "${number}" \
+      --cleanup-algorithm number \
+      --userdata "auxi=1" >/dev/null 2>&1 || true
+    ;;
+esac
+
+exit 0

@@ -7,6 +7,8 @@ Aucune suite automatisée complète n’est actuellement fournie.
 ```bash
 bash tests/test-rollback.sh
 bash tests/test-windows-wizard.sh
+bash tests/test-apt-snapshot-hook.sh
+bash tests/test-post-install.sh
 (cd packages/auxinux-center && cargo test --no-default-features)
 ```
 
@@ -20,9 +22,31 @@ en erreur explicite quand `zenity` manque, annulation, et — le cas critique �
 l’usage d’un préfixe Wine dédié avec vérification que `~/.wine` n’est jamais
 créé.
 
-Dans les deux cas, les commandes système (`btrfs`, `mount`, `wine`, `zenity`)
-sont remplacées par des stubs : ces tests valident l’enchaînement et les
-chemins, pas le comportement réel des outils.
+`test-apt-snapshot-hook.sh` couvre le hook dpkg qui porte désormais la promesse
+« un instantané avant chaque transaction DEB » : paire pre/post, silence sur une
+racine ext4 ou dans le chroot d’installation, respect de `AUXI_NO_SNAPSHOT`, et
+— le cas critique — le fait qu’un échec de snapper **n’avorte jamais** la
+transaction apt.
+
+`test-post-install.sh` couvre les deux scripts de fin d’installation : le
+retrait effectif de l’installateur, de son autodémarrage et de Calamares du
+système installé, et la configuration du rollback quel que soit l’emplacement
+du modèle snapper — la régression qui laissait chaque système installé sans
+aucune restauration.
+
+Dans tous les cas, les commandes système (`btrfs`, `mount`, `wine`, `zenity`,
+`snapper`, `chroot`, `findmnt`) sont remplacées par des stubs : ces tests
+valident l’enchaînement et les chemins, pas le comportement réel des outils.
+
+## Vérification du rootfs pendant la construction
+
+`image-builder/scripts/check-rootfs.sh` s’exécute automatiquement avant la
+compression du squashfs et **arrête la construction** si une fonction annoncée
+manque à l’image. Il peut aussi être lancé seul sur un rootfs existant :
+
+```bash
+./image-builder/scripts/check-rootfs.sh /mnt/build/Auxinuxos-normal/en-0.1-beta-live/rootfs
+```
 
 ## Vérifications locales
 
@@ -41,7 +65,10 @@ chemins, pas le comportement réel des outils.
 3. Vérifier COSMIC, le réseau et l’ouverture de Calamares.
 4. Installer sur un disque virtuel jetable avec un compte autre que `auxinux`.
 5. Retirer l’ISO, redémarrer et ouvrir une session avec ce compte.
-6. Vérifier que le compte live, son sudo sans mot de passe et l’autologin ont disparu.
+6. Vérifier que le compte live, son sudo sans mot de passe et l’autologin ont
+   disparu, que **Calamares n’est plus installé**, qu’aucune fenêtre
+   d’installation ne s’ouvre à l’ouverture de session, que `/etc/fstab` est
+   intact, et que le compte créé porte bien l’**UID 1000** (`id -u`).
 7. Tester recherche, installation, mise à jour et désinstallation Flatpak et DEB.
 8. Vérifier les langues, le son et les paramètres du bureau.
 
@@ -56,12 +83,22 @@ chemins, pas le comportement réel des outils.
     l’opération ; `sudo snapper -c root list` doit montrer une paire pre/post.
 13. Casser volontairement le système (par exemple purger un paquet essentiel),
     redémarrer, puis restaurer via le sous-menu GRUB
-    « AuxiNux OS - instantanés ».
+    « AuxiNux OS - instantanés ». **Point à valider en priorité** : l’entrée
+    doit aboutir à une session utilisable, et non se figer — c’est le hook
+    initramfs `auxinux-snapshot-overlay` qui rend l’instantané inscriptible, et
+    il n’a jamais été éprouvé sur un démarrage réel. Vérifier ensuite
+    `findmnt /` (attendu : `overlay`) puis lancer `sudo auxi rollback NUMERO`.
+13b. Vérifier qu’un démarrage NORMAL n’est pas affecté : `findmnt -no FSTYPE /`
+    doit renvoyer `btrfs`, jamais `overlay`.
 14. Après restauration : vérifier que `/home` est intact, que les journaux
     d’avant la restauration sont toujours dans `/var/log`, et que les
     applications Flatpak sont toujours installées.
-15. Vérifier que `@.rollback-*` existe encore et que sa suppression manuelle
-    fonctionne.
+15. Vérifier que `@.rollback-*` existe encore, puis que
+    `sudo auxi rollback-cleanup` le liste et le supprime.
+15b. Vérifier que l’instantané est bien posé HORS de `auxi` :
+    `sudo AUXI_NO_SNAPSHOT=0 apt install <paquet>` après
+    `sudo auxi set apt=true` doit créer une paire pre/post dans
+    `sudo snapper -c root list`.
 16. Reprendre les étapes 9 à 15 sur une installation **chiffrée (LUKS)**, cas
     non testé à ce jour.
 

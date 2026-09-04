@@ -32,9 +32,10 @@ fn is_safe_app_id(id: &str) -> bool {
             .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_' | '+'))
 }
 
-/// Le vrai binaire apt-cache (les commandes apt/apt-cache sont detournees vers
-/// le wrapper `auxi`; pour une recherche en lecture seule on contourne la
-/// politique en appelant directement le binaire reel detourne par dpkg-divert).
+/// `apt-cache`. Il n'est plus detourne par la politique APT -- c'est une
+/// commande de LECTURE SEULE, la masquer ne protegeait rien. Le chemin de
+/// diversion reste teste pour les systemes installes avant ce changement, dont
+/// la diversion n'est annulee qu'a la mise a jour de l'image.
 fn apt_cache_bin() -> &'static str {
     if std::path::Path::new("/usr/lib/auxinux/apt-real/apt-cache").exists() {
         "/usr/lib/auxinux/apt-real/apt-cache"
@@ -64,6 +65,63 @@ fn flatpak_matches_deb(app: &AppEntry, deb_name: &str) -> bool {
     name == deb || id.rsplit('.').next().map(|s| s == deb).unwrap_or(false) || id.ends_with(&deb)
 }
 
+/// Ensembles des applications deja installees: identifiants Flatpak d'un cote,
+/// noms de paquets DEB de l'autre.
+///
+/// DEUX appels de commande pour une liste entiere. Interroger `flatpak info`
+/// et `dpkg-query` fiche par fiche aurait coute jusqu'a 120 processus pour un
+/// seul ecran de resultats.
+fn installed_index() -> (
+    std::collections::HashSet<String>,
+    std::collections::HashSet<String>,
+) {
+    let mut flatpaks = std::collections::HashSet::new();
+    let fp = run("flatpak", &["list", "--app", "--columns=application"]);
+    if fp.ok {
+        for line in fp.stdout.lines() {
+            let id = line.trim();
+            if !id.is_empty() {
+                flatpaks.insert(id.to_string());
+            }
+        }
+    }
+
+    let mut debs = std::collections::HashSet::new();
+    let dpkg = run("dpkg-query", &["-W", "-f=${Package} ${Status}\n"]);
+    if dpkg.ok {
+        for line in dpkg.stdout.lines() {
+            if !line.contains("install ok installed") {
+                continue;
+            }
+            if let Some(name) = line.split_whitespace().next() {
+                if !name.is_empty() {
+                    debs.insert(name.to_string());
+                }
+            }
+        }
+    }
+
+    (flatpaks, debs)
+}
+
+/// Renseigne l'etat d'installation de chaque fiche d'une liste.
+fn mark_installed(entries: &mut [AppEntry]) {
+    if entries.is_empty() {
+        return;
+    }
+    let (flatpaks, debs) = installed_index();
+    for entry in entries.iter_mut() {
+        entry.installed_flathub =
+            entry.has_source(SOURCE_FLATHUB) && flatpaks.contains(&entry.id);
+        entry.installed_deb = entry.has_source(SOURCE_DEB)
+            && entry
+                .deb_name
+                .as_deref()
+                .map(|n| debs.contains(n))
+                .unwrap_or(false);
+    }
+}
+
 pub fn search(query: &str) -> Vec<AppEntry> {
     let query = query.trim();
     if query.len() < 2 {
@@ -75,7 +133,7 @@ pub fn search(query: &str) -> Vec<AppEntry> {
     // --- Flathub (prioritaire) ---
     let fp = run(
         "flatpak",
-        &["search", "--columns=application,name,description,version", query],
+        &["search", "--columns=application,name,description,version", "--", query],
     );
     if fp.ok {
         for line in fp.stdout.lines() {
@@ -96,12 +154,16 @@ pub fn search(query: &str) -> Vec<AppEntry> {
                 default_source: SOURCE_FLATHUB.into(),
                 icon: flatpak_icon_path(id),
                 deb_name: None,
+                installed_flathub: false,
+                installed_deb: false,
             });
         }
     }
 
     // --- DEB (apt-cache search) ---
-    let deb = run(apt_cache_bin(), &["search", query]);
+    // "--": un terme commencant par un tiret etait lu comme une option par
+    // apt-cache.
+    let deb = run(apt_cache_bin(), &["search", "--", query]);
     if deb.ok {
         let mut added = 0usize;
         for line in deb.stdout.lines() {
@@ -131,11 +193,14 @@ pub fn search(query: &str) -> Vec<AppEntry> {
                 default_source: SOURCE_DEB.into(),
                 icon: String::new(),
                 deb_name: Some(name.to_string()),
+                installed_flathub: false,
+                installed_deb: false,
             });
             added += 1;
         }
     }
 
+    mark_installed(&mut entries);
     entries
 }
 
@@ -169,7 +234,7 @@ pub fn featured() -> Vec<AppEntry> {
         }
     }
 
-    let entries: Vec<AppEntry> = curated
+    let mut entries: Vec<AppEntry> = curated
         .iter()
         .map(|(id, name, summary, deb)| {
             let mut sources = vec![SOURCE_FLATHUB.into()];
@@ -187,9 +252,12 @@ pub fn featured() -> Vec<AppEntry> {
                 default_source: SOURCE_FLATHUB.into(),
                 icon: flatpak_icon_path(id),
                 deb_name,
+                installed_flathub: false,
+                installed_deb: false,
             }
         })
         .collect();
+    mark_installed(&mut entries);
     entries
 }
 
@@ -223,6 +291,8 @@ pub fn list_installed() -> Vec<AppEntry> {
                 default_source: SOURCE_FLATHUB.into(),
                 icon: flatpak_icon_path(id),
                 deb_name: None,
+                installed_flathub: false,
+                installed_deb: false,
             });
         }
     }
@@ -247,6 +317,12 @@ pub fn list_installed() -> Vec<AppEntry> {
     }
 
     entries.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    // Cette liste ne contient que des applications installees, par
+    // construction: inutile de relancer l'inventaire.
+    for entry in entries.iter_mut() {
+        entry.installed_flathub = entry.has_source(SOURCE_FLATHUB);
+        entry.installed_deb = entry.has_source(SOURCE_DEB);
+    }
     entries
 }
 
@@ -331,6 +407,8 @@ fn parse_desktop(
         default_source: SOURCE_DEB.into(),
         icon,
         deb_name: Some(id),
+        installed_flathub: false,
+        installed_deb: false,
     })
 }
 
@@ -608,6 +686,8 @@ pub fn list_updates() -> Vec<AppEntry> {
                 default_source: SOURCE_FLATHUB.into(),
                 icon: flatpak_icon_path(id),
                 deb_name: None,
+                installed_flathub: false,
+                installed_deb: false,
             });
         }
     }
@@ -642,6 +722,8 @@ pub fn list_updates() -> Vec<AppEntry> {
                 default_source: SOURCE_DEB.into(),
                 icon: String::new(),
                 deb_name: Some(pkg),
+                installed_flathub: false,
+                installed_deb: false,
             });
         }
     }

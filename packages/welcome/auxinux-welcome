@@ -1,157 +1,133 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -uo pipefail
+
+# Accueil de la session live: choix de la langue, puis presentation.
+#
+# CE QUI NE FONCTIONNAIT PAS: ce script pilotait `kdialog` et ecrivait des
+# fichiers de configuration Plasma (plasma-localerc, plasma-workspace/env).
+# kdialog venait de Plasma, qui n'est plus installe depuis le passage a
+# COSMIC: le script retombait sur une lecture au clavier, sans terminal
+# attache. En session graphique, le PREMIER ecran de la distribution
+# n'affichait donc rien du tout, et la langue n'etait jamais appliquee.
+#
+# Tout passe desormais par zenity (present dans l'image, GTK, fonctionne sous
+# Wayland) et par environment.d, qui est le mecanisme d'environnement des
+# sessions COSMIC.
 
 STATE_DIR="${HOME}/.config/auxinux"
 STATE_FILE="${STATE_DIR}/welcome-seen"
 CHOICE_FILE="${STATE_DIR}/language"
 RESTART_FILE="${STATE_DIR}/session-restarted"
-PLASMA_LOCALE="${HOME}/.config/plasma-localerc"
-PLASMA_ENV_DIR="${HOME}/.config/plasma-workspace/env"
-PLASMA_ENV_FILE="${PLASMA_ENV_DIR}/auxinux-locale.sh"
-WALLPAPER_FILE="/usr/share/wallpapers/AuxiNuxOS/contents/images/default.png"
+ENV_DIR="${HOME}/.config/environment.d"
+ENV_FILE="${ENV_DIR}/60-auxinux-locale.conf"
 
-if [[ -e "${STATE_FILE}" ]]; then
+[[ -e "${STATE_FILE}" ]] && exit 0
+
+# Sans dialogue graphique, cet ecran n'a aucun moyen de s'afficher. On le dit
+# sur stderr (visible dans le journal de session) et on sort sans bloquer le
+# demarrage: l'absence d'accueil ne doit pas empecher d'utiliser le live.
+if ! command -v zenity >/dev/null 2>&1; then
+  echo "auxinux-welcome: zenity introuvable, accueil ignore." >&2
   exit 0
 fi
 
-mkdir -p "${STATE_DIR}" "$(dirname "${PLASMA_LOCALE}")" "${PLASMA_ENV_DIR}"
+mkdir -p "${STATE_DIR}" "${ENV_DIR}"
 
 choose_language() {
-  if command -v kdialog >/dev/null 2>&1; then
-    kdialog \
-      --title "AuxiNuxOS / Welcome" \
-      --radiolist "Choisissez la langue pour poursuivre / Choose your language" \
-      fr "Francais" on \
-      en "English" off
-    return
-  fi
-
-  printf '1) Francais\n2) English\n> ' >&2
-  read -r choice
-  case "${choice}" in
-    2|en|EN|english|English) printf 'en\n' ;;
-    *) printf 'fr\n' ;;
-  esac
+  zenity --list --radiolist \
+    --title "AuxiNuxOS" \
+    --width 560 --height 260 \
+    --text "Choisissez la langue pour poursuivre\nChoose your language" \
+    --column "" --column "Langue / Language" \
+    TRUE  "Francais (Canada)" \
+    FALSE "English (Canada)" \
+    2>/dev/null
 }
 
-write_live_locale() {
-  local lang="$1"
-  case "${lang}" in
-    en)
-      cat >"${PLASMA_LOCALE}" <<'EOF'
-[Formats]
-LANG=en_CA.UTF-8
-
-[Translations]
-LANGUAGE=en_CA:en:fr_CA:fr
-EOF
-      cat >"${PLASMA_ENV_FILE}" <<'EOF'
-export LANG=en_CA.UTF-8
-export LANGUAGE=en_CA:en:fr_CA:fr
-export LC_TIME=en_CA.UTF-8
-export LC_MONETARY=en_CA.UTF-8
-export LC_PAPER=en_CA.UTF-8
-export LC_MEASUREMENT=en_CA.UTF-8
-EOF
-      ;;
-    *)
-      cat >"${PLASMA_LOCALE}" <<'EOF'
-[Formats]
-LANG=fr_CA.UTF-8
-
-[Translations]
-LANGUAGE=fr_CA:fr:en_CA:en
-EOF
-      cat >"${PLASMA_ENV_FILE}" <<'EOF'
-export LANG=fr_CA.UTF-8
-export LANGUAGE=fr_CA:fr:en_CA:en
-export LC_TIME=fr_CA.UTF-8
-export LC_MONETARY=fr_CA.UTF-8
-export LC_PAPER=fr_CA.UTF-8
-export LC_MEASUREMENT=fr_CA.UTF-8
-EOF
-      ;;
-  esac
-  chmod 0755 "${PLASMA_ENV_FILE}"
-}
-
-apply_wallpaper() {
-  if command -v plasma-apply-wallpaperimage >/dev/null 2>&1 && [[ -f "${WALLPAPER_FILE}" ]]; then
-    plasma-apply-wallpaperimage "${WALLPAPER_FILE}" >/dev/null 2>&1 || true
+write_locale() {
+  local lang="$1" primary chain
+  if [[ "${lang}" == "en" ]]; then
+    primary="en_CA.UTF-8"
+    chain="en_CA:en:fr_CA:fr"
+  else
+    primary="fr_CA.UTF-8"
+    chain="fr_CA:fr:en_CA:en"
   fi
+
+  # environment.d est lu par le gestionnaire de session utilisateur, qui
+  # transmet ces variables a COSMIC et a toutes les applications lancees
+  # depuis le bureau.
+  cat >"${ENV_FILE}" <<EOF
+LANG=${primary}
+LANGUAGE=${chain}
+LC_TIME=${primary}
+LC_MONETARY=${primary}
+LC_PAPER=${primary}
+LC_MEASUREMENT=${primary}
+EOF
+  chmod 0644 "${ENV_FILE}"
 }
 
 restart_session() {
+  local lang="$1" message
+  if [[ "${lang}" == "en" ]]; then
+    message="The live session will restart once so the whole interface switches to English."
+  else
+    message="La session live va redemarrer une seule fois pour appliquer le francais a toute l'interface."
+  fi
+
+  if ! zenity --question --no-wrap --title "AuxiNuxOS" \
+       --ok-label "Redemarrer / Restart" --cancel-label "Plus tard / Later" \
+       --text "${message}" 2>/dev/null; then
+    return 1
+  fi
+
   touch "${RESTART_FILE}"
-  if command -v kdialog >/dev/null 2>&1; then
-    if [[ "$1" == "en" ]]; then
-      kdialog --title "AuxiNuxOS" --msgbox "The live session will restart once to apply English to the full KDE interface."
-    else
-      kdialog --title "AuxiNuxOS" --msgbox "La session live va redemarrer une seule fois pour appliquer le francais a toute l'interface KDE."
-    fi
-  fi
-
-  if command -v qdbus6 >/dev/null 2>&1; then
-    qdbus6 org.kde.Shutdown /Shutdown logout >/dev/null 2>&1 && exit 0
-    qdbus6 org.kde.ksmserver /KSMServer logout 0 0 0 >/dev/null 2>&1 && exit 0
-  fi
-
   if command -v loginctl >/dev/null 2>&1; then
-    (sleep 2; loginctl terminate-user "${USER}") >/dev/null 2>&1 &
+    (sleep 1; loginctl terminate-user "${USER}") >/dev/null 2>&1 &
     exit 0
   fi
+  return 1
 }
 
 show_intro() {
   local lang="$1"
-  if command -v kdialog >/dev/null 2>&1; then
-    if [[ "${lang}" == "en" ]]; then
-      kdialog --title "Welcome to AuxiNuxOS" --msgbox \
-"AuxiNuxOS is a Canadian desktop Linux project based on Debian, KDE Plasma and a privacy-first software selection.
+  if [[ "${lang}" == "en" ]]; then
+    zenity --info --no-wrap --title "Welcome to AuxiNuxOS" --text \
+"AuxiNuxOS is a Canadian desktop Linux project based on Debian and the COSMIC desktop, with a privacy-first software selection.
 
-This live environment lets you test the system before installing it.
+This live environment lets you try the system before installing it.
 
-The goal is simple: a familiar desktop, no AuxiNux telemetry, Flatpak first for applications, and DEB packages available when needed."
-    else
-      kdialog --title "Bienvenue dans AuxiNuxOS" --msgbox \
-"AuxiNuxOS est un projet Linux de bureau canadien base sur Debian, KDE Plasma et une selection logicielle orientee vie privee.
+A familiar desktop, no AuxiNux telemetry, Flatpak first for applications, and DEB packages available when needed." 2>/dev/null
+  else
+    zenity --info --no-wrap --title "Bienvenue dans AuxiNuxOS" --text \
+"AuxiNuxOS est un projet Linux de bureau canadien base sur Debian et le bureau COSMIC, avec une selection logicielle orientee vie privee.
 
 Cet environnement live permet d'essayer le systeme avant de l'installer.
 
-Le but est simple: un bureau familier, aucune telemetrie AuxiNux, Flatpak en priorite pour les applications, et les paquets DEB disponibles au besoin."
-    fi
-    return
-  fi
-
-  if [[ "${lang}" == "en" ]]; then
-    printf '%s\n' "Welcome to AuxiNuxOS. Privacy-first Debian/KDE desktop, Flatpak first, DEB available." >&2
-  else
-    printf '%s\n' "Bienvenue dans AuxiNuxOS. Bureau Debian/KDE oriente vie privee, Flatpak en premier, DEB disponible." >&2
+Un bureau familier, aucune telemetrie AuxiNux, Flatpak en priorite pour les applications, et les paquets DEB disponibles au besoin." 2>/dev/null
   fi
 }
 
 if [[ -f "${CHOICE_FILE}" ]]; then
   selected="$(cat "${CHOICE_FILE}")"
 else
-  language="$(choose_language || true)"
-  case "${language}" in
-    en) selected="en" ;;
+  case "$(choose_language)" in
+    English*) selected="en" ;;
+    # Fermeture de la fenetre comprise: le francais est la langue par defaut
+    # de la distribution.
     *) selected="fr" ;;
   esac
   printf '%s\n' "${selected}" >"${CHOICE_FILE}"
 fi
 
-write_live_locale "${selected}"
-apply_wallpaper
+write_locale "${selected}"
 
-current_lang="${LANG:-fr_CA.UTF-8}"
 desired_lang="fr_CA.UTF-8"
-if [[ "${selected}" == "en" ]]; then
-  desired_lang="en_CA.UTF-8"
-fi
+[[ "${selected}" == "en" ]] && desired_lang="en_CA.UTF-8"
 
-if [[ ! -f "${RESTART_FILE}" && "${current_lang}" != "${desired_lang}" ]]; then
-  restart_session "${selected}"
+if [[ ! -f "${RESTART_FILE}" && "${LANG:-}" != "${desired_lang}" ]]; then
+  restart_session "${selected}" || true
 fi
 
 show_intro "${selected}"

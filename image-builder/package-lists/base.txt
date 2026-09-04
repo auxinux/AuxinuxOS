@@ -24,7 +24,11 @@ live-boot
 live-config
 flatpak
 appstream
-packagekit
+# packagekit RETIRE: aucun composant de COSMIC ne l'utilise (Discover venait de
+# Plasma), et il ouvre un chemin vers dpkg parallele a celui d'apt. Le hook
+# d'instantane couvre desormais toute transaction dpkg, mais un service
+# d'installation supplementaire, actif en permanence et joignable par D-Bus,
+# reste une surface d'attaque sans contrepartie sur cette image.
 polkitd
 pkexec
 nano

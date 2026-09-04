@@ -11,9 +11,16 @@ use std::fs;
 use std::path::Path;
 
 use crate::model::{ActionResult, AptSource, FlatpakRemote, SourcePreset};
-use crate::util::{run, run_pkexec, run_pkexec_script};
+use crate::util::{run, run_pkexec};
 
 const SOURCES_DIR: &str = "/etc/apt/sources.list.d";
+
+/// Assistant privilegie. Tout ce qui s'execute en root vit dans ce fichier,
+/// appartenant a root, avec sa propre action polkit: l'invite
+/// d'authentification annonce « ajouter une source de logiciels » au lieu de
+/// « executer bash », et plus aucun script n'est depose dans un repertoire
+/// temporaire partage avant d'etre execute avec les privileges.
+const SOURCE_HELPER: &str = "/usr/libexec/auxinux/auxinux-source-helper";
 
 fn pretty_name(file: &str) -> String {
     file.trim_end_matches(".disabled")
@@ -174,41 +181,33 @@ pub fn remove_apt_source(file: &str) -> ActionResult {
 struct PresetDef {
     name: &'static str,
     desc: &'static str,
-    key_url: &'static str,
-    body: &'static str,
 }
 
+/// Libelles seuls. L'URL de la cle et le corps deb822 de chaque depot connu
+/// sont definis DANS l'assistant privilegie: le centre ne transmet qu'un
+/// identifiant, et ne peut donc pas faire telecharger une cle arbitraire en
+/// root, meme si son propre code etait detourne.
 fn preset_defs() -> Vec<(&'static str, PresetDef)> {
     vec![
         ("vscode", PresetDef {
             name: "Visual Studio Code",
             desc: "Editeur de code Microsoft, tres populaire.",
-            key_url: "https://packages.microsoft.com/keys/microsoft.asc",
-            body: "Types: deb\nURIs: https://packages.microsoft.com/repos/code\nSuites: stable\nComponents: main\nArchitectures: amd64\nSigned-By: /etc/apt/keyrings/vscode.asc\n",
         }),
         ("docker", PresetDef {
             name: "Docker CE",
             desc: "Moteur de conteneurs Docker (depot officiel).",
-            key_url: "https://download.docker.com/linux/debian/gpg",
-            body: "Types: deb\nURIs: https://download.docker.com/linux/debian\nSuites: trixie\nComponents: stable\nArchitectures: amd64\nSigned-By: /etc/apt/keyrings/docker.asc\n",
         }),
         ("mozilla", PresetDef {
             name: "Mozilla Firefox",
             desc: "Firefox officiel par Mozilla, mises a jour rapides.",
-            key_url: "https://packages.mozilla.org/apt/repo-signing-key.gpg",
-            body: "Types: deb\nURIs: https://packages.mozilla.org/apt\nSuites: mozilla\nComponents: main\nSigned-By: /etc/apt/keyrings/mozilla.asc\n",
         }),
         ("mullvad", PresetDef {
             name: "Mullvad VPN",
             desc: "VPN axe vie privee, sans journaux, paiement anonyme possible.",
-            key_url: "https://repository.mullvad.net/deb/mullvad-keyring.asc",
-            body: "Types: deb\nURIs: https://repository.mullvad.net/deb/stable\nSuites: trixie\nComponents: main\nArchitectures: amd64\nSigned-By: /etc/apt/keyrings/mullvad.asc\n",
         }),
         ("signal", PresetDef {
             name: "Signal Desktop",
             desc: "Messagerie chiffree de bout en bout, orientee vie privee.",
-            key_url: "https://updates.signal.org/desktop/apt/keys.asc",
-            body: "Types: deb\nURIs: https://updates.signal.org/desktop/apt\nSuites: xenial\nComponents: main\nArchitectures: amd64\nSigned-By: /etc/apt/keyrings/signal.asc\n",
         }),
     ]
 }
@@ -232,31 +231,29 @@ pub fn add_source_preset(preset: &str) -> ActionResult {
     let Some((id, d)) = preset_defs().into_iter().find(|(id, _)| *id == preset) else {
         return ActionResult::err(format!("preset inconnu: {preset}"));
     };
-    // Presets are compile-time constants, but the writer path is shared with
-    // user input; assert their safety so a bad edit can't reopen the
-    // hole.
-    if !is_safe_key_url(d.key_url) || !is_safe_sources_body(d.body) {
-        return ActionResult::err("preset interne invalide");
-    }
-    let out = run_pkexec_script(&preset_script(id, d.key_url, d.body));
+    let out = run_pkexec(&[SOURCE_HELPER, "preset", id]);
     if out.ok {
         ActionResult::ok(format!("Depot '{}' ajoute", d.name))
     } else {
-        ActionResult::err(out.stderr)
+        ActionResult::err(helper_error(&out.stderr))
     }
 }
 
-fn preset_script(id: &str, key_url: &str, sources_body: &str) -> String {
-    format!(
-        r#"set -euo pipefail
-install -d -m 0755 /etc/apt/keyrings
-curl -fsSL "{key_url}" -o /etc/apt/keyrings/{id}.asc
-chmod 0644 /etc/apt/keyrings/{id}.asc
-cat > /etc/apt/sources.list.d/{id}.sources <<'AUXIEOF'
-{sources_body}AUXIEOF
-auxi update || apt-get update || true
-"#
-    )
+/// Message d'echec de l'assistant, ramene a sa derniere ligne utile: la sortie
+/// de pkexec ajoute des lignes de refus d'autorisation qui noient la cause.
+fn helper_error(stderr: &str) -> String {
+    let msg = stderr
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .last()
+        .unwrap_or("")
+        .trim()
+        .to_string();
+    if msg.is_empty() {
+        "Ajout du depot impossible (authentification refusee ?)".into()
+    } else {
+        msg
+    }
 }
 
 pub fn add_custom_apt_source(name: &str, sources_body: &str, key_url: &str) -> ActionResult {
@@ -264,40 +261,29 @@ pub fn add_custom_apt_source(name: &str, sources_body: &str, key_url: &str) -> A
         .chars()
         .map(|c| if c.is_ascii_alphanumeric() || c == '-' || c == '_' { c } else { '-' })
         .collect();
-    if safe.is_empty() {
+    if safe.is_empty() || safe.len() > 64 {
         return ActionResult::err("nom invalide");
     }
-    // both fields are written/executed in root context. Validate
-    // before building the script so neither can inject shell.
+    // Pre-validation cote interface pour rendre l'erreur immediate et lisible.
+    // Le controle qui FAIT FOI est celui de l'assistant privilegie: c'est lui
+    // qui s'execute en root.
     if !is_safe_sources_body(sources_body) {
         return ActionResult::err(
             "corps de depot invalide (champs deb822 attendus, sans caractere special)",
         );
     }
     let key_trimmed = key_url.trim();
-    let key_part = if key_trimmed.is_empty() {
-        String::new()
-    } else {
-        if !is_safe_key_url(key_trimmed) {
-            return ActionResult::err("URL de cle invalide (https:// requis)");
-        }
-        format!(
-            "install -d -m 0755 /etc/apt/keyrings\ncurl -fsSL \"{key_trimmed}\" -o /etc/apt/keyrings/{safe}.asc\nchmod 0644 /etc/apt/keyrings/{safe}.asc\n"
-        )
-    };
-    let script = format!(
-        r#"set -euo pipefail
-{key_part}cat > /etc/apt/sources.list.d/{safe}.sources <<'AUXIEOF'
-{sources_body}
-AUXIEOF
-auxi update || apt-get update || true
-"#
-    );
-    let out = run_pkexec_script(&script);
+    if !key_trimmed.is_empty() && !is_safe_key_url(key_trimmed) {
+        return ActionResult::err("URL de cle invalide (https:// requis)");
+    }
+
+    // argv, jamais un script: ni le corps ni l'URL ne sont interpretes par un
+    // shell a un quelconque moment.
+    let out = run_pkexec(&[SOURCE_HELPER, "custom", &safe, key_trimmed, sources_body]);
     if out.ok {
         ActionResult::ok(format!("Depot '{safe}' ajoute"))
     } else {
-        ActionResult::err(out.stderr)
+        ActionResult::err(helper_error(&out.stderr))
     }
 }
 
@@ -361,5 +347,52 @@ pub fn set_apt_wrapper(enabled: bool) -> ActionResult {
         ActionResult::ok("Politique APT mise a jour")
     } else {
         ActionResult::err(out.stderr)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn key_urls_must_be_https_and_shell_safe() {
+        assert!(is_safe_key_url("https://packages.microsoft.com/keys/microsoft.asc"));
+        assert!(!is_safe_key_url("http://example.tld/key.asc"));
+        assert!(!is_safe_key_url("https://example.tld/$(id).asc"));
+        assert!(!is_safe_key_url("https://example.tld/`id`"));
+        assert!(!is_safe_key_url("https://example.tld/a\";id;\""));
+        assert!(!is_safe_key_url("file:///etc/shadow"));
+        assert!(!is_safe_key_url(""));
+    }
+
+    #[test]
+    fn sources_body_accepts_only_known_deb822_fields() {
+        let good = "Types: deb\nURIs: https://example.tld\nSuites: trixie\nComponents: main\n";
+        assert!(is_safe_sources_body(good));
+        assert!(!is_safe_sources_body("Types: deb\nrm -rf /\n"));
+        assert!(!is_safe_sources_body("Types: deb\nAUXIEOF\n"));
+        assert!(!is_safe_sources_body(""));
+        assert!(!is_safe_sources_body(&"Types: deb\n".repeat(1000)));
+    }
+
+    #[test]
+    fn unknown_preset_is_refused_without_calling_the_helper() {
+        let result = add_source_preset("../../etc/passwd");
+        assert!(!result.ok);
+        assert!(result.message.contains("preset inconnu"));
+    }
+
+    #[test]
+    fn protected_system_sources_cannot_be_removed() {
+        assert!(is_protected("auxinuxos-kernel.list"));
+        assert!(is_protected("brave-browser-release.sources"));
+        assert!(!is_protected("docker.sources"));
+
+        let result = remove_apt_source("auxinuxos-kernel.list");
+        assert!(!result.ok);
+
+        // Traversee de chemin refusee avant tout appel privilegie.
+        assert!(!remove_apt_source("../../etc/passwd").ok);
+        assert!(!set_apt_source_enabled("../../etc/passwd", false).ok);
     }
 }

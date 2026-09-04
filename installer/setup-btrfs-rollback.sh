@@ -21,7 +21,21 @@ prefix="${TARGET_ROOT%/}"
 
 SNAPPER_CONFIG_DIR="${prefix}/etc/snapper/configs"
 SNAPPER_CONFIG="${SNAPPER_CONFIG_DIR}/root"
-SNAPPER_TEMPLATE="${prefix}/etc/snapper/config-templates/default"
+
+# Emplacements possibles du modele de configuration snapper.
+#
+# Debian 13 livre le modele sous /usr/share/snapper/config-templates/default
+# et NON sous /etc/snapper/config-templates/default (verifie dans la liste des
+# fichiers du paquet). Ne chercher que dans /etc faisait sortir ce script en
+# code 0 avec un simple avertissement: aucune config snapper, aucun instantane
+# initial, aucun sous-menu GRUB -- le rollback etait absent de CHAQUE systeme
+# installe, et la panne n'apparaissait que le jour ou l'utilisateur en avait
+# besoin. On cherche donc les deux, et a defaut on ecrit un modele minimal
+# plutot que d'abandonner la fonction principale de la distribution.
+SNAPPER_TEMPLATE_CANDIDATES="
+${prefix}/usr/share/snapper/config-templates/default
+${prefix}/etc/snapper/config-templates/default
+"
 
 WARNINGS=0
 
@@ -60,16 +74,56 @@ fi
 #    create-config veut creer lui-meme le sous-volume /.snapshots et echoue
 #    quand Calamares l'a deja cree et monte (notre cas). Ecrire le fichier de
 #    config evite entierement la desactivation/remontage acrobatique.
-if [ ! -f "${SNAPPER_TEMPLATE}" ]; then
-  warn "modele snapper introuvable: ${SNAPPER_TEMPLATE}"
-  finish
-fi
+SNAPPER_TEMPLATE=""
+for candidate in ${SNAPPER_TEMPLATE_CANDIDATES}; do
+  if [ -f "${candidate}" ]; then
+    SNAPPER_TEMPLATE="${candidate}"
+    break
+  fi
+done
 
 mkdir -p "${SNAPPER_CONFIG_DIR}"
 if [ ! -f "${SNAPPER_CONFIG}" ]; then
-  if ! cp "${SNAPPER_TEMPLATE}" "${SNAPPER_CONFIG}"; then
-    warn "copie du modele snapper impossible."
-    finish
+  if [ -n "${SNAPPER_TEMPLATE}" ]; then
+    if ! cp "${SNAPPER_TEMPLATE}" "${SNAPPER_CONFIG}"; then
+      warn "copie du modele snapper impossible."
+      finish
+    fi
+  else
+    # Repli: aucun modele livre par le paquet. Toutes les cles que ce script
+    # pilote sont ecrites plus bas par set_cfg; celles-ci sont les valeurs
+    # structurelles que snapper attend et qui ne doivent pas rester vides.
+    warn "modele snapper introuvable; ecriture d'une configuration minimale."
+    cat >"${SNAPPER_CONFIG}" <<'SNAPPER_EOF'
+SUBVOLUME="/"
+FSTYPE="btrfs"
+QGROUP=""
+SPACE_LIMIT="0.5"
+FREE_LIMIT="0.2"
+ALLOW_USERS=""
+ALLOW_GROUPS=""
+SYNC_ACL="no"
+BACKGROUND_COMPARISON="yes"
+NUMBER_CLEANUP="no"
+NUMBER_MIN_AGE="1800"
+NUMBER_LIMIT="50"
+NUMBER_LIMIT_IMPORTANT="10"
+TIMELINE_CREATE="no"
+TIMELINE_CLEANUP="no"
+TIMELINE_MIN_AGE="1800"
+TIMELINE_LIMIT_HOURLY="10"
+TIMELINE_LIMIT_DAILY="10"
+TIMELINE_LIMIT_WEEKLY="0"
+TIMELINE_LIMIT_MONTHLY="10"
+TIMELINE_LIMIT_QUARTERLY="0"
+TIMELINE_LIMIT_YEARLY="10"
+EMPTY_PRE_POST_CLEANUP="yes"
+EMPTY_PRE_POST_MIN_AGE="1800"
+SNAPPER_EOF
+    if [ ! -s "${SNAPPER_CONFIG}" ]; then
+      warn "ecriture de la configuration snapper impossible."
+      finish
+    fi
   fi
 fi
 chmod 0640 "${SNAPPER_CONFIG}" || warn "chmod sur ${SNAPPER_CONFIG} echoue."
@@ -114,6 +168,15 @@ set_cfg EMPTY_PRE_POST_CLEANUP "yes"
 set_cfg SPACE_LIMIT "0.4"
 set_cfg FREE_LIMIT "0.2"
 
+# SPACE_LIMIT et FREE_LIMIT sont INOPERANTS sans les quotas BTRFS: snapper ne
+# sait pas mesurer la place occupee par les instantanes tant qu'un qgroup
+# n'existe pas. Les deux reglages ci-dessus etaient donc purement decoratifs,
+# et seules les limites numeriques retenaient quoi que ce soit. `setup-quota`
+# active les quotas et renseigne la cle QGROUP de la configuration.
+if ! chroot "${TARGET_ROOT}" snapper --no-dbus -c root setup-quota >/dev/null 2>&1; then
+  warn "quotas BTRFS non actives: les limites d'espace des instantanes seront ignorees."
+fi
+
 # 3. Declarer la config aupres des services snapper.
 if [ -f "${prefix}/etc/default/snapper" ]; then
   if grep -Eq '^SNAPPER_CONFIGS=' "${prefix}/etc/default/snapper"; then
@@ -151,6 +214,13 @@ GRUB_BTRFS_SUBMENUNAME="AuxiNux OS - instantanes (restauration)"
 GRUB_BTRFS_LIMIT="20"
 GRUB_BTRFS_TITLE_FORMAT=("date" "description" "type")
 GRUB_BTRFS_SHOW_SNAPSHOTS_FOUND="true"
+
+# Marqueur consomme par le hook initramfs auxinux-snapshot-overlay. Les
+# instantanes snapper sont en LECTURE SEULE: sans superposition inscriptible,
+# systemd s'arrete des les premieres ecritures et le menu de restauration ne
+# menait nulle part. Ce parametre est le seul declencheur du hook, ce qui
+# garantit qu'un demarrage normal n'est jamais touche.
+GRUB_BTRFS_SNAPSHOT_KERNEL_PARAMETERS="auxinux.snapshot=1"
 GRUB_BTRFS_EOF
   fi
 else

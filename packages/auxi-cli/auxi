@@ -5,7 +5,7 @@ APT_CONF="/etc/auxinux/apt.conf"
 APT_REAL_DIR="/usr/lib/auxinux/apt-real"
 SNAPPER_CONFIG="root"
 BTRFS_TOPLEVEL_MNT="/run/auxinux-btrfs-toplevel"
-SNAPSHOT_PRE_NUM=""
+SNAPSHOT_OVERLAY_LOWER="/run/auxinux-snapshot/lower"
 
 is_english() {
   local locale_chain="${LC_ALL:-}|${LC_MESSAGES:-}|${LANGUAGE:-}|${LANG:-}"
@@ -49,6 +49,7 @@ Usage:
   auxi snapshot [DESCRIPTION]
   auxi snapshots
   auxi rollback [NUMBER] [--yes]
+  auxi rollback-cleanup [--yes]
   auxi set apt=true|false
   auxi status
 EOF
@@ -68,6 +69,7 @@ Usage:
   auxi snapshot [DESCRIPTION]
   auxi snapshots
   auxi rollback [NUMERO] [--yes]
+  auxi rollback-cleanup [--yes]
   auxi set apt=true|false
   auxi status
 EOF
@@ -148,9 +150,30 @@ set_apt() {
 # absent ou une session live n'ont pas d'instantanes, et cela ne doit JAMAIS
 # empecher une installation de paquet d'aboutir.
 
+# Vrai quand le systeme a demarre sur un instantane depuis le menu GRUB. Dans
+# ce cas la racine visible est un overlay (voir le hook initramfs
+# auxinux-snapshot-overlay): interroger "/" renverrait « overlay » et le nom de
+# peripherique « auxinux-snapshot ». C'est PRECISEMENT la situation ou l'on a
+# besoin de `auxi rollback`, et sans cette distinction la commande refusait de
+# s'executer.
+booted_from_snapshot() {
+  [[ -d "${SNAPSHOT_OVERLAY_LOWER}" ]] || return 1
+  grep -qw 'auxinux.snapshot=1' /proc/cmdline 2>/dev/null
+}
+
+# Point de montage a interroger pour connaitre le VRAI systeme de fichiers
+# racine, instantane compris.
+root_mount_ref() {
+  if booted_from_snapshot; then
+    printf '%s' "${SNAPSHOT_OVERLAY_LOWER}"
+  else
+    printf '/'
+  fi
+}
+
 snapshots_available() {
   command -v snapper >/dev/null 2>&1 || return 1
-  [[ "$(findmnt -no FSTYPE / 2>/dev/null)" == "btrfs" ]] || return 1
+  [[ "$(findmnt -no FSTYPE "$(root_mount_ref)" 2>/dev/null)" == "btrfs" ]] || return 1
   [[ -f "/etc/snapper/configs/${SNAPPER_CONFIG}" ]] || return 1
   return 0
 }
@@ -168,48 +191,18 @@ require_snapshots() {
   exit 69
 }
 
-# Instantane "pre" pose juste avant une transaction DEB. La paire pre/post
-# permet ensuite a snapper de montrer exactement ce que la transaction a
-# change (snapper status PRE..POST).
-snapshot_pre() {
-  local description="$1"
-  SNAPSHOT_PRE_NUM=""
-  [[ "${EUID}" -eq 0 ]] || return 0
-  [[ "${AUXI_NO_SNAPSHOT:-0}" == "1" ]] && return 0
-  snapshots_available || return 0
-
-  SNAPSHOT_PRE_NUM="$(snapper -c "${SNAPPER_CONFIG}" create \
-    --type pre --print-number --cleanup-algorithm number \
-    --description "auxi ${description}" \
-    --userdata "auxi=1" 2>/dev/null || true)"
-
-  if [[ -n "${SNAPSHOT_PRE_NUM}" ]]; then
-    # Le trap garantit que le "post" est pose meme si apt-get echoue: sans lui,
-    # `set -e` sortirait en laissant un "pre" orphelin dans l'historique.
-    trap auxi_on_exit EXIT
-    say \
-      "Instantane de securite ${SNAPSHOT_PRE_NUM} cree avant: ${description}" \
-      "Safety snapshot ${SNAPSHOT_PRE_NUM} created before: ${description}"
-  else
-    say_err \
-      "Instantane de securite impossible; l'operation continue." \
-      "Safety snapshot failed; continuing anyway."
-  fi
-}
-
-snapshot_post() {
-  [[ -n "${SNAPSHOT_PRE_NUM}" ]] || return 0
-  local number="${SNAPSHOT_PRE_NUM}"
-  SNAPSHOT_PRE_NUM=""
-  snapper -c "${SNAPPER_CONFIG}" create \
-    --type post --pre-number "${number}" \
-    --cleanup-algorithm number \
-    --userdata "auxi=1" >/dev/null 2>&1 || true
-}
-
-auxi_on_exit() {
-  snapshot_post
-}
+# Les instantanes automatiques ne sont PLUS poses ici.
+#
+# Ils le sont par /usr/lib/auxinux/apt-snapshot-hook, branche sur DPkg::Pre-
+# Invoke et DPkg::Post-Invoke (voir /etc/apt/apt.conf.d/80auxinux-snapshot).
+# Tant que la logique vivait dans `auxi`, toute autre voie vers dpkg -- `apt`
+# reactive par `auxi set apt=true`, PackageKit, un script tiers -- modifiait le
+# systeme sans filet, alors que l'interface affirmait le contraire. Attache a
+# dpkg, l'instantane couvre desormais tous les chemins, `auxi` compris: le
+# dupliquer ici produirait deux paires pre/post par transaction.
+#
+# AUXI_NO_SNAPSHOT=1 reste honore: le hook lit la meme variable, transmise par
+# l'environnement jusqu'a apt-get.
 
 run_snapshot() {
   require_snapshots
@@ -265,7 +258,7 @@ run_rollback() {
   fi
 
   local root_source root_device
-  root_source="$(findmnt -no SOURCE / 2>/dev/null || true)"
+  root_source="$(findmnt -no SOURCE "$(root_mount_ref)" 2>/dev/null || true)"
   # findmnt rend "/dev/sda2[/@]" sur un sous-volume: on retire le suffixe.
   root_device="${root_source%%\[*}"
   if [[ -z "${root_device}" ]]; then
@@ -353,12 +346,93 @@ run_rollback() {
   say \
     "Une fois le redemarrage valide, vous pouvez le supprimer:" \
     "Once the reboot is confirmed working, you can delete it:"
-  # Le point de montage temporaire est demonte par auxi_rollback_cleanup des la
-  # fin de cette commande: on donne donc la sequence complete, pas un chemin
-  # qui n'existera plus.
-  printf '  sudo mount -o subvolid=5 %s /mnt\n' "${root_device}"
-  printf '  sudo btrfs subvolume delete /mnt/%s\n' "${saved}"
-  printf '  sudo umount /mnt\n'
+  printf '  sudo auxi rollback-cleanup\n'
+}
+
+# Suppression des systemes mis de cote par une restauration.
+#
+# `auxi rollback` conserve DELIBEREMENT l'ancien systeme sous @.rollback-<date>
+# -- c'est le seul recours si la restauration s'avere pire que la panne. Mais
+# rien ne les supprimait ensuite: chaque restauration laissait une copie
+# complete du systeme sur le disque, jusqu'a saturation. La suppression reste
+# manuelle et explicite; elle cesse simplement d'exiger trois commandes
+# recopiees a la main.
+run_rollback_cleanup() {
+  require_root_for_config rollback-cleanup "$@"
+
+  local assume_yes=0 arg
+  for arg in "$@"; do
+    case "${arg}" in
+      --yes|-y) assume_yes=1 ;;
+    esac
+  done
+
+  local root_source root_device
+  root_source="$(findmnt -no SOURCE "$(root_mount_ref)" 2>/dev/null || true)"
+  root_device="${root_source%%\[*}"
+  if [[ -z "${root_device}" ]]; then
+    say_err "Peripherique racine introuvable." "Could not determine root device."
+    exit 69
+  fi
+
+  mkdir -p "${BTRFS_TOPLEVEL_MNT}"
+  if ! mount -o subvolid=5 "${root_device}" "${BTRFS_TOPLEVEL_MNT}"; then
+    say_err \
+      "Montage de la racine BTRFS impossible: ${root_device}" \
+      "Could not mount the BTRFS top level: ${root_device}"
+    exit 69
+  fi
+  trap auxi_rollback_cleanup EXIT
+
+  local saved=()
+  local candidate
+  for candidate in "${BTRFS_TOPLEVEL_MNT}"/@.rollback-*; do
+    [[ -d "${candidate}" ]] || continue
+    saved+=("${candidate}")
+  done
+
+  if [[ "${#saved[@]}" -eq 0 ]]; then
+    say \
+      "Aucun systeme mis de cote par une restauration." \
+      "No system set aside by a rollback."
+    return 0
+  fi
+
+  say \
+    "Systemes conserves par une restauration precedente:" \
+    "Systems kept by a previous rollback:"
+  for candidate in "${saved[@]}"; do
+    printf '  %s\n' "$(basename "${candidate}")"
+  done
+  say \
+    "Ne les supprimez qu'apres avoir verifie que le systeme restaure demarre." \
+    "Only delete these once you have confirmed the restored system boots."
+
+  if [[ "${assume_yes}" -ne 1 ]]; then
+    local answer
+    say "Supprimer definitivement? [o/N]" "Delete permanently? [y/N]"
+    read -r answer
+    case "${answer}" in
+      o|O|oui|OUI|y|Y|yes|YES) ;;
+      *)
+        say "Suppression annulee." "Deletion cancelled."
+        return 0
+        ;;
+    esac
+  fi
+
+  local failures=0
+  for candidate in "${saved[@]}"; do
+    if btrfs subvolume delete "${candidate}" >/dev/null 2>&1; then
+      say "Supprime: $(basename "${candidate}")" "Deleted: $(basename "${candidate}")"
+    else
+      failures=$((failures + 1))
+      say_err \
+        "Suppression impossible: $(basename "${candidate}")" \
+        "Could not delete: $(basename "${candidate}")"
+    fi
+  done
+  [[ "${failures}" -eq 0 ]] || exit 69
 }
 
 auxi_rollback_cleanup() {
@@ -396,7 +470,6 @@ run_upgrade() {
   fi
   if [[ "${MODE}" == "both" || "${MODE}" == "deb" ]]; then
     require_root_for_deb upgrade "$@"
-    snapshot_pre "upgrade"
     "$(apt_real apt-get)" upgrade
   fi
 }
@@ -410,11 +483,11 @@ run_search() {
   fi
   if [[ "${MODE}" == "both" || "${MODE}" == "flatpak" ]]; then
     echo "== Flatpak =="
-    flatpak search "${term}" || true
+    flatpak search -- "${term}" || true
   fi
   if [[ "${MODE}" == "both" || "${MODE}" == "deb" ]]; then
     echo "== DEB =="
-    "$(apt_real apt-cache)" search "${term}" || true
+    "$(apt_real apt-cache)" search -- "${term}" || true
   fi
 }
 
@@ -428,21 +501,19 @@ run_install() {
     exit 64
   fi
   if [[ "${MODE}" == "flatpak" ]]; then
-    flatpak install -y flathub "${item}"
+    flatpak install -y flathub -- "${item}"
   elif [[ "${MODE}" == "deb" ]]; then
     require_root_for_deb install "$@"
-    snapshot_pre "install ${item}"
-    "$(apt_real apt-get)" install "${item}"
+    "$(apt_real apt-get)" install -- "${item}"
   else
     if flatpak remote-ls flathub --app 2>/dev/null | awk '{print $1}' | grep -Fxq "${item}"; then
-      flatpak install -y flathub "${item}"
+      flatpak install -y flathub -- "${item}"
     else
       say \
         "Aucun Flatpak exact trouve pour ${item}; installation DEB." \
         "No exact Flatpak found for ${item}; using DEB installation."
       require_root_for_deb install "$@"
-      snapshot_pre "install ${item}"
-      "$(apt_real apt-get)" install "${item}"
+      "$(apt_real apt-get)" install -- "${item}"
     fi
   fi
 }
@@ -457,18 +528,17 @@ run_uninstall() {
     exit 64
   fi
   if [[ "${MODE}" == "flatpak" ]]; then
-    flatpak uninstall -y "${item}"
+    flatpak uninstall -y -- "${item}"
   elif [[ "${MODE}" == "deb" ]]; then
     require_root_for_deb uninstall "$@"
-    snapshot_pre "uninstall ${item}"
-    "$(apt_real apt-get)" remove "${item}"
+    "$(apt_real apt-get)" remove -- "${item}"
   else
     require_root_for_deb uninstall "$@"
-    # L'instantane n'est pose que si l'on retombe reellement sur DEB: une
-    # desinstallation Flatpak ne modifie pas l'etat systeme capture par "@".
-    if ! flatpak uninstall -y "${item}"; then
-      snapshot_pre "uninstall ${item}"
-      "$(apt_real apt-get)" remove "${item}"
+    # Une desinstallation Flatpak ne modifie pas l'etat systeme capture par
+    # "@": aucun instantane n'est pose tant qu'on ne retombe pas sur DEB, ce
+    # dont le hook dpkg se charge desormais.
+    if ! flatpak uninstall -y -- "${item}"; then
+      "$(apt_real apt-get)" remove -- "${item}"
     fi
   fi
 }
@@ -492,8 +562,7 @@ case "${1:-}" in
   purge)
     shift
     require_root_for_deb purge "$@"
-    snapshot_pre "purge $*"
-    "$(apt_real apt-get)" purge "$@"
+    "$(apt_real apt-get)" purge -- "$@"
     ;;
   clean)
     require_root_for_deb clean
@@ -511,6 +580,9 @@ case "${1:-}" in
     ;;
   rollback)
     shift; run_rollback "$@"
+    ;;
+  rollback-cleanup)
+    shift; run_rollback_cleanup "$@"
     ;;
   set)
     shift

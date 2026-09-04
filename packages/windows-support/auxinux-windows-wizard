@@ -134,6 +134,23 @@ ${prefix}" 73
     # lancement.
     export WINEPREFIX="${prefix}"
     export WINEDLLOVERRIDES="mscoree,mshtml="
-    exec wine "${target}"
+
+    # Chaque format s'ouvre avec la commande qui lui correspond. `wine
+    # fichier.msi` ECHOUE: un paquet MSI n'est pas un executable, il doit
+    # passer par msiexec. Idem pour un raccourci .lnk, qui doit etre resolu
+    # par `start`. Ces deux types sont pourtant associes a cet assistant dans
+    # /etc/xdg/mimeapps.list: les ouvrir menait droit a une erreur Wine
+    # incomprehensible.
+    case "${target,,}" in
+      *.msi)
+        exec wine msiexec /i "${target}"
+        ;;
+      *.lnk)
+        exec wine start /unix "${target}"
+        ;;
+      *)
+        exec wine "${target}"
+        ;;
+    esac
     ;;
 esac

@@ -1,0 +1,183 @@
+#!/usr/bin/env bash
+# Assistant privilegie du centre de controle: ajout d'un depot APT.
+#
+# POURQUOI CE FICHIER EXISTE: le centre ecrivait auparavant un script shell
+# dans /tmp, sous un nom previsible (auxinux-center-<pid>.sh), puis lancait
+# « pkexec bash /tmp/... ». Deux problemes:
+#   - la fenetre d'authentification annoncait « executer bash », sans dire ce
+#     qui allait etre fait en root;
+#   - entre l'ecriture du fichier et son execution, un autre processus local
+#     pouvait le remplacer -- le nom etait devinable et le repertoire partage.
+#
+# Le code privilegie vit desormais ici, a un emplacement fixe appartenant a
+# root. Le centre ne transmet plus de script: il nomme une action et des
+# donnees, revalidees ci-dessous. La definition des depots connus est du
+# cote ROOT: le centre ne peut choisir qu'un identifiant, jamais une URL.
+set -euo pipefail
+
+KEYRING_DIR="/etc/apt/keyrings"
+SOURCES_DIR="/etc/apt/sources.list.d"
+
+die() {
+  echo "auxinux-source-helper: $*" >&2
+  exit 65
+}
+
+# Le vrai binaire apt-get (detourne vers le wrapper auxi sur le systeme
+# installe).
+apt_get_bin() {
+  if [[ -x /usr/lib/auxinux/apt-real/apt-get ]]; then
+    printf '%s' /usr/lib/auxinux/apt-real/apt-get
+  else
+    printf '%s' apt-get
+  fi
+}
+
+valid_name() {
+  [[ "$1" =~ ^[A-Za-z0-9_-]{1,64}$ ]]
+}
+
+valid_key_url() {
+  local url="$1"
+  [[ "${#url}" -le 512 ]] || return 1
+  [[ "${url}" =~ ^https://[A-Za-z0-9._~%/?=\&+:@-]+$ ]]
+}
+
+# Corps deb822: seuls les champs compris par AuxiNuxOS, aucun caractere de
+# controle. Revalide ICI meme si le centre valide deja: c'est ce cote-ci qui
+# s'execute en root, et c'est donc le seul controle qui compte.
+valid_body() {
+  local body="$1" line
+  [[ -n "${body}" && "${#body}" -le 4096 ]] || return 1
+  while IFS= read -r line; do
+    line="${line%$'\r'}"
+    [[ -n "${line//[[:space:]]/}" ]] || continue
+    [[ "${line}" == *[$'\x01'-$'\x08'$'\x0b'$'\x0c'$'\x0e'-$'\x1f']* ]] && return 1
+    case "${line}" in
+      Types:*|URIs:*|Suites:*|Components:*|Architectures:*|Signed-By:*|Enabled:*) ;;
+      *) return 1 ;;
+    esac
+  done <<<"${body}"
+  return 0
+}
+
+# Depots connus. Table cote root: le centre ne transmet qu'un identifiant.
+preset_key_url() {
+  case "$1" in
+    vscode)  printf '%s' "https://packages.microsoft.com/keys/microsoft.asc" ;;
+    docker)  printf '%s' "https://download.docker.com/linux/debian/gpg" ;;
+    mozilla) printf '%s' "https://packages.mozilla.org/apt/repo-signing-key.gpg" ;;
+    mullvad) printf '%s' "https://repository.mullvad.net/deb/mullvad-keyring.asc" ;;
+    signal)  printf '%s' "https://updates.signal.org/desktop/apt/keys.asc" ;;
+    *) return 1 ;;
+  esac
+}
+
+preset_body() {
+  case "$1" in
+    vscode)
+      printf '%s\n' "Types: deb" "URIs: https://packages.microsoft.com/repos/code" \
+        "Suites: stable" "Components: main" "Architectures: amd64" \
+        "Signed-By: ${KEYRING_DIR}/vscode.asc" ;;
+    docker)
+      printf '%s\n' "Types: deb" "URIs: https://download.docker.com/linux/debian" \
+        "Suites: trixie" "Components: stable" "Architectures: amd64" \
+        "Signed-By: ${KEYRING_DIR}/docker.asc" ;;
+    mozilla)
+      printf '%s\n' "Types: deb" "URIs: https://packages.mozilla.org/apt" \
+        "Suites: mozilla" "Components: main" \
+        "Signed-By: ${KEYRING_DIR}/mozilla.asc" ;;
+    mullvad)
+      printf '%s\n' "Types: deb" "URIs: https://repository.mullvad.net/deb/stable" \
+        "Suites: trixie" "Components: main" "Architectures: amd64" \
+        "Signed-By: ${KEYRING_DIR}/mullvad.asc" ;;
+    signal)
+      printf '%s\n' "Types: deb" "URIs: https://updates.signal.org/desktop/apt" \
+        "Suites: xenial" "Components: main" "Architectures: amd64" \
+        "Signed-By: ${KEYRING_DIR}/signal.asc" ;;
+    *) return 1 ;;
+  esac
+}
+
+# Installation de la cle, avec epinglage du condensat.
+#
+# On ne peut pas coder ici une empreinte de confiance pour chaque editeur sans
+# la recopier depuis ce que sert le site -- ce qui ne verifierait rien. On
+# verifie donc ce qui est verifiable: que le fichier est bien une cle OpenPGP,
+# et qu'il ne CHANGE PAS d'un ajout a l'autre. Une rotation de cle legitime
+# demande alors une action explicite, au lieu de passer inapercue.
+install_key() {
+  local name="$1" url="$2"
+  local dest="${KEYRING_DIR}/${name}.asc"
+  local pin="${KEYRING_DIR}/${name}.asc.sha256"
+  local tmp
+  tmp="$(mktemp "${KEYRING_DIR}/.${name}.XXXXXX")"
+  # shellcheck disable=SC2064
+  trap "rm -f '${tmp}'" EXIT
+
+  curl --proto '=https' --tlsv1.2 -fsSL "${url}" -o "${tmp}" \
+    || die "telechargement de la cle impossible: ${url}"
+
+  [[ -s "${tmp}" ]] || die "cle vide: ${url}"
+  gpg --show-keys --with-colons "${tmp}" >/dev/null 2>&1 \
+    || die "le fichier telecharge n'est pas une cle OpenPGP: ${url}"
+
+  local actual
+  actual="$(sha256sum "${tmp}" | awk '{print $1}')"
+  if [[ -s "${pin}" ]]; then
+    local expected
+    expected="$(cat "${pin}")"
+    if [[ "${actual}" != "${expected}" ]]; then
+      die "la cle de '${name}' a change depuis son ajout (attendu ${expected}, obtenu ${actual}). Retirez le depot puis rajoutez-le si ce changement est legitime."
+    fi
+  fi
+
+  install -m 0644 "${tmp}" "${dest}"
+  printf '%s\n' "${actual}" >"${pin}"
+  chmod 0644 "${pin}"
+  rm -f "${tmp}"
+  trap - EXIT
+}
+
+write_sources() {
+  local name="$1" body="$2"
+  local dest="${SOURCES_DIR}/${name}.sources"
+  install -d -m 0755 "${SOURCES_DIR}"
+  printf '%s\n' "${body}" >"${dest}"
+  chmod 0644 "${dest}"
+}
+
+install -d -m 0755 "${KEYRING_DIR}"
+
+case "${1:-}" in
+  preset)
+    id="${2:-}"
+    valid_name "${id}" || die "identifiant de depot invalide"
+    key_url="$(preset_key_url "${id}")" || die "depot connu inconnu: ${id}"
+    body="$(preset_body "${id}")" || die "depot connu inconnu: ${id}"
+    valid_key_url "${key_url}" || die "URL de cle invalide"
+    valid_body "${body}" || die "corps de depot invalide"
+    install_key "${id}" "${key_url}"
+    write_sources "${id}" "${body}"
+    ;;
+
+  custom)
+    name="${2:-}"
+    key_url="${3:-}"
+    body="${4:-}"
+    valid_name "${name}" || die "nom de depot invalide"
+    valid_body "${body}" || die "corps de depot invalide"
+    if [[ -n "${key_url}" ]]; then
+      valid_key_url "${key_url}" || die "URL de cle invalide (https:// requis)"
+      install_key "${name}" "${key_url}"
+    fi
+    write_sources "${name}" "${body}"
+    ;;
+
+  *)
+    die "usage: auxinux-source-helper preset ID | custom NOM URL_CLE CORPS"
+    ;;
+esac
+
+"$(apt_get_bin)" update >/dev/null 2>&1 || true
+echo "depot configure"

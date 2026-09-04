@@ -1,0 +1,21 @@
+#!/bin/sh
+# Embarque le module overlayfs dans l'initramfs.
+#
+# Sans lui, le script local-bottom/auxinux-snapshot-overlay ne peut pas
+# superposer un espace inscriptible sur un instantane demarre depuis le menu
+# GRUB: `modprobe overlay` echouerait, faute de module dans l'initramfs.
+set -e
+
+PREREQ=""
+prereqs() { echo "${PREREQ}"; }
+
+case "${1}" in
+  prereqs)
+    prereqs
+    exit 0
+    ;;
+esac
+
+. /usr/share/initramfs-tools/hook-functions
+
+manual_add_modules overlay
