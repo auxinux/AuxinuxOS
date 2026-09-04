@@ -65,6 +65,17 @@
   `apt-cache policy` sur l'hôte de build : `packages.debian.org` a renvoyé un
   faux positif pour `grub-btrfs`.
 
+## Dépendances tierces fragiles
+
+- Le dépôt OBS `home:nomispaz:debian:cosmic-desktop` est la seule source APT de
+  COSMIC pour Trixie, et il **a cassé entre juillet et septembre 2026** : il
+  publie `cosmic-session`, qui dépend de `cosmic-applets`, absent du dépôt.
+  Les paquets nécessaires sont désormais énumérés explicitement au lieu de
+  passer par ce métapaquet. Un dépôt communautaire peut casser à tout moment ;
+  ces paquets ne servent qu'à tirer les dépendances d'exécution, les binaires
+  venant de la compilation depuis les sources officielles.
+- `grub-btrfs` est installé depuis GitHub à un commit épinglé.
+
 ## Applications Windows et jeux
 
 - **Aucune** de cette couche n’a été testée : ni Wine 32 bits après l’activation

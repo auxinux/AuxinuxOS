@@ -199,10 +199,30 @@ Suites: /
 Signed-By: /usr/share/keyrings/obs-cosmic-debian13.asc
 EOF
 sudo chroot "${ROOTFS_DIR}" apt-get update
+
+# `cosmic-session` n'est PAS installe depuis OBS, volontairement.
+#
+# Le depot communautaire est incoherent: il publie cosmic-session, qui declare
+# « Depends: cosmic-applets », alors que cosmic-applets N'EXISTE PAS dans le
+# depot (58 paquets, verifie). apt echoue donc en « Unable to satisfy
+# dependencies », et rien de tout cela n'est sous notre controle -- c'est un
+# depot tiers qui a change sous nos pieds depuis la construction de juillet.
+#
+# Ces paquets OBS ne servent de toute facon qu'a tirer les DEPENDANCES
+# D'EXECUTION dans le rootfs: les binaires COSMIC reels sont ensuite compiles
+# depuis les sources officielles et ecrasent ceux-ci (build-cosmic-source.sh),
+# cosmic-applets et cosmic-session compris. On enumere donc explicitement ce
+# que cosmic-session aurait tire, ce qui a l'avantage de ne plus dependre d'un
+# metapaquet tiers susceptible de casser a nouveau.
 sudo chroot "${ROOTFS_DIR}" env DEBIAN_FRONTEND=noninteractive \
   apt-get install -y --no-install-recommends \
-  cosmic-session cosmic-greeter cosmic-term cosmic-files cosmic-edit \
-  cosmic-wallpapers xdg-desktop-portal-cosmic adw-gtk3
+  cosmic-app-library cosmic-bg cosmic-comp cosmic-greeter cosmic-greeter-daemon \
+  cosmic-icons cosmic-idle cosmic-launcher cosmic-notifications cosmic-osd \
+  cosmic-panel cosmic-randr cosmic-screenshot cosmic-settings \
+  cosmic-settings-daemon cosmic-workspaces \
+  cosmic-term cosmic-files cosmic-edit cosmic-wallpapers \
+  xdg-desktop-portal-cosmic adw-gtk3 pop-fonts pop-launcher \
+  fonts-open-sans switcheroo-control dconf-gsettings-backend
 
 # The OBS repo must not remain enabled on the shipped system.
 sudo rm -f "${ROOTFS_DIR}/etc/apt/sources.list.d/obs-cosmic.sources"
