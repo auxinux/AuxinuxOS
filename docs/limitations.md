@@ -2,10 +2,11 @@
 
 ## Construction
 
-- Le cache COSMIC conserve `packages-before.txt` entre les builds. Après une
-  modification des paquets de base, sa comparaison avec le nouvel état peut
-  classer des paquets essentiels parmi ceux à purger. Ce cache doit être
-  invalidé avant une reconstruction concernée.
+- Le cache COSMIC conserve `packages-before.txt` entre les builds. Une
+  empreinte SHA-256 des listes de paquets est désormais stockée à côté du
+  cache : `build-cosmic-source.sh` invalide ce fichier automatiquement dès que
+  les listes changent. Auparavant, l’oubli produisait une ISO amputée de
+  fonctions entières sans le moindre message d’erreur.
 - Le centre d’applications est recompilé seulement si son binaire est absent.
   Après une modification des sources, lancer explicitement son `build.sh`.
 - L’hôte de build a besoin de nouvelles dépendances depuis la 0.2 du centre :

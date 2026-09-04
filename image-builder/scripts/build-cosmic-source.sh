@@ -8,6 +8,8 @@ fi
 
 ROOTFS_DIR="$(realpath "$1")"
 CACHE_DIR="$(realpath -m "$2")"
+PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+PACKAGE_LISTS_DIR="${PROJECT_DIR}/image-builder/package-lists"
 COSMIC_TAG="epoch-1.2.0"
 COSMIC_COMMIT="0098ab4d8f930bf7f7738121e04a4532154852ef"
 SOURCE_DIR="${CACHE_DIR}/cosmic-epoch-${COSMIC_TAG}"
@@ -46,6 +48,30 @@ for metadata_file in packages-before.txt packages-after.txt build-only-packages.
   sudo touch "${CACHE_DIR}/${metadata_file}"
   sudo chown "$(id -u):$(id -g)" "${CACHE_DIR}/${metadata_file}"
 done
+
+# Invalidation automatique de packages-before.txt quand les listes de paquets
+# changent.
+#
+# Ce fichier n'est regenere que s'il est VIDE, et build-only = after - before
+# est ensuite PURGE du rootfs. Un packages-before.txt herite d'une
+# construction anterieure aux listes actuelles fait donc classer chaque paquet
+# nouvellement ajoute (snapper, grub-btrfs, zenity, zram-tools...) parmi les
+# dependances de compilation a supprimer: l'ISO se construit sans erreur et
+# arrive amputee de fonctions entieres, sans le moindre message. Panne deja
+# rencontree, jusqu'ici documentee comme une precaution manuelle a prendre --
+# ce qui revient a compter sur la memoire de l'operateur.
+LISTS_FINGERPRINT="$(cat "${PACKAGE_LISTS_DIR}"/*.txt 2>/dev/null | sha256sum | cut -d' ' -f1)"
+FINGERPRINT_FILE="${CACHE_DIR}/package-lists.sha256"
+sudo touch "${FINGERPRINT_FILE}"
+sudo chown "$(id -u):$(id -g)" "${FINGERPRINT_FILE}"
+if [[ "$(cat "${FINGERPRINT_FILE}")" != "${LISTS_FINGERPRINT}" ]]; then
+  if [[ -s "${CACHE_DIR}/packages-before.txt" ]]; then
+    echo "==> Listes de paquets modifiees: invalidation de packages-before.txt"
+  fi
+  : >"${CACHE_DIR}/packages-before.txt"
+  printf '%s\n' "${LISTS_FINGERPRINT}" >"${FINGERPRINT_FILE}"
+fi
+
 if [[ ! -s "${CACHE_DIR}/packages-before.txt" ]]; then
   sudo chroot "${ROOTFS_DIR}" dpkg-query -W -f='${binary:Package}\n' \
     | LC_ALL=C sort >"${CACHE_DIR}/packages-before.txt"
