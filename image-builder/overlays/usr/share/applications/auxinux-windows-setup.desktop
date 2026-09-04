@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=Windows applications and games
+Name[fr]=Applications Windows et jeux
+Comment=Install the Windows compatibility and gaming layer
+Comment[fr]=Installer la couche de compatibilité Windows et les jeux
+Exec=auxinux-windows-setup
+Icon=applications-games
+Terminal=false
+Categories=System;Settings;Game;
+Keywords=windows;wine;bottles;steam;proton;heroic;lutris;games;exe;
+Keywords[fr]=windows;wine;bottles;steam;proton;heroic;lutris;jeux;exe;
+StartupNotify=true

@@ -1,29 +1,139 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -uo pipefail
+
+# Assistant d'ouverture d'un fichier .exe Windows.
+#
+# Ce que faisait la version precedente et pourquoi c'etait le pire choix:
+# elle posait une question oui/non puis lancait `exec wine "$fichier"`. Wine
+# utilise alors le prefixe PAR DEFAUT, ~/.wine, partage par TOUTES les
+# applications. Une application qui installe un runtime casse, et ce sont
+# toutes les autres qui cessent de fonctionner -- sans que l'utilisateur ait
+# le moindre moyen de comprendre ni de nettoyer.
+#
+# Cette version propose trois chemins et n'utilise JAMAIS le prefixe partage.
 
 target="${1:-}"
 
+BOTTLES_ID="com.usebottles.bottles"
+PREFIX_ROOT="${XDG_DATA_HOME:-${HOME}/.local/share}/auxinux/wine-prefixes"
+
+is_english() {
+  local locale_chain="${LC_ALL:-}|${LC_MESSAGES:-}|${LANGUAGE:-}|${LANG:-}"
+  [[ "${locale_chain}" =~ (^|[|:])en([_.]|$) ]]
+}
+
+t() {
+  # t "francais" "english"
+  if is_english; then printf '%s' "$2"; else printf '%s' "$1"; fi
+}
+
+# Toutes les interactions passent par zenity. Sans dialogue graphique
+# disponible, l'assistant DOIT le dire sur stderr et sortir en erreur: se
+# rabattre silencieusement sur une lecture clavier revenait a ne rien faire du
+# tout quand le fichier est ouvert depuis le gestionnaire de fichiers.
+if ! command -v zenity >/dev/null 2>&1; then
+  echo "$(t "zenity est introuvable: assistant graphique indisponible." \
+            "zenity not found: graphical assistant unavailable.")" >&2
+  exit 69
+fi
+
+die() {
+  zenity --error --no-wrap --title "AuxiNuxOS" --text "$1" 2>/dev/null
+  exit "${2:-1}"
+}
+
 if [[ -z "${target}" ]]; then
-  echo "Aucun fichier Windows fourni." >&2
-  exit 64
+  die "$(t "Aucun fichier Windows fourni." "No Windows file provided.")" 64
 fi
 
-message="Ce fichier semble etre une application Windows.
+if [[ ! -f "${target}" ]]; then
+  die "$(t "Fichier introuvable :" "File not found:")
+${target}" 66
+fi
 
-AuxiNuxOS peut tenter de la lancer avec Wine, mais une alternative Linux ou Flatpak est souvent preferable pour la securite et la stabilite.
+app_name="$(basename "${target}")"
+# Nom de prefixe sur: on ne garde que des caracteres inoffensifs pour un nom
+# de repertoire, et on refuse un resultat vide.
+prefix_name="$(printf '%s' "${app_name%.*}" | tr -c 'A-Za-z0-9._-' '-' | sed 's/^-*//;s/-*$//')"
+[[ -n "${prefix_name}" ]] || prefix_name="application"
 
-Voulez-vous essayer de la lancer avec Wine?"
+choice="$(zenity --list --radiolist \
+  --title "$(t "Application Windows détectée" "Windows application detected")" \
+  --width 720 --height 340 \
+  --text "$(t \
+      "« ${app_name} » est un programme conçu pour Windows.\n\nUne alternative Linux est souvent plus rapide, plus sûre et mieux intégrée. Si vous avez vraiment besoin de ce programme, choisissez de l'installer dans un espace isolé." \
+      "'${app_name}' is a program built for Windows.\n\nA Linux alternative is usually faster, safer and better integrated. If you really need this program, install it in an isolated space.")" \
+  --column "" --column "$(t "Que voulez-vous faire ?" "What would you like to do?")" \
+  TRUE  "$(t "Chercher une alternative Linux (recommandé)" "Look for a Linux alternative (recommended)")" \
+  FALSE "$(t "Installer dans un espace isolé avec Bottles" "Install in an isolated space with Bottles")" \
+  FALSE "$(t "Lancer directement avec Wine (dernier recours)" "Run directly with Wine (last resort)")" \
+  2>/dev/null)"
 
-if command -v kdialog >/dev/null 2>&1; then
-  if kdialog --yesno "${message}" --title "Application Windows detectee"; then
+# Annulation ou fermeture de la fenetre: on ne fait rien, sans message
+# d'erreur -- refuser d'ouvrir un .exe est un choix legitime.
+[[ -n "${choice}" ]] || exit 0
+
+case "${choice}" in
+  *"alternative"*|*"Alternative"*)
+    # Le centre de controle est le point d'entree des installations: y
+    # renvoyer evite d'apprendre une deuxieme interface a l'utilisateur.
+    if command -v auxinux-center >/dev/null 2>&1; then
+      exec auxinux-center
+    fi
+    die "$(t "Le centre de contrôle est introuvable. Ouvrez « AuxiNux OS Center » depuis le menu des applications." \
+             "The control center was not found. Open 'AuxiNux OS Center' from the applications menu.")" 69
+    ;;
+
+  *"Bottles"*)
+    if ! flatpak info "${BOTTLES_ID}" >/dev/null 2>&1; then
+      if ! zenity --question --no-wrap --title "Bottles" \
+        --text "$(t \
+          "Bottles n'est pas encore installé.\n\nIl crée un espace séparé par application : si l'une casse, les autres continuent de fonctionner.\n\nL'installer maintenant ?" \
+          "Bottles is not installed yet.\n\nIt creates a separate space per application: if one breaks, the others keep working.\n\nInstall it now?")" 2>/dev/null; then
+        exit 0
+      fi
+      # La progression de flatpak est affichee dans une fenetre d'attente:
+      # une installation de plusieurs centaines de Mo sans retour visuel
+      # passe pour un plantage.
+      if ! flatpak install -y --noninteractive flathub "${BOTTLES_ID}" 2>&1 \
+        | zenity --progress --pulsate --auto-close --no-cancel \
+                 --title "Bottles" \
+                 --text "$(t "Installation de Bottles…" "Installing Bottles…")" 2>/dev/null; then
+        die "$(t "L'installation de Bottles a échoué." "Installing Bottles failed.")" 70
+      fi
+    fi
+
+    zenity --info --no-wrap --title "Bottles" \
+      --text "$(t \
+        "Bottles va s'ouvrir.\n\nCréez une bouteille, puis utilisez « Exécuter un fichier » et choisissez :\n${target}" \
+        "Bottles will now open.\n\nCreate a bottle, then use 'Run executable' and pick:\n${target}")" 2>/dev/null
+    exec flatpak run "${BOTTLES_ID}"
+    ;;
+
+  *)
+    if ! command -v wine >/dev/null 2>&1; then
+      die "$(t "Wine n'est pas installé sur ce système." "Wine is not installed on this system.")" 69
+    fi
+
+    prefix="${PREFIX_ROOT}/${prefix_name}"
+    if ! zenity --question --no-wrap --title "Wine" \
+      --text "$(t \
+        "« ${app_name} » sera lancé dans un espace Wine qui lui est propre :\n${prefix}\n\nCet espace n'est partagé avec aucune autre application. Pour tout annuler plus tard, il suffit de supprimer ce dossier.\n\nContinuer ?" \
+        "'${app_name}' will run in its own Wine space:\n${prefix}\n\nThis space is not shared with any other application. To undo everything later, just delete that folder.\n\nContinue?")" 2>/dev/null; then
+      exit 0
+    fi
+
+    if ! mkdir -p "${prefix}"; then
+      die "$(t "Impossible de créer l'espace Wine :" "Could not create the Wine space:")
+${prefix}" 73
+    fi
+
+    # WINEPREFIX par application: c'est TOUTE la difference avec la version
+    # precedente. WINEDLLOVERRIDES desactive l'installateur automatique de
+    # mono/gecko, qui ouvre sinon deux fenetres incomprehensibles au premier
+    # lancement.
+    export WINEPREFIX="${prefix}"
+    export WINEDLLOVERRIDES="mscoree,mshtml="
     exec wine "${target}"
-  fi
-  exit 0
-fi
-
-printf '%s\n[y/N] ' "${message}" >&2
-read -r answer
-case "${answer}" in
-  y|Y|yes|YES|oui|OUI) exec wine "${target}" ;;
-  *) exit 0 ;;
+    ;;
 esac

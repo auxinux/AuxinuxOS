@@ -16,3 +16,10 @@ cups
 xdg-desktop-portal
 fonts-noto-color-emoji
 gnome-disk-utility
+
+# zenity: boites de dialogue GTK pour les assistants maison (accueil live,
+# assistant Windows). kdialog etait utilise auparavant, mais il venait de
+# Plasma: depuis le passage a COSMIC il n'est plus installe, et les assistants
+# retombaient silencieusement sur une lecture au clavier -- donc AUCUNE fenetre
+# quand ils sont lances depuis le bureau ou un gestionnaire de fichiers.
+zenity

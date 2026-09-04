@@ -1,0 +1,16 @@
+# zram-tools — espace d'echange compresse en RAM.
+#
+# C'est le levier de fluidite le plus rentable sur les machines a 4-8 Go: les
+# pages inactives sont compressees en memoire (ratio ~3:1 avec zstd) au lieu
+# d'aller sur le disque. La difference se ressent surtout quand plusieurs
+# applications lourdes sont ouvertes en meme temps.
+ALGO=zstd
+
+# 50% de la RAM en taille MAXIMALE de zram, pas en reservation: zram n'occupe
+# que ce qu'il contient reellement. Au-dela de 50%, la memoire recuperee par
+# la compression ne compense plus la memoire prise par zram lui-meme.
+PERCENT=50
+
+# Priorite superieure a celle d'un eventuel fichier d'echange sur disque:
+# le noyau doit toujours preferer la RAM compressee au disque.
+PRIORITY=100

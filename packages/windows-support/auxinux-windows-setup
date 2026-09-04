@@ -1,0 +1,99 @@
+#!/usr/bin/env bash
+set -uo pipefail
+
+# Installation a la demande de la couche Windows et jeux.
+#
+# Rien de tout cela n'est embarque dans l'ISO: Steam seul pese plusieurs Go et
+# gonflerait l'image pour la majorite des utilisateurs qui n'en veulent pas.
+# Mais un utilisateur non technique ne devinera jamais qu'il doit chercher
+# « Bottles » ou « Heroic »: cet assistant est la pour rendre ces choix
+# visibles, avec une explication de ce que chacun sert.
+
+is_english() {
+  local locale_chain="${LC_ALL:-}|${LC_MESSAGES:-}|${LANGUAGE:-}|${LANG:-}"
+  [[ "${locale_chain}" =~ (^|[|:])en([_.]|$) ]]
+}
+
+t() {
+  if is_english; then printf '%s' "$2"; else printf '%s' "$1"; fi
+}
+
+if ! command -v zenity >/dev/null 2>&1; then
+  echo "$(t "zenity est introuvable: assistant graphique indisponible." \
+            "zenity not found: graphical assistant unavailable.")" >&2
+  exit 69
+fi
+
+# id_flatpak | libelle | description
+CATALOG=(
+  "com.usebottles.bottles|Bottles|$(t "Applications Windows, chacune dans son espace isolé" "Windows applications, each in its own isolated space")"
+  "com.valvesoftware.Steam|Steam|$(t "Jeux Steam, avec Proton pour les jeux Windows" "Steam games, with Proton for Windows games")"
+  "com.heroicgameslauncher.hgl|Heroic|$(t "Jeux Epic Games et GOG" "Epic Games and GOG games")"
+  "net.lutris.Lutris|Lutris|$(t "Autres jeux Windows et émulateurs" "Other Windows games and emulators")"
+)
+
+installed() {
+  flatpak info "$1" >/dev/null 2>&1
+}
+
+build_rows() {
+  local entry id label desc state
+  for entry in "${CATALOG[@]}"; do
+    IFS='|' read -r id label desc <<<"${entry}"
+    if installed "${id}"; then
+      state="$(t "Déjà installé" "Already installed")"
+    else
+      state="$(t "Non installé" "Not installed")"
+    fi
+    printf '%s\n%s\n%s\n%s\n' "FALSE" "${label}" "${desc}" "${state}"
+  done
+}
+
+selection="$(build_rows | zenity --list --checklist \
+  --title "$(t "Applications Windows et jeux" "Windows applications and games")" \
+  --width 820 --height 420 \
+  --text "$(t \
+      "Choisissez ce que vous voulez installer.\n\nCes applications sont installées en Flatpak : elles sont isolées du système et se désinstallent proprement." \
+      "Choose what you want to install.\n\nThese are installed as Flatpaks: they are isolated from the system and uninstall cleanly.")" \
+  --column "" \
+  --column "$(t "Application" "Application")" \
+  --column "$(t "À quoi ça sert" "What it is for")" \
+  --column "$(t "État" "Status")" \
+  --separator "|" 2>/dev/null)"
+
+[[ -n "${selection}" ]] || exit 0
+
+failed=()
+IFS='|' read -ra chosen <<<"${selection}"
+for label in "${chosen[@]}"; do
+  for entry in "${CATALOG[@]}"; do
+    IFS='|' read -r id entry_label _ <<<"${entry}"
+    [[ "${entry_label}" == "${label}" ]] || continue
+    installed "${id}" && break
+
+    # Une installation Flatpak de plusieurs centaines de Mo sans retour visuel
+    # passe pour un plantage: on garde une fenetre de progression ouverte.
+    if ! flatpak install -y --noninteractive flathub "${id}" 2>&1 \
+      | zenity --progress --pulsate --auto-close --no-cancel \
+               --title "${entry_label}" \
+               --text "$(t "Installation de ${entry_label}…" "Installing ${entry_label}…")" 2>/dev/null; then
+      failed+=("${entry_label}")
+    fi
+    break
+  done
+done
+
+if [[ ${#failed[@]} -gt 0 ]]; then
+  zenity --error --no-wrap --title "AuxiNuxOS" \
+    --text "$(t "Ces installations ont échoué :" "These installations failed:")
+$(printf '  • %s\n' "${failed[@]}")
+
+$(t "Vérifiez votre connexion, puis réessayez depuis le centre de contrôle." \
+    "Check your connection, then retry from the control center.")" 2>/dev/null
+  exit 70
+fi
+
+zenity --info --no-wrap --title "AuxiNuxOS" \
+  --text "$(t \
+    "Installation terminée.\n\nLes applications sont dans votre menu.\n\nAstuce : pour un jeu Steam conçu pour Windows, activez Proton dans\nSteam → Paramètres → Compatibilité." \
+    "Installation complete.\n\nThe applications are in your menu.\n\nTip: for a Steam game built for Windows, enable Proton in\nSteam → Settings → Compatibility.")" 2>/dev/null

@@ -1,0 +1,12 @@
+# Fluidite et reactivite.
+
+# zram-tools: espace d'echange COMPRESSE en RAM. C'est le plus gros gain
+# ressenti sur les machines a 4-8 Go: au lieu de partir sur le disque, les
+# pages inactives sont compressees en memoire (ratio ~3:1 en zstd).
+zram-tools
+
+# systemd-oomd fait partie du paquet systemd, deja present: aucun paquet a
+# ajouter. Il est configure et active par build-image.sh. Son role est
+# d'eviter le GEL TOTAL quand la memoire sature -- le systeme tue l'application
+# fautive au lieu de devenir inutilisable pendant plusieurs minutes. C'est le
+# defaut de fluidite le plus violent qu'un utilisateur puisse rencontrer.
