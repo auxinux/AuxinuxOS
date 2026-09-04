@@ -6,7 +6,11 @@
 # de demarrer sur un instantane meme quand le systeme installe ne demarre plus.
 btrfs-progs
 snapper
-grub-btrfs
 # grub-btrfsd surveille /.snapshots via inotify pour regenerer le menu GRUB
 # des qu'un instantane apparait ou disparait.
 inotify-tools
+
+# grub-btrfs N'EST PAS un paquet Debian 13 (verifie avec apt-cache policy sur
+# l'hote de build; packages.debian.org donne un faux positif). Il est installe
+# depuis les sources officielles, a un commit epingle, par
+# image-builder/scripts/install-grub-btrfs.sh.

@@ -115,6 +115,25 @@ sudo btrfs subvolume delete /mnt/@.rollback-20260903-101500
 sudo umount /mnt
 ```
 
+## Provenance de grub-btrfs
+
+`grub-btrfs` **n'est pas un paquet Debian 13**. Les douze autres composants de
+la pile (`btrfs-progs`, `snapper`, `inotify-tools`…) le sont ; celui-là non.
+
+Il est installé depuis les sources officielles
+([Antynea/grub-btrfs](https://github.com/Antynea/grub-btrfs)), tag `v4.14`,
+commit `2fcfbe967637166b88dadd49c834807243a941bf`, par
+`image-builder/scripts/install-grub-btrfs.sh`. Le script **refuse d'installer**
+si le dépôt n'est pas exactement à ce commit : un tag amont peut être déplacé,
+et ce code s'exécute en root dans le rootfs de l'image.
+
+Aucune compilation : le projet est un script `/etc/grub.d`, un démon shell et
+une unité systemd.
+
+S'en passer aurait vidé la fonction de sa substance — `auxi rollback` ne
+marcherait plus que depuis un système qui démarre encore, c'est-à-dire pas dans
+le seul cas où l'on en a réellement besoin.
+
 ## Limites
 
 Voir [les limites connues](limitations.md) — notamment BTRFS + LUKS,

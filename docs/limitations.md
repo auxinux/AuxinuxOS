@@ -58,8 +58,12 @@
   `@` n’existe pas encore. La reprise sur échec est implémentée et testée,
   mais une coupure de courant à cet instant précis laisse la machine sans
   racine amorçable, réparable seulement depuis un média live.
-- `grub-btrfs`, `snapper` et `btrfs-progs` sont supposés présents dans Debian
-  13 ; leur disponibilité doit être confirmée au premier build.
+- `grub-btrfs` **n'existe pas dans Debian 13** : il est installé depuis les
+  sources à un commit épinglé (voir `rollback.md`). C'est une dépendance
+  externe supplémentaire, à resuivre à chaque montée de version.
+- La vérification de disponibilité des paquets doit se faire avec
+  `apt-cache policy` sur l'hôte de build : `packages.debian.org` a renvoyé un
+  faux positif pour `grub-btrfs`.
 
 ## Applications Windows et jeux
 

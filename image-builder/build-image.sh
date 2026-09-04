@@ -163,7 +163,7 @@ sudo chroot "${ROOTFS_DIR}" apt-get install -y --no-install-recommends dosfstool
 # Idem pour la pile de rollback: sans btrfs-progs dans le LIVE, Calamares ne
 # peut pas formater la cible en BTRFS et le rollback est perdu des l'install.
 sudo chroot "${ROOTFS_DIR}" apt-get install -y --no-install-recommends \
-  btrfs-progs snapper grub-btrfs inotify-tools
+  btrfs-progs snapper inotify-tools
 
 # Idem pour la couche Windows et la fluidite. Sur un rootfs reutilise, i386
 # peut manquer: on l'ajoute avant, sinon wine32 est introuvable.
@@ -210,6 +210,12 @@ sudo rm -f "${ROOTFS_DIR}/etc/apt/sources.list.d/obs-cosmic.sources"
 echo "==> Building coherent COSMIC Epoch stack from official sources"
 "${PROJECT_DIR}/image-builder/scripts/build-cosmic-source.sh" \
   "${ROOTFS_DIR}" "${WORK_DIR}/cosmic-source-cache"
+
+echo "==> Installing grub-btrfs from source"
+# Absent de Debian 13: sans lui, aucun sous-menu GRUB pour demarrer sur un
+# instantane, donc pas de restauration quand le systeme ne demarre plus.
+"${PROJECT_DIR}/image-builder/scripts/install-grub-btrfs.sh" \
+  "${ROOTFS_DIR}" "${WORK_DIR}/grub-btrfs-cache"
 
 echo "==> Configuring Flatpak"
 "${PROJECT_DIR}/image-builder/scripts/configure-flatpak.sh" "${ROOTFS_DIR}"
