@@ -3,6 +3,9 @@ set -euo pipefail
 
 APT_CONF="/etc/auxinux/apt.conf"
 APT_REAL_DIR="/usr/lib/auxinux/apt-real"
+SNAPPER_CONFIG="root"
+BTRFS_TOPLEVEL_MNT="/run/auxinux-btrfs-toplevel"
+SNAPSHOT_PRE_NUM=""
 
 is_english() {
   local locale_chain="${LC_ALL:-}|${LC_MESSAGES:-}|${LANGUAGE:-}|${LANG:-}"
@@ -43,6 +46,9 @@ Usage:
   auxi purge PACKAGE
   auxi clean
   auxi autoclean
+  auxi snapshot [DESCRIPTION]
+  auxi snapshots
+  auxi rollback [NUMBER] [--yes]
   auxi set apt=true|false
   auxi status
 EOF
@@ -59,6 +65,9 @@ Usage:
   auxi purge PAQUET
   auxi clean
   auxi autoclean
+  auxi snapshot [DESCRIPTION]
+  auxi snapshots
+  auxi rollback [NUMERO] [--yes]
   auxi set apt=true|false
   auxi status
 EOF
@@ -133,6 +142,230 @@ set_apt() {
   esac
 }
 
+# --- Instantanes systeme (BTRFS + snapper) ---------------------------------
+#
+# Tout ce bloc doit se degrader silencieusement: une racine ext4, un snapper
+# absent ou une session live n'ont pas d'instantanes, et cela ne doit JAMAIS
+# empecher une installation de paquet d'aboutir.
+
+snapshots_available() {
+  command -v snapper >/dev/null 2>&1 || return 1
+  [[ "$(findmnt -no FSTYPE / 2>/dev/null)" == "btrfs" ]] || return 1
+  [[ -f "/etc/snapper/configs/${SNAPPER_CONFIG}" ]] || return 1
+  return 0
+}
+
+require_snapshots() {
+  if snapshots_available; then
+    return 0
+  fi
+  say_err \
+    "Les instantanes ne sont pas disponibles sur ce systeme." \
+    "Snapshots are not available on this system."
+  say_err \
+    "Ils exigent une racine BTRFS avec snapper configure (voir docs/rollback.md)." \
+    "They require a BTRFS root with snapper configured (see docs/rollback.md)."
+  exit 69
+}
+
+# Instantane "pre" pose juste avant une transaction DEB. La paire pre/post
+# permet ensuite a snapper de montrer exactement ce que la transaction a
+# change (snapper status PRE..POST).
+snapshot_pre() {
+  local description="$1"
+  SNAPSHOT_PRE_NUM=""
+  [[ "${EUID}" -eq 0 ]] || return 0
+  [[ "${AUXI_NO_SNAPSHOT:-0}" == "1" ]] && return 0
+  snapshots_available || return 0
+
+  SNAPSHOT_PRE_NUM="$(snapper -c "${SNAPPER_CONFIG}" create \
+    --type pre --print-number --cleanup-algorithm number \
+    --description "auxi ${description}" \
+    --userdata "auxi=1" 2>/dev/null || true)"
+
+  if [[ -n "${SNAPSHOT_PRE_NUM}" ]]; then
+    # Le trap garantit que le "post" est pose meme si apt-get echoue: sans lui,
+    # `set -e` sortirait en laissant un "pre" orphelin dans l'historique.
+    trap auxi_on_exit EXIT
+    say \
+      "Instantane de securite ${SNAPSHOT_PRE_NUM} cree avant: ${description}" \
+      "Safety snapshot ${SNAPSHOT_PRE_NUM} created before: ${description}"
+  else
+    say_err \
+      "Instantane de securite impossible; l'operation continue." \
+      "Safety snapshot failed; continuing anyway."
+  fi
+}
+
+snapshot_post() {
+  [[ -n "${SNAPSHOT_PRE_NUM}" ]] || return 0
+  local number="${SNAPSHOT_PRE_NUM}"
+  SNAPSHOT_PRE_NUM=""
+  snapper -c "${SNAPPER_CONFIG}" create \
+    --type post --pre-number "${number}" \
+    --cleanup-algorithm number \
+    --userdata "auxi=1" >/dev/null 2>&1 || true
+}
+
+auxi_on_exit() {
+  snapshot_post
+}
+
+run_snapshot() {
+  require_snapshots
+  require_root_for_config snapshot "$@"
+  local description="${*:-Instantane manuel}"
+  local number
+  number="$(snapper -c "${SNAPPER_CONFIG}" create \
+    --type single --print-number --cleanup-algorithm number \
+    --description "${description}" \
+    --userdata "auxi=1")"
+  say \
+    "Instantane ${number} cree: ${description}" \
+    "Snapshot ${number} created: ${description}"
+}
+
+run_snapshot_list() {
+  require_snapshots
+  snapper -c "${SNAPPER_CONFIG}" list
+}
+
+# Restauration. Sur une disposition plate "@" (la notre), `snapper rollback`
+# ne suffit PAS: il joue sur le sous-volume par defaut, alors que /etc/fstab
+# monte la racine par CHEMIN (subvol=@). On echange donc les sous-volumes.
+#
+# L'operation est sure depuis un systeme en cours d'execution: renommer un
+# sous-volume monte n'affecte pas le montage courant, et c'est au prochain
+# demarrage que subvol=@ resout vers le sous-volume restaure.
+run_rollback() {
+  require_snapshots
+  require_root_for_config rollback "$@"
+
+  local assume_yes=0
+  local number=""
+  local arg
+  for arg in "$@"; do
+    case "${arg}" in
+      --yes|-y) assume_yes=1 ;;
+      *) number="${arg}" ;;
+    esac
+  done
+
+  if [[ -z "${number}" ]]; then
+    run_snapshot_list
+    say \
+      "Choisissez un numero, puis: sudo auxi rollback NUMERO" \
+      "Pick a number, then run: sudo auxi rollback NUMBER"
+    return 0
+  fi
+
+  if [[ ! "${number}" =~ ^[0-9]+$ ]]; then
+    say_err "Numero d'instantane invalide: ${number}" "Invalid snapshot number: ${number}"
+    exit 64
+  fi
+
+  local root_source root_device
+  root_source="$(findmnt -no SOURCE / 2>/dev/null || true)"
+  # findmnt rend "/dev/sda2[/@]" sur un sous-volume: on retire le suffixe.
+  root_device="${root_source%%\[*}"
+  if [[ -z "${root_device}" ]]; then
+    say_err "Peripherique racine introuvable." "Could not determine root device."
+    exit 69
+  fi
+
+  mkdir -p "${BTRFS_TOPLEVEL_MNT}"
+  if ! mount -o subvolid=5 "${root_device}" "${BTRFS_TOPLEVEL_MNT}"; then
+    say_err \
+      "Montage de la racine BTRFS impossible: ${root_device}" \
+      "Could not mount the BTRFS top level: ${root_device}"
+    exit 69
+  fi
+  trap auxi_rollback_cleanup EXIT
+
+  # @snapshots est un sous-volume de premier niveau (voir partition.conf); on
+  # accepte quand meme la disposition imbriquee des installations anciennes.
+  local snapshot_src=""
+  local candidate
+  for candidate in \
+    "${BTRFS_TOPLEVEL_MNT}/@snapshots/${number}/snapshot" \
+    "${BTRFS_TOPLEVEL_MNT}/@/.snapshots/${number}/snapshot"; do
+    if [[ -d "${candidate}" ]]; then
+      snapshot_src="${candidate}"
+      break
+    fi
+  done
+
+  if [[ -z "${snapshot_src}" ]]; then
+    say_err "Instantane ${number} introuvable." "Snapshot ${number} not found."
+    exit 69
+  fi
+
+  local stamp saved
+  stamp="$(date +%Y%m%d-%H%M%S)"
+  saved="@.rollback-${stamp}"
+
+  say \
+    "Restauration de l'instantane ${number}." \
+    "Restoring snapshot ${number}."
+  say \
+    "Le systeme actuel est conserve sous ${saved} et /home n'est pas touche." \
+    "The current system is kept as ${saved} and /home is left untouched."
+  say \
+    "Le changement prend effet au prochain demarrage." \
+    "The change takes effect on next boot."
+
+  if [[ "${assume_yes}" -ne 1 ]]; then
+    local answer
+    say "Confirmer? [o/N]" "Confirm? [y/N]"
+    read -r answer
+    case "${answer}" in
+      o|O|oui|OUI|y|Y|yes|YES) ;;
+      *)
+        say "Restauration annulee." "Rollback cancelled."
+        return 0
+        ;;
+    esac
+  fi
+
+  if ! mv "${BTRFS_TOPLEVEL_MNT}/@" "${BTRFS_TOPLEVEL_MNT}/${saved}"; then
+    say_err \
+      "Mise de cote du systeme actuel impossible; rien n'a ete modifie." \
+      "Could not move the current system aside; nothing was changed."
+    exit 69
+  fi
+
+  if ! btrfs subvolume snapshot "${snapshot_src}" "${BTRFS_TOPLEVEL_MNT}/@"; then
+    # Sans cette remise en place, la machine n'aurait plus AUCUNE racine "@"
+    # et ne redemarrerait pas. C'est le seul point vraiment dangereux.
+    mv "${BTRFS_TOPLEVEL_MNT}/${saved}" "${BTRFS_TOPLEVEL_MNT}/@" || true
+    say_err \
+      "Restauration echouee; le systeme d'origine a ete remis en place." \
+      "Rollback failed; the original system has been restored."
+    exit 69
+  fi
+
+  say \
+    "Restauration prete. Redemarrez pour l'appliquer: sudo reboot" \
+    "Rollback ready. Reboot to apply it: sudo reboot"
+  say \
+    "Ancien systeme conserve sous le sous-volume ${saved}." \
+    "Previous system kept as subvolume ${saved}."
+  say \
+    "Une fois le redemarrage valide, vous pouvez le supprimer:" \
+    "Once the reboot is confirmed working, you can delete it:"
+  # Le point de montage temporaire est demonte par auxi_rollback_cleanup des la
+  # fin de cette commande: on donne donc la sequence complete, pas un chemin
+  # qui n'existera plus.
+  printf '  sudo mount -o subvolid=5 %s /mnt\n' "${root_device}"
+  printf '  sudo btrfs subvolume delete /mnt/%s\n' "${saved}"
+  printf '  sudo umount /mnt\n'
+}
+
+auxi_rollback_cleanup() {
+  umount "${BTRFS_TOPLEVEL_MNT}" >/dev/null 2>&1 || true
+  rmdir "${BTRFS_TOPLEVEL_MNT}" >/dev/null 2>&1 || true
+}
+
 select_mode() {
   MODE="both"
   if [[ "${1:-}" == "--deb" ]]; then
@@ -163,6 +396,7 @@ run_upgrade() {
   fi
   if [[ "${MODE}" == "both" || "${MODE}" == "deb" ]]; then
     require_root_for_deb upgrade "$@"
+    snapshot_pre "upgrade"
     "$(apt_real apt-get)" upgrade
   fi
 }
@@ -197,6 +431,7 @@ run_install() {
     flatpak install -y flathub "${item}"
   elif [[ "${MODE}" == "deb" ]]; then
     require_root_for_deb install "$@"
+    snapshot_pre "install ${item}"
     "$(apt_real apt-get)" install "${item}"
   else
     if flatpak remote-ls flathub --app 2>/dev/null | awk '{print $1}' | grep -Fxq "${item}"; then
@@ -206,6 +441,7 @@ run_install() {
         "Aucun Flatpak exact trouve pour ${item}; installation DEB." \
         "No exact Flatpak found for ${item}; using DEB installation."
       require_root_for_deb install "$@"
+      snapshot_pre "install ${item}"
       "$(apt_real apt-get)" install "${item}"
     fi
   fi
@@ -224,10 +460,16 @@ run_uninstall() {
     flatpak uninstall -y "${item}"
   elif [[ "${MODE}" == "deb" ]]; then
     require_root_for_deb uninstall "$@"
+    snapshot_pre "uninstall ${item}"
     "$(apt_real apt-get)" remove "${item}"
   else
     require_root_for_deb uninstall "$@"
-    flatpak uninstall -y "${item}" || "$(apt_real apt-get)" remove "${item}"
+    # L'instantane n'est pose que si l'on retombe reellement sur DEB: une
+    # desinstallation Flatpak ne modifie pas l'etat systeme capture par "@".
+    if ! flatpak uninstall -y "${item}"; then
+      snapshot_pre "uninstall ${item}"
+      "$(apt_real apt-get)" remove "${item}"
+    fi
   fi
 }
 
@@ -248,7 +490,10 @@ case "${1:-}" in
     shift; run_uninstall "$@"
     ;;
   purge)
-    shift; require_root_for_deb purge "$@"; "$(apt_real apt-get)" purge "$@"
+    shift
+    require_root_for_deb purge "$@"
+    snapshot_pre "purge $*"
+    "$(apt_real apt-get)" purge "$@"
     ;;
   clean)
     require_root_for_deb clean
@@ -257,6 +502,15 @@ case "${1:-}" in
   autoclean)
     require_root_for_deb autoclean
     "$(apt_real apt-get)" autoclean
+    ;;
+  snapshot)
+    shift; run_snapshot "$@"
+    ;;
+  snapshots)
+    shift; run_snapshot_list
+    ;;
+  rollback)
+    shift; run_rollback "$@"
     ;;
   set)
     shift
@@ -271,6 +525,14 @@ case "${1:-}" in
       say "APT direct: actif" "Direct APT: enabled"
     else
       say "APT direct: masque, utilisez auxi" "Direct APT: hidden, use auxi"
+    fi
+    if snapshots_available; then
+      say "Rollback systeme: actif (BTRFS + snapper)" \
+          "System rollback: enabled (BTRFS + snapper)"
+      snapper -c "${SNAPPER_CONFIG}" list 2>/dev/null | tail -n 5 || true
+    else
+      say "Rollback systeme: indisponible sur ce systeme" \
+          "System rollback: unavailable on this system"
     fi
     ;;
   -h|--help|help|"")

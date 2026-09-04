@@ -1,0 +1,12 @@
+# Rollback systeme (BTRFS + instantanes).
+#
+# LVM a ete ecarte volontairement: ses instantanes ont une taille pre-allouee
+# fixe, se remplissent silencieusement, degradent les ecritures et surtout ne
+# sont PAS amorcables. BTRFS + grub-btrfs ajoute un sous-menu GRUB permettant
+# de demarrer sur un instantane meme quand le systeme installe ne demarre plus.
+btrfs-progs
+snapper
+grub-btrfs
+# grub-btrfsd surveille /.snapshots via inotify pour regenerer le menu GRUB
+# des qu'un instantane apparait ou disparait.
+inotify-tools
