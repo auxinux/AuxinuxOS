@@ -2,12 +2,37 @@
 
 Aucune suite automatisée complète n’est actuellement fournie.
 
+## Tests automatisés
+
+```bash
+bash tests/test-rollback.sh
+bash tests/test-windows-wizard.sh
+(cd packages/auxinux-center && cargo test --no-default-features)
+```
+
+`test-rollback.sh` couvre la logique de `auxi rollback` : numéro invalide,
+instantané inexistant, refus de confirmation, restauration nominale et — le cas
+critique — reprise après échec de `btrfs subvolume snapshot`, quand la machine
+se retrouverait sinon sans racine amorçable.
+
+`test-windows-wizard.sh` couvre l’assistant `.exe` : arguments invalides, sortie
+en erreur explicite quand `zenity` manque, annulation, et — le cas critique —
+l’usage d’un préfixe Wine dédié avec vérification que `~/.wine` n’est jamais
+créé.
+
+Dans les deux cas, les commandes système (`btrfs`, `mount`, `wine`, `zenity`)
+sont remplacées par des stubs : ces tests valident l’enchaînement et les
+chemins, pas le comportement réel des outils.
+
 ## Vérifications locales
 
 - Vérifier la syntaxe des scripts avec `bash -n`.
 - Valider le JSON de la politique Brave.
 - Tester `auxi --help`, `auxi status` et le refus d’une opération DEB sans sudo.
 - Compiler le centre sur Debian 13 amd64 et vérifier son lancement graphique.
+  `./packages/auxinux-center/build.sh --backend-only` valide la logique sans
+  aucune dépendance graphique ; la compilation complète exige
+  `libxkbcommon-dev` et `libwayland-dev`.
 
 ## Validation en machine virtuelle
 
@@ -19,5 +44,63 @@ Aucune suite automatisée complète n’est actuellement fournie.
 6. Vérifier que le compte live, son sudo sans mot de passe et l’autologin ont disparu.
 7. Tester recherche, installation, mise à jour et désinstallation Flatpak et DEB.
 8. Vérifier les langues, le son et les paramètres du bureau.
+
+## Validation du rollback (obligatoire avant diffusion)
+
+9. Vérifier que `/` est en BTRFS et que les sept sous-volumes sont montés :
+   `findmnt -t btrfs`.
+10. Vérifier les options dans `/etc/fstab` : `noatime`, `compress=zstd:1`.
+11. `auxi status` doit annoncer « Rollback système : actif » et lister
+    l’instantané « Installation initiale ».
+12. `sudo auxi install <un paquet DEB>` doit créer un instantané avant
+    l’opération ; `sudo snapper -c root list` doit montrer une paire pre/post.
+13. Casser volontairement le système (par exemple purger un paquet essentiel),
+    redémarrer, puis restaurer via le sous-menu GRUB
+    « AuxiNux OS - instantanés ».
+14. Après restauration : vérifier que `/home` est intact, que les journaux
+    d’avant la restauration sont toujours dans `/var/log`, et que les
+    applications Flatpak sont toujours installées.
+15. Vérifier que `@.rollback-*` existe encore et que sa suppression manuelle
+    fonctionne.
+16. Reprendre les étapes 9 à 15 sur une installation **chiffrée (LUKS)**, cas
+    non testé à ce jour.
+
+## Validation du centre de contrôle (0.2, jamais lancé graphiquement)
+
+17. Vérifier que le centre s'ouvre et adopte le thème COSMIC, en clair
+    **et** en sombre.
+18. Lancer une installation depuis Applications : la fenêtre doit rester
+    utilisable et navigable pendant toute l'opération.
+19. Rechercher une application présente sur Flathub **et** en DEB (VLC, GIMP),
+    basculer sur « AuxiNux (DEB) » et vérifier que la fiche affiche le nom de
+    paquet (`vlc`) et non l'app-id Flatpak. Installer et confirmer avec
+    `dpkg -l`.
+20. Ouvrir Santé : vérifier que chaque anomalie porte un conseil lisible.
+21. Ouvrir Restauration : créer un point, vérifier qu'il apparaît dans
+    `snapper -c root list`, puis tester la confirmation en deux temps.
+22. Annuler une invite polkit et vérifier que l'interface affiche l'échec au
+    lieu de rester bloquée ou d'afficher un faux succès.
+
+## Validation de la couche Windows et de la fluidité (jamais testée)
+
+23. `dpkg --print-foreign-architectures` doit renvoyer `i386`, et
+    `dpkg -l wine32` doit montrer le paquet installé.
+24. Double-cliquer un `.exe` depuis le gestionnaire de fichiers : l'assistant
+    doit s'ouvrir avec **trois** choix. Vérifier qu'aucune fenêtre ne manque —
+    c'est le cas qui échouait silencieusement avec `kdialog`.
+25. Choisir « Lancer directement avec Wine » et vérifier qu'un préfixe dédié
+    apparaît sous `~/.local/share/auxinux/wine-prefixes/`, et que `~/.wine`
+    n'est **pas** créé.
+26. Ouvrir « Applications Windows et jeux », installer Bottles, vérifier que la
+    fenêtre de progression s'affiche et que l'état passe à « Déjà installé ».
+27. `zramswap status` (ou `zramctl`) doit montrer un périphérique zram actif en
+    zstd, de priorité supérieure à tout autre swap (`swapon --show`).
+28. `systemctl status systemd-oomd` doit être actif, et
+    `systemd-analyze cat-config systemd/oomd.conf` doit reprendre les 20 s.
+29. `systemctl show user@$(id -u).service -p ManagedOOMMemoryPressure` doit
+    renvoyer `kill` — sans quoi systemd-oomd tourne sans rien surveiller.
+30. Saturer volontairement la mémoire et vérifier que le bureau reste utilisable
+    et qu'une application est tuée, au lieu d'un gel de plusieurs minutes.
+31. `systemctl is-enabled fstrim.timer` doit renvoyer `enabled`.
 
 Consigner la version de l’ISO, les résultats et les échecs avant diffusion.

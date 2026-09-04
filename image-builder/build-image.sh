@@ -106,7 +106,7 @@ package_csv() {
   awk 'NF && $1 !~ /^#/' "$@" | paste -sd,
 }
 
-BASE_PACKAGES="$(package_csv "${PROJECT_DIR}/image-builder/package-lists/base.txt" "${PROJECT_DIR}/image-builder/package-lists/firmware.txt" "${PROJECT_DIR}/image-builder/package-lists/desktop-base.txt" "${PROJECT_DIR}/image-builder/package-lists/i18n-canada.txt" "${PROJECT_DIR}/image-builder/package-lists/live-installer.txt" "${PROJECT_DIR}/image-builder/package-lists/windows-support.txt")"
+BASE_PACKAGES="$(package_csv "${PROJECT_DIR}/image-builder/package-lists/base.txt" "${PROJECT_DIR}/image-builder/package-lists/firmware.txt" "${PROJECT_DIR}/image-builder/package-lists/desktop-base.txt" "${PROJECT_DIR}/image-builder/package-lists/i18n-canada.txt" "${PROJECT_DIR}/image-builder/package-lists/live-installer.txt" "${PROJECT_DIR}/image-builder/package-lists/windows-support.txt" "${PROJECT_DIR}/image-builder/package-lists/rollback.txt" "${PROJECT_DIR}/image-builder/package-lists/performance.txt")"
 
 if [[ "${REUSE_ROOTFS}" -eq 1 ]]; then
   if [[ ! -e "${ROOTFS_DIR}/etc/os-release" ]]; then
@@ -116,8 +116,12 @@ if [[ "${REUSE_ROOTFS}" -eq 1 ]]; then
   echo "==> Reusing rootfs: ${ROOTFS_DIR}"
 else
   echo "==> Creating Debian 13.5 rootfs"
+  # i386 est requis par wine32, lui-meme tire par le metapaquet `wine`. Sans
+  # cette architecture, seules les applications Windows 64 bits fonctionnent --
+  # ce qui exclut une grande partie des logiciels anciens, precisement ceux
+  # pour lesquels on garde Wine.
   sudo mmdebstrap \
-    --architectures=amd64 \
+    --architectures=amd64,i386 \
     --variant=apt \
     --components=main,contrib,non-free,non-free-firmware \
     --include="${BASE_PACKAGES}" \
@@ -145,6 +149,8 @@ INSTALL_PACKAGES="$(package_csv \
   "${PROJECT_DIR}/image-builder/package-lists/i18n-canada.txt" \
   "${PROJECT_DIR}/image-builder/package-lists/live-installer.txt" \
   "${PROJECT_DIR}/image-builder/package-lists/windows-support.txt" \
+  "${PROJECT_DIR}/image-builder/package-lists/rollback.txt" \
+  "${PROJECT_DIR}/image-builder/package-lists/performance.txt" \
   "${PROJECT_DIR}/image-builder/package-lists/auxinux-system.txt" \
   "${PROJECT_DIR}/image-builder/package-lists/apps-privacy.txt" \
   | tr ',' ' ')"
@@ -153,6 +159,26 @@ sudo chroot "${ROOTFS_DIR}" apt-get install -y --no-install-recommends ${INSTALL
 # Reuse builds must also keep the installer formatting stack available for EFI
 # partition creation, even when the rootfs predates new package-list entries.
 sudo chroot "${ROOTFS_DIR}" apt-get install -y --no-install-recommends dosfstools
+
+# Idem pour la pile de rollback: sans btrfs-progs dans le LIVE, Calamares ne
+# peut pas formater la cible en BTRFS et le rollback est perdu des l'install.
+sudo chroot "${ROOTFS_DIR}" apt-get install -y --no-install-recommends \
+  btrfs-progs snapper grub-btrfs inotify-tools
+
+# Idem pour la couche Windows et la fluidite. Sur un rootfs reutilise, i386
+# peut manquer: on l'ajoute avant, sinon wine32 est introuvable.
+if ! sudo chroot "${ROOTFS_DIR}" dpkg --print-foreign-architectures | grep -qx i386; then
+  sudo chroot "${ROOTFS_DIR}" dpkg --add-architecture i386
+  sudo chroot "${ROOTFS_DIR}" apt-get update
+fi
+sudo chroot "${ROOTFS_DIR}" apt-get install -y --no-install-recommends \
+  wine winetricks mesa-vulkan-drivers libvulkan1 vulkan-tools gamemode mangohud \
+  zram-tools zenity
+
+# q4wine a ete retire de la couche Windows (interface abandonnee en amont, et
+# gestion brute des prefixes). Sur un rootfs reutilise il resterait installe.
+sudo chroot "${ROOTFS_DIR}" apt-get purge -y q4wine 2>/dev/null || true
+sudo chroot "${ROOTFS_DIR}" apt-get autoremove -y --purge
 
 echo "==> Installing COSMIC runtime dependencies (OBS home:nomispaz Debian_13)"
 # COSMIC has no Debian package; the only APT source for trixie is the
@@ -267,6 +293,23 @@ sudo rm -f "${ROOTFS_DIR}/etc/systemd/system/multi-user.target.wants/tor.service
 # timers that may run in the background and hit the apt wrapper policy.
 sudo rm -f "${ROOTFS_DIR}/etc/systemd/system/timers.target.wants/apt-daily.timer"
 sudo rm -f "${ROOTFS_DIR}/etc/systemd/system/timers.target.wants/apt-daily-upgrade.timer"
+
+# Fluidite: zram (echange compresse en RAM), systemd-oomd (evite le gel total
+# en saturation memoire) et fstrim (entretien des SSD). Les fichiers de
+# configuration viennent des overlays, appliques juste avant.
+#
+# On remonte /proc et /dev le temps de l'activation: `systemctl enable` teste
+# /proc/1/root pour detecter le chroot et echoue sans lui. On passe bien par
+# systemctl et non par des liens symboliques faits main, parce que
+# systemd-oomd.service declare `Also=systemd-oomd.socket` -- un lien pose a la
+# main activerait le service sans sa socket.
+mount_chroot_api_filesystems
+for unit in zramswap.service systemd-oomd.service fstrim.timer; do
+  if ! sudo chroot "${ROOTFS_DIR}" systemctl enable "${unit}" >/dev/null 2>&1; then
+    echo "AVERTISSEMENT: activation de ${unit} echouee." >&2
+  fi
+done
+cleanup_chroot_api_filesystems
 
 sudo install -d -m 0755 "${ROOTFS_DIR}/etc/auxinux"
 printf 'APT_ENABLED=0\n' | sudo tee "${ROOTFS_DIR}/etc/auxinux/apt.conf" >/dev/null
