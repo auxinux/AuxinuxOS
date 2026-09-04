@@ -16,21 +16,26 @@ Voir [les limites connues](docs/limitations.md).
 ## Composants
 
 - `image-builder/` : construction de l’ISO, listes de paquets, ressources et configuration.
-- `installer/` : nettoyage du système après installation.
+- `installer/` : nettoyage du système après installation et configuration du rollback.
 - `packages/auxi-cli/` : gestion des applications et politique APT.
-- `packages/auxinux-center/` : centre d’applications Rust, Qt6 et Kirigami.
+- `packages/auxinux-center/` : centre de contrôle Rust et libcosmic.
 - `packages/welcome/` : accueil live et lanceur Calamares.
-- `packages/windows-support/` : assistant Wine.
+- `packages/windows-support/` : assistant `.exe` et installation de la couche Windows/jeux.
 - `docs/` : documentation technique.
 - `tests/` : procédure de validation.
 
 Les applications Flatpak sont privilégiées ; les paquets DEB restent
 accessibles. Les langues visées sont le français et l’anglais canadiens.
 
+L’installation se fait sur **BTRFS** avec instantanés : un instantané est créé
+automatiquement avant chaque transaction DEB, et le système peut être restauré
+depuis le menu GRUB même quand il ne démarre plus. Voir
+[le rollback système](docs/rollback.md).
+
 ## Construction
 
 La construction nécessite un hôte **Debian 13 amd64**, les outils Linux de
-création d’images et les dépendances du centre d’applications. Elle ne
+création d’images et les dépendances du centre de contrôle. Elle ne
 s’exécute pas directement sous macOS.
 
 Consulter [les instructions de construction](image-builder/README.md).
@@ -39,5 +44,10 @@ Les ISO et les caches de compilation sont exclus de Git ; les sources,
 
 ## Licence
 
-Voir le fichier `LICENSE` à la racine du dépôt. La licence globale reste à
-finaliser ; le manifeste du centre d’applications déclare GPL-3.0-or-later.
+Le code d’AuxiNuxOS est sous **GPL-3.0-or-later** (texte intégral dans
+[`LICENSE`](LICENSE)).
+
+L’**image ISO** n’est pas sous GPL : c’est une agrégation de logiciels tiers
+qui conservent chacun leur licence, y compris les composants `non-free` et
+`non-free-firmware` délibérément activés pour la prise en charge du matériel.
+Voir [`COPYING.md`](COPYING.md) avant toute redistribution.
