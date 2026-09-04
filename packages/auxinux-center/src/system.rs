@@ -1,41 +1,14 @@
 //! Section SYSTEME: informations de base et avancees.
 
-use serde::Serialize;
 use sysinfo::{Disks, System};
 
+use crate::model::{DiskInfo, SystemReport};
 use crate::util::run;
 
-#[derive(Serialize)]
-struct DiskInfo {
-    mount: String,
-    total_gb: u64,
-    available_gb: u64,
-}
+pub const MB: u64 = 1024 * 1024;
+pub const GB: u64 = 1024 * 1024 * 1024;
 
-#[derive(Serialize)]
-struct SystemReport {
-    product: String,
-    os: String,
-    kernel: String,
-    hostname: String,
-    arch: String,
-    cpu: String,
-    cpu_cores: usize,
-    memory_total_mb: u64,
-    memory_used_mb: u64,
-    disks: Vec<DiskInfo>,
-    // Champs avances (optionnels).
-    desktop: Option<String>,
-    session_type: Option<String>,
-    gpu: Option<String>,
-    uptime_min: Option<u64>,
-    flatpak_runtimes: Option<u64>,
-}
-
-const MB: u64 = 1024 * 1024;
-const GB: u64 = 1024 * 1024 * 1024;
-
-pub fn info(advanced: bool) -> String {
+pub fn info(advanced: bool) -> SystemReport {
     let mut sys = System::new_all();
     sys.refresh_all();
 
@@ -58,7 +31,7 @@ pub fn info(advanced: bool) -> String {
         .collect();
 
     let mut report = SystemReport {
-        product: "AuxiNux OS EN 0.1-BETA".into(),
+        product: product_name(),
         os: System::long_os_version().unwrap_or_else(|| "Debian 13 (trixie)".into()),
         kernel: System::kernel_version().unwrap_or_else(|| "inconnu".into()),
         hostname: System::host_name().unwrap_or_else(|| "inconnu".into()),
@@ -94,7 +67,23 @@ pub fn info(advanced: bool) -> String {
         }
     }
 
-    serde_json::to_string(&report).unwrap_or_else(|_| "{}".into())
+    report
+}
+
+/// Nom produit lu depuis /etc/os-release, avec repli sur la valeur compilee.
+/// Coder la version en dur obligeait a modifier le Rust a chaque version.
+fn product_name() -> String {
+    if let Ok(content) = std::fs::read_to_string("/etc/os-release") {
+        for line in content.lines() {
+            if let Some(v) = line.strip_prefix("PRETTY_NAME=") {
+                let v = v.trim().trim_matches('"');
+                if !v.is_empty() {
+                    return v.to_string();
+                }
+            }
+        }
+    }
+    "AuxiNux OS EN".into()
 }
 
 /// Opens the COSMIC settings application (replaces the old KDE

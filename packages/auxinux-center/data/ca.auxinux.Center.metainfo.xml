@@ -5,21 +5,23 @@
   <project_license>GPL-3.0-or-later</project_license>
   <name>AuxiNux OS Center</name>
   <name xml:lang="fr">AuxiNux OS Center</name>
-  <summary>Software store, sources and system information for AuxiNux OS</summary>
-  <summary xml:lang="fr">Magasin d'applications, sources et infos système pour AuxiNux OS</summary>
+  <summary>Control center for AuxiNux OS: apps, updates, health, sources and recovery</summary>
+  <summary xml:lang="fr">Centre de contrôle d'AuxiNux OS : applications, mises à jour, santé, sources et restauration</summary>
   <description>
     <p>
-      AuxiNux OS Center is the home application store for AuxiNux OS. It searches
-      and installs applications with Flathub as the default source and the AuxiNux
-      DEB repository as an alternative, manages software sources (enable, disable,
-      add repositories such as Docker), and reports system information.
+      AuxiNux OS Center is the control center of AuxiNux OS. It installs and
+      updates applications with Flathub as the default source and the AuxiNux DEB
+      repository as an alternative, updates the operating system, reports system
+      health with plain-language advice, manages software sources, exposes the
+      APT policy, and restores the system from a BTRFS snapshot.
     </p>
     <p xml:lang="fr">
-      AuxiNux OS Center est le magasin d'applications maison d'AuxiNux OS. Il
-      recherche et installe des applications avec Flathub comme source par défaut
-      et le dépôt AuxiNux DEB en alternative, gère les sources logicielles
-      (activer, désactiver, ajouter un dépôt comme Docker) et affiche les
-      informations système.
+      AuxiNux OS Center est le centre de contrôle d'AuxiNux OS. Il installe et met
+      à jour les applications avec Flathub comme source par défaut et le dépôt
+      AuxiNux DEB en alternative, met à jour le système d'exploitation, présente
+      la santé du système avec des conseils en français courant, gère les sources
+      logicielles, expose la politique APT et permet de restaurer le système
+      depuis un instantané BTRFS.
     </p>
   </description>
   <launchable type="desktop-id">ca.auxinux.Center.desktop</launchable>
@@ -36,6 +38,25 @@
   </developer>
   <content_rating type="oars-1.1" />
   <releases>
+    <release version="0.2.0" date="2026-09-04">
+      <description>
+        <p>
+          Rebuilt on libcosmic, the native COSMIC toolkit: no more Qt/Kirigami
+          dependency. All operations now run in the background, so the window no
+          longer freezes during installs and updates. New sections: system
+          updates, system health and snapshot recovery. Fixed the Flatpak/DEB
+          merge sending the Flatpak app-id to apt instead of the package name.
+        </p>
+        <p xml:lang="fr">
+          Reconstruit sur libcosmic, le toolkit natif de COSMIC : plus aucune
+          dépendance Qt/Kirigami. Toutes les opérations s'exécutent en arrière-plan,
+          la fenêtre ne se fige plus pendant les installations et les mises à jour.
+          Nouvelles sections : mises à jour système, santé du système et
+          restauration. Correction de la fusion Flatpak/DEB, qui transmettait
+          l'app-id Flatpak à apt au lieu du nom de paquet.
+        </p>
+      </description>
+    </release>
     <release version="0.1.0" date="2026-06-26">
       <description>
         <p>First release: Apps, Sources, Configuration and System sections.</p>

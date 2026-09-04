@@ -1,14 +1,17 @@
 [Desktop Entry]
 Type=Application
 Name=AuxiNux OS Center
-GenericName=Software & System Center
-GenericName[fr]=Centre logiciel et système
-Comment=Applications, software sources and system information
-Comment[fr]=Applications, sources logicielles et informations système
+GenericName=Control Center
+GenericName[fr]=Centre de contrôle
+Comment=Applications, updates, system health, sources, settings and recovery
+Comment[fr]=Applications, mises à jour, santé du système, sources, réglages et restauration
 Exec=auxinux-center
 Icon=auxinuxos
 Terminal=false
-Categories=System;Settings;PackageManager;Qt;KDE;
-Keywords=store;software;apps;flatpak;deb;sources;repository;docker;system;
-Keywords[fr]=magasin;logiciels;applications;flatpak;deb;sources;depot;docker;systeme;
+# Qt et KDE retirés: depuis la 0.2 l'application est en libcosmic, pas en
+# Kirigami. Les laisser ferait apparaître le Center dans les regroupements
+# KDE des lanceurs.
+Categories=System;Settings;PackageManager;
+Keywords=store;software;apps;flatpak;deb;sources;repository;updates;health;backup;snapshot;rollback;recovery;
+Keywords[fr]=magasin;logiciels;applications;flatpak;deb;sources;depot;mises a jour;sante;sauvegarde;instantane;restauration;retour arriere;
 StartupNotify=true

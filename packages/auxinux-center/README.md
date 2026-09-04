@@ -1,54 +1,87 @@
 # AuxiNux OS Center
 
-Magasin d'applications et centre système maison d'AuxiNux OS EN.
+Centre de contrôle d'AuxiNux OS : applications, mises à jour, santé du système,
+sources, réglages et restauration.
 
-- **Backend** : Rust (modules `apps`, `sources`, `system`), délègue à `flatpak`,
-  à la CLI `auxi` (politique APT maison) et à `apt-cache`.
-- **UI** : Kirigami (QML), interface Qt6/Kirigami sous COSMIC.
-- **Pont** : CXX-Qt — objet singleton QML `Backend` (URI `ca.auxinux.Center`).
+- **Interface** : Rust + [libcosmic](https://github.com/pop-os/libcosmic), le
+  toolkit natif du bureau COSMIC.
+- **Backend** : Rust (`apps`, `sources`, `system`, `health`, `recovery`,
+  `updates`), délègue à `flatpak`, à la CLI `auxi` et à `apt-cache`.
+- **Privilèges** : `pkexec` (agent polkit). Le Center n'écrit jamais
+  directement sous `/etc`.
+
+## Pourquoi libcosmic et pas Kirigami
+
+La 0.1 était en Kirigami (Qt6) via CXX-Qt. Trois problèmes, tous résolus par le
+changement de toolkit :
+
+| Problème 0.1 | 0.2 |
+|---|---|
+| Fenêtre Qt/KDE au milieu d'un bureau COSMIC (thème, police, boutons différents) | Thème du bureau hérité, clair et sombre |
+| Toute la pile KF6 + modules QML dans l'ISO | Aucune dépendance de paquet propre |
+| Moteur QML chargé au lancement | Un binaire, démarrage direct |
+
+Go a été évalué et écarté : les défauts réels de la 0.1 étaient architecturaux
+(opérations synchrones, fusion Flatpak/DEB heuristique), pas liés au langage, et
+Go n'offre pas de binding GUI qui s'intègre au bureau.
 
 ## Sections
 
-- **Applications** : recherche, install, désinstall, mise à jour. Source par
-  défaut **Flathub** ; bascule possible sur **AuxiNux (DEB)**. Si une app n'est
-  pas sur Flathub mais existe en DEB, elle est affichée avec la source DEB.
-- **Sources** : activer/désactiver les dépôts APT, ajouter un dépôt (presets
-  **Docker**, **VS Code**, ou personnalisé deb822), gérer les remotes Flatpak.
-- **Configuration** : politique APT (`auxi set apt=…`), raccourcis réglages COSMIC.
-- **Système** : infos de base et vue avancée (GPU, session, uptime, disques…).
+- **Applications** — recherche, installation, désinstallation. Source par défaut
+  **Flathub**, bascule possible vers **AuxiNux (DEB)**. La fiche affiche
+  toujours l'identifiant réellement visé pour la source choisie.
+- **Mises à jour** — applications Flatpak, paquets DEB et système, avec le
+  rappel qu'un point de restauration est créé automatiquement avant.
+- **Santé du système** — espace disque, mémoire, services en échec, mises à
+  jour en attente, état de la restauration, temps de démarrage. Chaque anomalie
+  porte un **conseil en français courant**, pas seulement un chiffre.
+- **Restauration** — points de restauration BTRFS : lister, créer, revenir en
+  arrière. Confirmation en deux temps, `/home` jamais touché.
+- **Sources** — dépôts APT (activer/désactiver/retirer), dépôts connus
+  (VS Code, Docker, Mozilla, Mullvad, Signal), remotes Flatpak.
+- **Réglages** — politique APT (`auxi set apt=…`) et accès aux réglages COSMIC.
 
-## Compilation (sur l'hôte de build Debian 13)
+## Compilation
 
-Prérequis : toolchain Rust, Qt6 + KF6 dev (`qt6-base-dev qt6-declarative-dev
-cmake build-essential`), Kirigami runtime, `pkg-config libssl-dev`.
+Prérequis sur l’hôte de build Debian 13 : toolchain Rust ≥ 1.93 (via rustup —
+le `rustc` de Trixie est en 1.85 et ne suffit pas),
+`build-essential pkg-config libxkbcommon-dev libwayland-dev libudev-dev
+libinput-dev libssl-dev`. **Qt6 et KF6 ne sont plus nécessaires.**
 
 ```bash
-./build.sh
-# Test du backend SANS Qt (utile pour valider la logique):
+./build.sh                 # tests + binaire complet
+./build.sh --backend-only  # logique seule, sans dépendance graphique
+```
+
+`--backend-only` compile avec `--no-default-features` : toute la logique est
+validée sur une machine dépourvue de Wayland et de libxkbcommon. C'est le mode
+à utiliser en intégration continue.
+
+```bash
+./target/release/auxinux-center --cli health
+./target/release/auxinux-center --cli snapshots
 ./target/release/auxinux-center --cli search vlc
-./target/release/auxinux-center --cli sources
 ./target/release/auxinux-center --cli sysinfo advanced
 ```
+
+## Tests
+
+```bash
+cargo test --no-default-features
+```
+
+Couvre le choix d'identifiant par source (le bug DEB/Flatpak de la 0.1),
+l'agrégation des gravités de santé et l'analyse du CSV de snapper.
 
 ## Intégration ISO
 
 `image-builder/scripts/install-auxinux-center.sh` compile (ou prend
 `AUXINUX_CENTER_BIN`) puis installe le binaire, le `.desktop` et le metainfo
-dans le rootfs. Appelé par `build-image.sh`. L'app **reste** sur le système
-installé (ce n'est pas un artefact live).
+dans le rootfs. L'application reste sur le système installé.
 
-## À vérifier en premier sur debiandev
+## Limites connues
 
-1. `cargo build` — le pont CXX-Qt est la partie à confirmer contre la version
-   exacte de `cxx-qt` installée (API 0.7 visée).
-2. Lancement UI : `auxinux-center`.
-3. Droits : les opérations DEB et l'écriture sous `/etc/apt` passent par
-   `pkexec` (agent polkit de la session).
-
-## Limites connues (v1)
-
-- Opérations install/maj **synchrones** (l'UI se fige pendant l'action) →
-  passer en tâche asynchrone (signal `taskFinished`) en v2.
-- Fusion Flatpak/DEB **heuristique** (par nom/app-id) → AppStream unifié en v2
-  pour des fiches riches et une correspondance fiable.
-- Correspondance Flatpak/DEB et confirmations APT : voir `../../docs/limitations.md`.
+Voir [docs/limitations.md](../../docs/limitations.md). En résumé pour la 0.2 :
+la sortie des opérations longues n'est pas encore diffusée en direct (seul le
+résultat final s'affiche), et la fiche détaillée AppStream (icônes, captures)
+n'est pas encore branchée sur l'interface.

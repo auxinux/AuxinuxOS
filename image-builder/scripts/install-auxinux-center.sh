@@ -33,9 +33,12 @@ sudo install -D -m 0644 "${PKG_DIR}/data/ca.auxinux.Center.desktop" \
 sudo install -D -m 0644 "${PKG_DIR}/data/ca.auxinux.Center.metainfo.xml" \
   "${ROOTFS}/usr/share/metainfo/ca.auxinux.Center.metainfo.xml"
 
-# Dependances QML d'execution. Plasma 6 fournit deja Kirigami et Qt6 Quick, donc
-# ces paquets sont generalement deja presents; on tolere l'echec/redondance.
-RUNTIME_QML="qml6-module-org-kde-kirigami qml6-module-qtquick-controls qml6-module-qtquick-layouts qml6-module-qtquick-window"
-if ! sudo chroot "${ROOTFS}" apt-get install -y --no-install-recommends ${RUNTIME_QML}; then
-  echo "AVERTISSEMENT: dependances QML non installees (probablement deja fournies par Plasma)." >&2
-fi
+# Depuis la 0.2, le Center est un binaire libcosmic: il n'a plus AUCUNE
+# dependance QML/Kirigami/KF6 a installer dans l'image. Ses dependances
+# d'execution (wayland, libxkbcommon, mesa) sont deja tirees par COSMIC.
+#
+# Nettoyage des reliquats: sur un rootfs reutilise (--reuse-rootfs), les
+# modules QML installes par les versions precedentes resteraient dans l'image
+# sans que rien ne les utilise.
+sudo chroot "${ROOTFS}" apt-get autoremove -y --purge \
+  qml6-module-org-kde-kirigami 2>/dev/null || true

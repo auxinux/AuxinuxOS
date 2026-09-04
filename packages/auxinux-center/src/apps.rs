@@ -10,47 +10,14 @@
 //! de l'API publique Flathub v2; les icones des tuiles viennent du cache
 //! AppStream local de Flatpak (rapide, hors-ligne).
 
-use serde::Serialize;
 use serde_json::Value;
 
+use crate::model::{
+    ActionResult, AppDetails, AppEntry, AppStatus, SOURCE_DEB, SOURCE_FLATHUB,
+};
 use crate::util::{run, run_pkexec};
 
 const MAX_DEB_RESULTS: usize = 60;
-
-#[derive(Serialize)]
-pub struct AppEntry {
-    pub id: String,
-    pub name: String,
-    pub summary: String,
-    pub version: String,
-    pub sources: Vec<String>,
-    pub default_source: String,
-    /// Chemin file:// de l'icone si trouvee dans le cache Flatpak, sinon "".
-    pub icon: String,
-}
-
-#[derive(Serialize)]
-pub struct AppDetails {
-    pub name: String,
-    pub summary: String,
-    pub description: String,
-    pub version: String,
-    pub license: String,
-    pub homepage: String,
-    pub icon: String,
-    pub screenshots: Vec<String>,
-}
-
-#[derive(Serialize)]
-pub struct ActionResult {
-    pub ok: bool,
-    pub message: String,
-}
-
-fn result(ok: bool, msg: impl Into<String>) -> String {
-    serde_json::to_string(&ActionResult { ok, message: msg.into() })
-        .unwrap_or_else(|_| "{\"ok\":false,\"message\":\"serialisation\"}".into())
-}
 
 /// identifiers reach `pkexec auxi/apt-get/flatpak <id>` as argv. argv
 /// means no shell injection, but an id starting with `-` would be read as an
@@ -97,10 +64,10 @@ fn flatpak_matches_deb(app: &AppEntry, deb_name: &str) -> bool {
     name == deb || id.rsplit('.').next().map(|s| s == deb).unwrap_or(false) || id.ends_with(&deb)
 }
 
-pub fn search(query: &str) -> String {
+pub fn search(query: &str) -> Vec<AppEntry> {
     let query = query.trim();
     if query.len() < 2 {
-        return "[]".into();
+        return Vec::new();
     }
 
     let mut entries: Vec<AppEntry> = Vec::new();
@@ -125,9 +92,10 @@ pub fn search(query: &str) -> String {
                 name: cols.get(1).copied().unwrap_or(id).trim().to_string(),
                 summary: cols.get(2).copied().unwrap_or("").trim().to_string(),
                 version: cols.get(3).copied().unwrap_or("").trim().to_string(),
-                sources: vec!["flathub".into()],
-                default_source: "flathub".into(),
+                sources: vec![SOURCE_FLATHUB.into()],
+                default_source: SOURCE_FLATHUB.into(),
                 icon: flatpak_icon_path(id),
+                deb_name: None,
             });
         }
     }
@@ -146,9 +114,12 @@ pub fn search(query: &str) -> String {
                 continue;
             }
             if let Some(e) = entries.iter_mut().find(|e| flatpak_matches_deb(e, name)) {
-                if !e.sources.iter().any(|s| s == "auxinux-deb") {
-                    e.sources.push("auxinux-deb".into());
+                if !e.has_source(SOURCE_DEB) {
+                    e.sources.push(SOURCE_DEB.into());
                 }
+                // Sans cette ligne, basculer la fiche sur DEB enverrait
+                // l'app-id Flatpak a apt-get.
+                e.deb_name.get_or_insert_with(|| name.to_string());
                 continue;
             }
             entries.push(AppEntry {
@@ -156,19 +127,20 @@ pub fn search(query: &str) -> String {
                 name: name.to_string(),
                 summary: desc.trim().to_string(),
                 version: String::new(),
-                sources: vec!["auxinux-deb".into()],
-                default_source: "auxinux-deb".into(),
+                sources: vec![SOURCE_DEB.into()],
+                default_source: SOURCE_DEB.into(),
                 icon: String::new(),
+                deb_name: Some(name.to_string()),
             });
             added += 1;
         }
     }
 
-    serde_json::to_string(&entries).unwrap_or_else(|_| "[]".into())
+    entries
 }
 
 /// Selection d'applications mises en avant a l'ouverture (Flathub + DEB si disponible).
-pub fn featured() -> String {
+pub fn featured() -> Vec<AppEntry> {
     // (flatpak_id, nom, resume, paquet_deb_candidat)
     let curated: &[(&str, &str, &str, &str)] = &[
         ("org.videolan.VLC",          "VLC",        "Lecteur multimedia universel",              "vlc"),
@@ -200,9 +172,11 @@ pub fn featured() -> String {
     let entries: Vec<AppEntry> = curated
         .iter()
         .map(|(id, name, summary, deb)| {
-            let mut sources = vec!["flathub".into()];
+            let mut sources = vec![SOURCE_FLATHUB.into()];
+            let mut deb_name = None;
             if available_debs.contains(*deb) {
-                sources.push("auxinux-deb".into());
+                sources.push(SOURCE_DEB.into());
+                deb_name = Some((*deb).to_string());
             }
             AppEntry {
                 id: id.to_string(),
@@ -210,15 +184,16 @@ pub fn featured() -> String {
                 summary: summary.to_string(),
                 version: String::new(),
                 sources,
-                default_source: "flathub".into(),
+                default_source: SOURCE_FLATHUB.into(),
                 icon: flatpak_icon_path(id),
+                deb_name,
             }
         })
         .collect();
-    serde_json::to_string(&entries).unwrap_or_else(|_| "[]".into())
+    entries
 }
 
-pub fn list_installed() -> String {
+pub fn list_installed() -> Vec<AppEntry> {
     let mut entries: Vec<AppEntry> = Vec::new();
     let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
 
@@ -244,9 +219,10 @@ pub fn list_installed() -> String {
                 name,
                 summary: format!("Flatpak — origine: {}", cols.get(3).copied().unwrap_or("").trim()),
                 version: cols.get(2).copied().unwrap_or("").trim().to_string(),
-                sources: vec!["flathub".into()],
-                default_source: "flathub".into(),
+                sources: vec![SOURCE_FLATHUB.into()],
+                default_source: SOURCE_FLATHUB.into(),
                 icon: flatpak_icon_path(id),
+                deb_name: None,
             });
         }
     }
@@ -271,7 +247,7 @@ pub fn list_installed() -> String {
     }
 
     entries.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
-    serde_json::to_string(&entries).unwrap_or_else(|_| "[]".into())
+    entries
 }
 
 /// Construit une table {nom-de-fichier-.desktop-sans-extension -> paquet} via
@@ -347,13 +323,14 @@ fn parse_desktop(
     let stem = path.file_stem()?.to_string_lossy().to_string();
     let id = pkg_map.get(&stem).cloned().unwrap_or(stem);
     Some(AppEntry {
-        id,
+        id: id.clone(),
         name: final_name,
         summary: if !comment_fr.is_empty() { comment_fr } else { comment },
         version: String::new(),
-        sources: vec!["auxinux-deb".into()],
-        default_source: "auxinux-deb".into(),
+        sources: vec![SOURCE_DEB.into()],
+        default_source: SOURCE_DEB.into(),
         icon,
+        deb_name: Some(id),
     })
 }
 
@@ -361,13 +338,13 @@ fn parse_desktop(
 // Fiche detaillee
 // ---------------------------------------------------------------------------
 
-pub fn app_details(id: &str, source: &str) -> String {
-    if source != "auxinux-deb" {
+pub fn app_details(id: &str, source: &str) -> AppDetails {
+    if source != SOURCE_DEB {
         if let Some(d) = flathub_details(id) {
-            return serde_json::to_string(&d).unwrap_or_else(|_| "{}".into());
+            return d;
         }
     }
-    serde_json::to_string(&deb_details(id)).unwrap_or_else(|_| "{}".into())
+    deb_details(id)
 }
 
 fn flathub_details(id: &str) -> Option<AppDetails> {
@@ -504,20 +481,12 @@ fn strip_html(s: &str) -> String {
 // Etat d'installation (pour des boutons contextuels)
 // ---------------------------------------------------------------------------
 
-#[derive(Serialize)]
-pub struct AppStatus {
-    pub installed: bool,
-    pub update_available: bool,
-}
-
-pub fn app_status(id: &str, source: &str) -> String {
-    let st = if source == "auxinux-deb" {
+pub fn app_status(id: &str, source: &str) -> AppStatus {
+    if source == SOURCE_DEB {
         deb_status(id)
     } else {
         flatpak_status(id)
-    };
-    serde_json::to_string(&st)
-        .unwrap_or_else(|_| "{\"installed\":false,\"update_available\":false}".into())
+    }
 }
 
 fn flatpak_status(id: &str) -> AppStatus {
@@ -564,43 +533,55 @@ fn line_value(text: &str, key: &str) -> String {
 // Operations
 // ---------------------------------------------------------------------------
 
-pub fn install(id: &str, source: &str) -> String {
+pub fn install(id: &str, source: &str) -> ActionResult {
     if !is_safe_app_id(id) {
-        return result(false, "identifiant d'application invalide");
+        return ActionResult::err("identifiant d'application invalide");
     }
     let out = match source {
-        "flathub" | "flatpak" => run("flatpak", &["install", "-y", "flathub", id]),
+        SOURCE_FLATHUB | "flatpak" => run("flatpak", &["install", "-y", "flathub", id]),
         _ => run_pkexec(&["auxi", "install", "--deb", id]),
     };
-    result(out.ok, if out.ok { format!("Installe: {id}") } else { tail(&out.stderr) })
+    if out.ok {
+        ActionResult::ok(format!("Installe: {id}"))
+    } else {
+        ActionResult::err(tail(&out.stderr))
+    }
 }
 
-pub fn remove(id: &str, source: &str) -> String {
+pub fn remove(id: &str, source: &str) -> ActionResult {
     if !is_safe_app_id(id) {
-        return result(false, "identifiant d'application invalide");
+        return ActionResult::err("identifiant d'application invalide");
     }
     let out = match source {
-        "flathub" | "flatpak" => run("flatpak", &["uninstall", "-y", id]),
+        SOURCE_FLATHUB | "flatpak" => run("flatpak", &["uninstall", "-y", id]),
         _ => run_pkexec(&["auxi", "uninstall", "--deb", id]),
     };
-    result(out.ok, if out.ok { format!("Desinstalle: {id}") } else { tail(&out.stderr) })
+    if out.ok {
+        ActionResult::ok(format!("Desinstalle: {id}"))
+    } else {
+        ActionResult::err(tail(&out.stderr))
+    }
 }
 
-pub fn update_app(id: &str, source: &str) -> String {
+pub fn update_app(id: &str, source: &str) -> ActionResult {
     if !is_safe_app_id(id) {
-        return result(false, "identifiant d'application invalide");
+        return ActionResult::err("identifiant d'application invalide");
     }
     let out = match source {
-        "flathub" | "flatpak" => run("flatpak", &["update", "-y", id]),
+        SOURCE_FLATHUB | "flatpak" => run("flatpak", &["update", "-y", id]),
         // update only the requested package, not the whole system.
         _ => run_pkexec(&["auxi", "install", "--deb", id]),
     };
-    result(out.ok, if out.ok { "Mise a jour terminee".into() } else { tail(&out.stderr) })
+    if out.ok {
+        ActionResult::ok("Mise a jour terminee")
+    } else {
+        ActionResult::err(tail(&out.stderr))
+    }
 }
 
 /// consolidated "what has an update" list across Flatpak and DEB, so
 /// the UI can offer a single updates view instead of one fiche per app.
-pub fn list_updates() -> String {
+pub fn list_updates() -> Vec<AppEntry> {
     let mut entries: Vec<AppEntry> = Vec::new();
 
     // Flatpak apps with a newer commit on their remote.
@@ -623,9 +604,10 @@ pub fn list_updates() -> String {
                 name: cols.get(1).copied().unwrap_or(id).trim().to_string(),
                 summary: "Mise a jour Flatpak disponible".into(),
                 version: cols.get(2).copied().unwrap_or("").trim().to_string(),
-                sources: vec!["flathub".into()],
-                default_source: "flathub".into(),
+                sources: vec![SOURCE_FLATHUB.into()],
+                default_source: SOURCE_FLATHUB.into(),
                 icon: flatpak_icon_path(id),
+                deb_name: None,
             });
         }
     }
@@ -653,17 +635,18 @@ pub fn list_updates() -> String {
                 .to_string();
             entries.push(AppEntry {
                 id: pkg.clone(),
-                name: pkg,
+                name: pkg.clone(),
                 summary: "Mise a jour DEB disponible".into(),
                 version,
-                sources: vec!["auxinux-deb".into()],
-                default_source: "auxinux-deb".into(),
+                sources: vec![SOURCE_DEB.into()],
+                default_source: SOURCE_DEB.into(),
                 icon: String::new(),
+                deb_name: Some(pkg),
             });
         }
     }
 
-    serde_json::to_string(&entries).unwrap_or_else(|_| "[]".into())
+    entries
 }
 
 /// The real apt-get binary (diverted by dpkg-divert), for read-only dry-run

@@ -1,0 +1,194 @@
+//! Page SOURCES: depots APT, depots connus et remotes Flatpak.
+//!
+//! Les depots systeme (auxinux*, brave*) sont affiches mais non supprimables:
+//! les retirer casserait les mises a jour du noyau et du navigateur, sans
+//! signal clair pour l'utilisateur avant la panne suivante.
+
+use cosmic::{iced, widget, Element};
+
+use crate::ui::{widgets, App, Loading, Message};
+
+pub fn view(app: &App) -> Element<'_, Message> {
+    let header = widgets::header(
+        "Sources de logiciels",
+        "D'ou proviennent les applications et les mises a jour",
+        vec![widget::button::standard("Actualiser")
+            .on_press(Message::RefreshSources)
+            .into()],
+    );
+
+    let body: Element<Message> = match &app.apt_sources {
+        Loading::Idle | Loading::Busy => widgets::busy("Lecture des depots…"),
+        Loading::Ready(sources) => {
+            let mut col = widget::Column::new().spacing(16);
+
+            // --- Depots APT ---
+            let mut apt = widget::Column::new()
+                .spacing(8)
+                .push(widget::text::heading("Depots APT (paquets DEB)"));
+            if sources.is_empty() {
+                apt = apt.push(widget::text::caption("Aucun depot configure."));
+            }
+            for source in sources {
+                let mut actions = widget::Row::new()
+                    .spacing(8)
+                    .align_y(iced::Alignment::Center)
+                    .push(widget::toggler(source.enabled).on_toggle({
+                        let file = source.file.clone();
+                        move |enabled| Message::ToggleAptSource(file.clone(), enabled)
+                    }));
+
+                if source.removable {
+                    actions = actions.push(
+                        widget::button::destructive("Retirer")
+                            .on_press(Message::RemoveAptSource(source.file.clone())),
+                    );
+                }
+
+                let mut info = widget::Column::new()
+                    .spacing(2)
+                    .width(iced::Length::Fill)
+                    .push(widget::text::body(source.name.clone()))
+                    .push(widget::text::caption(format!(
+                        "{} · {}",
+                        source.file, source.kind
+                    )));
+                if !source.removable {
+                    info = info.push(widget::text::caption(
+                        "Depot systeme AuxiNux — protege contre la suppression.",
+                    ));
+                }
+
+                apt = apt.push(
+                    widget::container(
+                        widget::Row::new()
+                            .spacing(12)
+                            .align_y(iced::Alignment::Center)
+                            .push(info)
+                            .push(actions),
+                    )
+                    .class(cosmic::theme::Container::Card)
+                    .padding(12)
+                    .width(iced::Length::Fill),
+                );
+            }
+            col = col.push(apt);
+
+            // --- Depots connus ---
+            let mut presets = widget::Column::new().spacing(8).push(
+                widget::Column::new()
+                    .spacing(2)
+                    .push(widget::text::heading("Depots connus"))
+                    .push(widget::text::caption(
+                        "Ajout en un clic, avec verification de la signature du depot.",
+                    )),
+            );
+            for preset in &app.presets {
+                let action: Element<Message> = if preset.installed {
+                    widget::text::caption("Deja ajoute").into()
+                } else {
+                    widget::button::standard("Ajouter")
+                        .on_press(Message::AddPreset(preset.id.clone()))
+                        .into()
+                };
+                presets = presets.push(
+                    widget::container(
+                        widget::Row::new()
+                            .spacing(12)
+                            .align_y(iced::Alignment::Center)
+                            .push(
+                                widget::Column::new()
+                                    .spacing(2)
+                                    .width(iced::Length::Fill)
+                                    .push(widget::text::body(preset.name.clone()))
+                                    .push(widget::text::caption(preset.description.clone())),
+                            )
+                            .push(action),
+                    )
+                    .class(cosmic::theme::Container::Card)
+                    .padding(12)
+                    .width(iced::Length::Fill),
+                );
+            }
+            col = col.push(presets);
+
+            // --- Remotes Flatpak ---
+            let mut remotes = widget::Column::new()
+                .spacing(8)
+                .push(widget::text::heading("Depots Flatpak"));
+            for remote in &app.remotes {
+                remotes = remotes.push(
+                    widget::container(
+                        widget::Row::new()
+                            .spacing(12)
+                            .align_y(iced::Alignment::Center)
+                            .push(
+                                widget::Column::new()
+                                    .spacing(2)
+                                    .width(iced::Length::Fill)
+                                    .push(widget::text::body(remote.name.clone()))
+                                    .push(widget::text::caption(remote.url.clone())),
+                            )
+                            .push(widget::toggler(remote.enabled).on_toggle({
+                                let name = remote.name.clone();
+                                move |enabled| Message::ToggleRemote(name.clone(), enabled)
+                            })),
+                    )
+                    .class(cosmic::theme::Container::Card)
+                    .padding(12)
+                    .width(iced::Length::Fill),
+                );
+            }
+            col = col.push(remotes);
+            col = col.push(custom_form(app));
+
+            widget::scrollable(col).height(iced::Length::Fill).into()
+        }
+    };
+
+    widget::Column::new().spacing(16).push(header).push(body).into()
+}
+
+/// Formulaire de depot personnalise.
+///
+/// Le corps et l'URL de cle sont ecrits/executes en contexte root: la
+/// validation reelle est faite cote backend (`is_safe_sources_body`,
+/// `is_safe_key_url`), jamais ici. L'interface se contente d'expliquer le
+/// format attendu -- un champ libre sans exemple produit surtout des erreurs.
+fn custom_form(app: &App) -> Element<'_, Message> {
+    widget::container(
+        widget::Column::new()
+            .spacing(8)
+            .push(widget::text::heading("Ajouter un depot personnalise"))
+            .push(widget::text::caption(
+                "Format deb822. Seuls les champs Types, URIs, Suites, Components, \
+                 Architectures, Signed-By et Enabled sont acceptes.",
+            ))
+            .push(
+                widget::text_input("Nom (ex. mon-depot)", &app.custom_name)
+                    .on_input(Message::CustomName),
+            )
+            .push(
+                widget::text_input(
+                    "Types: deb / URIs: https://… / Suites: trixie / Components: main",
+                    &app.custom_body,
+                )
+                .on_input(Message::CustomBody),
+            )
+            .push(
+                widget::text_input(
+                    "URL de la cle GPG (https://…, facultatif)",
+                    &app.custom_key_url,
+                )
+                .on_input(Message::CustomKeyUrl),
+            )
+            .push(
+                widget::button::suggested("Ajouter le depot")
+                    .on_press(Message::AddCustomSource),
+            ),
+    )
+    .class(cosmic::theme::Container::Card)
+    .padding(14)
+    .width(iced::Length::Fill)
+    .into()
+}
