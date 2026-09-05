@@ -84,6 +84,49 @@ need_exec /etc/initramfs-tools/scripts/local-bottom/auxinux-snapshot-overlay \
 need_exec /etc/initramfs-tools/hooks/auxinux-snapshot-overlay \
   "le module overlay serait absent de l'initramfs"
 
+echo "-- Installateur (Calamares)"
+# La configuration de montage de Calamares est du YAML lu par un module
+# Python. Deux erreurs y sont MUETTES a la construction et ne se voient qu'a
+# l'ecran d'installation de l'utilisateur:
+#
+#   1. `options: bind` ecrit en SCALAIRE. main.py fait ",".join(options); sur
+#      une chaine Python joint les caracteres et lance `mount -o b,i,n,d`,
+#      qui echoue. Le module se contente d'un avertissement et l'installation
+#      CONTINUE sans /dev dans la cible: grub-probe ne trouve plus aucun
+#      peripherique ("failed to get canonical path of /dev/vda1") et
+#      l'installation s'arrete au bootloader. Il faut `options: [ bind ]`.
+#   2. Un point de montage manquant. La liste remplace les defauts compiles:
+#      incomplete, elle prive le chroot de /proc, /sys, /dev ou /dev/pts.
+CAL_MOUNT="${ROOTFS}/etc/calamares/modules/mount.conf"
+if [[ ! -f "${CAL_MOUNT}" ]]; then
+  fail "/etc/calamares/modules/mount.conf — Calamares n'aurait aucun extraMounts"
+else
+  bad_opts="$(grep -nE '^[[:space:]]*options:[[:space:]]*[^[:space:]]' "${CAL_MOUNT}" \
+              | grep -vE 'options:[[:space:]]*\[' || true)"
+  if [[ -n "${bad_opts}" ]]; then
+    fail "mount.conf: options en scalaire au lieu d'une liste — ${bad_opts//$'\n'/ ; }"
+  else
+    ok "mount.conf: chaque options est une liste YAML"
+  fi
+
+  for mp in /proc /sys /dev /dev/pts /run; do
+    if grep -qE "^[[:space:]]*mountPoint:[[:space:]]*${mp}[[:space:]]*\$" "${CAL_MOUNT}"; then
+      ok "mount.conf: ${mp} monte dans la cible"
+    else
+      fail "mount.conf: ${mp} absent — les modules chrootes (bootloader, initramfs) echoueraient"
+    fi
+  done
+
+  # `extraMountsEfi` n'existe pas dans ce module: elle est ignoree en silence,
+  # donc efivarfs ne serait jamais monte et grub-install ne pourrait pas
+  # enregistrer l'entree NVRAM d'une installation UEFI.
+  if grep -qE '^[[:space:]]*extraMountsEfi:' "${CAL_MOUNT}"; then
+    fail "mount.conf: cle extraMountsEfi ignoree par Calamares — utiliser 'efi: true' sur l'entree"
+  else
+    ok "mount.conf: pas de cle extraMountsEfi"
+  fi
+fi
+
 echo "-- Instantane avant transaction DEB"
 need_exec /usr/lib/auxinux/apt-snapshot-hook "la promesse d'un instantane avant chaque transaction ne serait pas tenue"
 need_file /etc/apt/apt.conf.d/80auxinux-snapshot "le hook ne serait jamais appele par dpkg"

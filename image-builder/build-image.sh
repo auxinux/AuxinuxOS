@@ -219,9 +219,17 @@ if [[ ! -s "${COSMIC_KEY}" ]]; then
 fi
 sudo install -D -m 0644 "${COSMIC_KEY}" \
   "${ROOTFS_DIR}/usr/share/keyrings/obs-cosmic-debian13.asc"
+#
+# downloadcontent.opensuse.org, PAS download.opensuse.org: ce dernier redirige
+# vers un miroir choisi geographiquement, et slc-mirror.opensuse.org a servi
+# des .deb corrompus (taille et sha differents de l'index) pour cosmic-edit,
+# cosmic-files, cosmic-settings, cosmic-term et xdg-desktop-portal-cosmic. La
+# construction echouait alors sur une verification de somme, ou pire,
+# produisait une ISO amputee. downloadcontent sert le contenu directement,
+# sans redirection de miroir.
 sudo tee "${ROOTFS_DIR}/etc/apt/sources.list.d/obs-cosmic.sources" >/dev/null <<'EOF'
 Types: deb
-URIs: https://download.opensuse.org/repositories/home:/nomispaz:/debian:/cosmic-desktop/Debian_13/
+URIs: https://downloadcontent.opensuse.org/repositories/home:/nomispaz:/debian:/cosmic-desktop/Debian_13/
 Suites: /
 Signed-By: /usr/share/keyrings/obs-cosmic-debian13.asc
 EOF
