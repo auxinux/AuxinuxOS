@@ -332,6 +332,15 @@ done
 # renders through llvmpipe when the VM has no GPU, so no X11 fallback is
 # needed (unlike Plasma-Wayland). SDDM is not installed anymore.
 sudo install -d -m 0755 "${ROOTFS_DIR}/etc/greetd"
+#
+# `command` de [default_session] est celui d'AMONT: `cosmic-greeter-start`.
+# On ecrivait `cosmic-comp systemd-cat -t cosmic-greeter cosmic-greeter`, une
+# forme heritee de Pop!_OS que System76 ne teste plus. Le script amont fait
+# davantage: il purge /run/cosmic-greeter/cosmic/...CosmicSettingsDaemon avant
+# de lancer le compositeur. Sans cette purge, un etat residuel du daemon de
+# reglages suffit a faire echouer le greeter au demarrage suivant -- et un
+# greeter qui echoue, c'est un ecran noir sans console (voir le drop-in
+# etc/systemd/system/cosmic-greeter.service.d/50-auxinux-fallback.conf).
 sudo tee "${ROOTFS_DIR}/etc/greetd/cosmic-greeter.toml" >/dev/null <<'EOF'
 [terminal]
 vt = "1"
@@ -344,7 +353,7 @@ command = "/usr/bin/start-cosmic"
 user = "auxinux"
 
 [default_session]
-command = "cosmic-comp systemd-cat -t cosmic-greeter cosmic-greeter"
+command = "cosmic-greeter-start"
 user = "cosmic-greeter"
 EOF
 sudo chroot "${ROOTFS_DIR}" ln -sf \
@@ -447,12 +456,17 @@ sudo mksquashfs "${ROOTFS_DIR}" "${ISO_ROOT}/live/filesystem.squashfs" \
 # cartes WiFi Atheros (ath10k) qui inonde la console et bloque le boot; le
 # WiFi reste fonctionnel. Meme reglage que /etc/default/grub du systeme
 # installe.
+#
+# `quiet splash` a ete retire des entrees de menu, comme sur le systeme
+# installe: `splash` est inerte (pas de plymouth dans l'image) et `quiet`
+# masque tout, y compris les raisons d'un demarrage qui n'aboutit pas. Un
+# medium live sert AUSSI a diagnostiquer une machine: il doit parler.
 cat >"${ISO_ROOT}/boot/grub/grub.cfg" <<'EOF'
 set timeout=5
 set default=0
 
 menuentry "AuxiNux OS EN 0.1-BETA Live" {
-    linux /live/vmlinuz boot=live components username=auxinux hostname=auxinuxos-live pci=noaer pcie_aspm=off quiet splash
+    linux /live/vmlinuz boot=live components username=auxinux hostname=auxinuxos-live pci=noaer pcie_aspm=off
     initrd /live/initrd.img
 }
 
@@ -462,7 +476,7 @@ menuentry "AuxiNux OS EN 0.1-BETA (graphiques de secours / nomodeset)" {
 }
 
 menuentry "AuxiNux OS EN 0.1-BETA (copie en RAM / toram)" {
-    linux /live/vmlinuz boot=live components username=auxinux hostname=auxinuxos-live pci=noaer pcie_aspm=off toram quiet splash
+    linux /live/vmlinuz boot=live components username=auxinux hostname=auxinuxos-live pci=noaer pcie_aspm=off toram
     initrd /live/initrd.img
 }
 EOF

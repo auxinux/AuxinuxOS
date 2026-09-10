@@ -12,6 +12,18 @@ GRUB_DISTRIBUTOR="AuxiNux OS EN"
 # gestion d'energie ASPM PCIe: le WiFi reste fonctionnel, seule la remontee
 # d'erreurs (souvent spurious) et l'economie d'energie PCIe sont desactivees.
 GRUB_CMDLINE_LINUX="pci=noaer pcie_aspm=off"
-GRUB_CMDLINE_LINUX_DEFAULT="quiet splash"
+# `quiet splash` a ete retire.
+#
+# `splash` n'a JAMAIS rien fait ici: plymouth n'est pas installe dans l'image
+# (verifie: dpkg -l | grep -c plymouth == 0). Le parametre etait donc inerte.
+# `quiet`, lui, faisait des degats: il supprime les messages du noyau et de
+# systemd, si bien qu'un demarrage qui echoue ne montre RIEN. C'est ce qui a
+# transforme une panne de gestionnaire de connexion en « le systeme ne finit
+# jamais de demarrer »: l'utilisateur n'avait aucun message a lire, aucune
+# console, aucun moyen de savoir que le systeme etait en fait demarre.
+#
+# Tant que l'image n'embarque pas plymouth, un demarrage bavard est ce qui
+# sert le mieux l'utilisateur: il voit ou ca bloque et peut le rapporter.
+GRUB_CMDLINE_LINUX_DEFAULT=""
 
 GRUB_TERMINAL_OUTPUT=gfxterm

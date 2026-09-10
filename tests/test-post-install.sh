@@ -74,6 +74,41 @@ make_target() {
         "${t}/home/utilisateur/Desktop/Install AuxiNuxOS.desktop"
   mkdir -p "${t}/etc/sudoers.d"
   touch "${t}/etc/sudoers.d/90-auxinux-live"
+
+  # fstab tel que le module Calamares `fstab` l'ecrit: aucun `nofail`, y
+  # compris sur des montages dont l'absence ne devrait pas empecher de
+  # demarrer.
+  cat > "${t}/etc/fstab" <<'FSTAB'
+# /etc/fstab
+UUID=aaaa / btrfs defaults,noatime,subvol=@ 0 0
+UUID=aaaa /home btrfs defaults,noatime,subvol=@home 0 0
+UUID=aaaa /.snapshots btrfs defaults,noatime,subvol=@snapshots 0 0
+UUID=aaaa /var/log btrfs defaults,noatime,subvol=@var_log 0 0
+UUID=aaaa /var/lib/flatpak btrfs defaults,subvol=@var_lib_flatpak 0 0
+UUID=BBBB-CCCC /boot/efi vfat umask=0077 0 2
+/swap/swapfile none swap defaults 0 0
+FSTAB
+
+  # Config greetd du live: elle porte l'autologin [initial_session] sur un
+  # compte que ce script supprime.
+  cat > "${t}/etc/greetd/cosmic-greeter.toml" <<'GREETD'
+[terminal]
+vt = "1"
+
+[general]
+service = "cosmic-greeter"
+
+[initial_session]
+command = "/usr/bin/start-cosmic"
+user = "auxinux"
+
+[default_session]
+command = "cosmic-greeter-start"
+user = "cosmic-greeter"
+GREETD
+
+  mkdir -p "${t}/etc/calamares/modules"
+  touch "${t}/etc/calamares/modules/partition.conf"
   printf 'APT_ENABLED=1\n' > "${t}/etc/auxinux/apt.conf"
   printf 'deb file:/cdrom trixie main\n' > "${t}/etc/apt/sources.list.d/media.list"
 
@@ -115,6 +150,38 @@ check "politique APT retablie" \
   "$(cat "${TARGET}/etc/auxinux/apt.conf")" "APT_ENABLED=0"
 check "source APT locale retiree" \
   "$([[ -e "${TARGET}/etc/apt/sources.list.d/media.list" ]] && echo present || echo absent)" "absent"
+
+# L'autologin du live pointe sur un compte que ce script supprime. S'il
+# survit, greetd tente d'ouvrir une session pour un utilisateur inexistant,
+# echoue cinq fois, systemd renonce -- et comme cosmic-greeter.service declare
+# Conflicts=getty@tty1.service, plus rien ne reprend la console: ecran noir
+# definitif, symptome « le systeme ne finit jamais de demarrer ».
+check "autologin du live retire de greetd" \
+  "$(grep -c 'initial_session' "${TARGET}/etc/greetd/cosmic-greeter.toml")" "0"
+check "session par defaut = commande amont" \
+  "$(grep -c 'command = "cosmic-greeter-start"' "${TARGET}/etc/greetd/cosmic-greeter.toml")" "1"
+
+# Sans `nofail`, un seul de ces montages absent fait basculer systemd en mode
+# urgence -- et comme le compte root n'a pas de mot de passe (users.conf:
+# setRootPassword: false), sulogin refuse la console et le demarrage s'arrete
+# la, definitivement.
+for mp in /.snapshots /var/lib/flatpak /var/log; do
+  check "nofail sur ${mp}" \
+    "$(awk -v m="${mp}" '$2 == m { print ($4 ~ /(^|,)nofail(,|$)/) ? "oui" : "non" }' "${TARGET}/etc/fstab")" "oui"
+done
+check "nofail sur l'espace d'echange" \
+  "$(awk '$3 == "swap" { print ($4 ~ /(^|,)nofail(,|$)/) ? "oui" : "non" }' "${TARGET}/etc/fstab")" "oui"
+# La racine et le repertoire personnel ne doivent PAS etre en nofail: si l'un
+# manque il n'y a rien a sauver, et demarrer en silence serait pire.
+check "racine intacte (pas de nofail)" \
+  "$(awk '$2 == "/" { print ($4 ~ /(^|,)nofail(,|$)/) ? "oui" : "non" }' "${TARGET}/etc/fstab")" "non"
+check "/home intact (pas de nofail)" \
+  "$(awk '$2 == "/home" { print ($4 ~ /(^|,)nofail(,|$)/) ? "oui" : "non" }' "${TARGET}/etc/fstab")" "non"
+
+# Nos fichiers de configuration Calamares decrivent comment partitionner et
+# formater un disque: ils n'ont rien a faire sur un systeme en service.
+check "configuration Calamares retiree" \
+  "$([[ -e "${TARGET}/etc/calamares" ]] && echo present || echo absent)" "absent"
 
 echo "== 2. Rollback: modele snapper sous /usr/share (Debian 13) =="
 TARGET="${WORK}/cible2"

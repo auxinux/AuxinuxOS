@@ -3,21 +3,29 @@ set -uo pipefail
 
 # Accueil de la session live: choix de la langue, puis presentation.
 #
-# CE QUI NE FONCTIONNAIT PAS: ce script pilotait `kdialog` et ecrivait des
-# fichiers de configuration Plasma (plasma-localerc, plasma-workspace/env).
-# kdialog venait de Plasma, qui n'est plus installe depuis le passage a
-# COSMIC: le script retombait sur une lecture au clavier, sans terminal
-# attache. En session graphique, le PREMIER ecran de la distribution
-# n'affichait donc rien du tout, et la langue n'etait jamais appliquee.
+# CE QUI NE FONCTIONNAIT PAS (panne rapportee: « si je choisis la langue, ca
+# quitte l'interface et reste sur un ecran noir »): apres le choix, ce script
+# proposait de REDEMARRER LA SESSION et executait
+# `loginctl terminate-user "${USER}"`.
 #
-# Tout passe desormais par zenity (present dans l'image, GTK, fonctionne sous
-# Wayland) et par environment.d, qui est le mecanisme d'environnement des
-# sessions COSMIC.
+# Or la session live est ouverte par le bloc [initial_session] de greetd, qui
+# ne s'applique qu'UNE SEULE FOIS, au demarrage. Une fois la session terminee,
+# greetd bascule sur [default_session], c.-a-d. l'ecran de connexion. Terminer
+# la session live revenait donc a se jeter hors du live sans retour: dans le
+# meilleur cas un ecran de connexion pour un compte dont l'utilisateur ignore
+# le mot de passe, dans le pire un ecran noir. Et tout cela pour changer une
+# langue.
+#
+# On n'arrete plus jamais la session. La langue est appliquee:
+#   * a l'environnement du gestionnaire de session utilisateur et au bus de
+#     session, donc a TOUT ce qui est lance ensuite (installateur compris);
+#   * dans environment.d, pour les sessions suivantes et le systeme installe.
+# Ce qui est deja affiche a l'ecran (le panneau COSMIC) garde sa langue: c'est
+# dit clairement a l'utilisateur plutot que paye par une deconnexion.
 
 STATE_DIR="${HOME}/.config/auxinux"
 STATE_FILE="${STATE_DIR}/welcome-seen"
 CHOICE_FILE="${STATE_DIR}/language"
-RESTART_FILE="${STATE_DIR}/session-restarted"
 ENV_DIR="${HOME}/.config/environment.d"
 ENV_FILE="${ENV_DIR}/60-auxinux-locale.conf"
 
@@ -44,7 +52,7 @@ choose_language() {
     2>/dev/null
 }
 
-write_locale() {
+locale_vars() {
   local lang="$1" primary chain
   if [[ "${lang}" == "en" ]]; then
     primary="en_CA.UTF-8"
@@ -53,41 +61,39 @@ write_locale() {
     primary="fr_CA.UTF-8"
     chain="fr_CA:fr:en_CA:en"
   fi
+  printf 'LANG=%s\nLANGUAGE=%s\nLC_TIME=%s\nLC_MONETARY=%s\nLC_PAPER=%s\nLC_MEASUREMENT=%s\n' \
+    "${primary}" "${chain}" "${primary}" "${primary}" "${primary}" "${primary}"
+}
 
-  # environment.d est lu par le gestionnaire de session utilisateur, qui
-  # transmet ces variables a COSMIC et a toutes les applications lancees
-  # depuis le bureau.
-  cat >"${ENV_FILE}" <<EOF
-LANG=${primary}
-LANGUAGE=${chain}
-LC_TIME=${primary}
-LC_MONETARY=${primary}
-LC_PAPER=${primary}
-LC_MEASUREMENT=${primary}
-EOF
+write_locale() {
+  # environment.d est lu au demarrage du gestionnaire de session utilisateur:
+  # il couvre les sessions SUIVANTES, pas celle en cours.
+  locale_vars "$1" >"${ENV_FILE}"
   chmod 0644 "${ENV_FILE}"
 }
 
-restart_session() {
-  local lang="$1" message
-  if [[ "${lang}" == "en" ]]; then
-    message="The live session will restart once so the whole interface switches to English."
-  else
-    message="La session live va redemarrer une seule fois pour appliquer le francais a toute l'interface."
-  fi
+# Applique la langue a la session EN COURS, sans la redemarrer.
+#
+# `systemctl --user import-environment` fixe l'environnement du gestionnaire de
+# session, dont heritent les unites utilisateur; `dbus-update-activation-
+# environment` fait de meme pour les services actives par le bus, ce qui couvre
+# les applications lancees depuis le lanceur COSMIC -- l'installateur inclus.
+apply_to_running_session() {
+  local line key value
+  local -a keys=()
+  while IFS= read -r line; do
+    key="${line%%=*}"
+    value="${line#*=}"
+    export "${key}=${value}"
+    keys+=("${key}")
+  done < <(locale_vars "$1")
 
-  if ! zenity --question --no-wrap --title "AuxiNuxOS" \
-       --ok-label "Redemarrer / Restart" --cancel-label "Plus tard / Later" \
-       --text "${message}" 2>/dev/null; then
-    return 1
+  if command -v systemctl >/dev/null 2>&1; then
+    systemctl --user import-environment "${keys[@]}" >/dev/null 2>&1 || true
   fi
-
-  touch "${RESTART_FILE}"
-  if command -v loginctl >/dev/null 2>&1; then
-    (sleep 1; loginctl terminate-user "${USER}") >/dev/null 2>&1 &
-    exit 0
+  if command -v dbus-update-activation-environment >/dev/null 2>&1; then
+    dbus-update-activation-environment --systemd "${keys[@]}" >/dev/null 2>&1 || true
   fi
-  return 1
 }
 
 show_intro() {
@@ -98,12 +104,16 @@ show_intro() {
 
 This live environment lets you try the system before installing it.
 
+English is now applied to everything you open from here on, including the installer. The panel already on screen keeps its current language until the next session.
+
 A familiar desktop, no AuxiNux telemetry, Flatpak first for applications, and DEB packages available when needed." 2>/dev/null
   else
     zenity --info --no-wrap --title "Bienvenue dans AuxiNuxOS" --text \
 "AuxiNuxOS est un projet Linux de bureau canadien base sur Debian et le bureau COSMIC, avec une selection logicielle orientee vie privee.
 
 Cet environnement live permet d'essayer le systeme avant de l'installer.
+
+Le francais s'applique des maintenant a tout ce que vous ouvrez, installateur compris. Le panneau deja affiche garde sa langue jusqu'a la prochaine session.
 
 Un bureau familier, aucune telemetrie AuxiNux, Flatpak en priorite pour les applications, et les paquets DEB disponibles au besoin." 2>/dev/null
   fi
@@ -122,13 +132,7 @@ else
 fi
 
 write_locale "${selected}"
-
-desired_lang="fr_CA.UTF-8"
-[[ "${selected}" == "en" ]] && desired_lang="en_CA.UTF-8"
-
-if [[ ! -f "${RESTART_FILE}" && "${LANG:-}" != "${desired_lang}" ]]; then
-  restart_session "${selected}" || true
-fi
+apply_to_running_session "${selected}"
 
 show_intro "${selected}"
 date -u +"%Y-%m-%dT%H:%M:%SZ" >"${STATE_FILE}"

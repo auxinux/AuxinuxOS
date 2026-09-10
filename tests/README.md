@@ -9,6 +9,7 @@ bash tests/test-rollback.sh
 bash tests/test-windows-wizard.sh
 bash tests/test-apt-snapshot-hook.sh
 bash tests/test-post-install.sh
+bash tests/test-welcome.sh
 (cd packages/auxinux-center && cargo test --no-default-features)
 ```
 
@@ -21,6 +22,14 @@ se retrouverait sinon sans racine amorçable.
 en erreur explicite quand `zenity` manque, annulation, et — le cas critique —
 l’usage d’un préfixe Wine dédié avec vérification que `~/.wine` n’est jamais
 créé.
+
+`test-welcome.sh` couvre l’écran d’accueil live et le lanceur d’installation.
+Le cas critique : **aucun chemin ne doit fermer la session**. L’accueil
+proposait auparavant de la redémarrer et exécutait `loginctl terminate-user` ;
+comme la session live vient du bloc `[initial_session]` de greetd, qui ne
+s’applique qu’une fois au démarrage, cela jetait l’utilisateur hors du live —
+la panne « je choisis la langue, ça quitte l’interface et reste noir ». Le test
+vérifie aussi que la langue choisie est bien transmise à Calamares.
 
 `test-apt-snapshot-hook.sh` couvre le hook dpkg qui porte désormais la promesse
 « un instantané avant chaque transaction DEB » : paire pre/post, silence sur une
@@ -141,3 +150,25 @@ manque à l’image. Il peut aussi être lancé seul sur un rootfs existant :
 31. `systemctl is-enabled fstrim.timer` doit renvoyer `enabled`.
 
 Consigner la version de l’ISO, les résultats et les échecs avant diffusion.
+
+## Banc d’essai « installation puis démarrage » (hôte de build)
+
+`tests/vm-install-boot.sh` reconstitue une installation complète à partir du
+rootfs de construction — sous-volumes BTRFS, `/etc/fstab`, compte utilisateur,
+`post-install-cleanup.sh` — puis fabrique un disque GPT (ESP + BTRFS) **sans
+périphérique loop**, l’hôte de build étant un conteneur LXC qui n’en a pas.
+Le disque obtenu se démarre en QEMU avec OVMF.
+
+```bash
+# sur l'hôte de build
+bash tests/vm-install-boot.sh all
+qemu-system-x86_64 -machine q35 -m 4096 -smp 4 \
+  -drive if=pflash,format=raw,unit=0,readonly=on,file=/usr/share/OVMF/OVMF_CODE_4M.fd \
+  -drive if=pflash,format=raw,unit=1,file=OVMF_VARS.fd \
+  -drive file=/mnt/build/vmtest/disk.raw,format=raw,if=virtio \
+  -device virtio-vga -serial file:serial.log -display none
+```
+
+C’est ce banc qui a permis, le 2026-09-09, de reproduire et de comprendre
+l’écran noir du système installé. Il ne couvre **pas** les modules Calamares
+eux-mêmes : il part du rootfs, pas du squashfs, et pose GRUB à la main.

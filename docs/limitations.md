@@ -113,18 +113,79 @@
 
 ## Accueil live
 
-- `auxinux-welcome` a été réécrit pour zenity et écrit la langue dans
-  `~/.config/environment.d`. **Non vérifié sur une session COSMIC réelle** :
-  reste à confirmer que le gestionnaire de session lit bien `environment.d`
-  dans une session lancée par greetd, sans quoi la langue ne s’appliquera qu’au
-  redémarrage de session.
+- `auxinux-welcome` **ne ferme plus jamais la session**. Il proposait
+  auparavant de la redémarrer pour appliquer la langue et exécutait
+  `loginctl terminate-user`. Or la session live est ouverte par le bloc
+  `[initial_session]` de greetd, qui ne s’applique **qu’une seule fois, au
+  démarrage** : la terminer jetait l’utilisateur hors du live sans retour —
+  au mieux un écran de connexion pour un compte dont il ignore le mot de
+  passe, au pire un écran noir. C’est la panne « je choisis la langue, ça
+  quitte l’interface et reste noir ».
+- La langue est désormais appliquée sans rien fermer : `environment.d` pour
+  les sessions suivantes, `systemctl --user import-environment` et
+  `dbus-update-activation-environment` pour tout ce qui est lancé ensuite,
+  **l’installateur compris** (`auxinux-install-launcher` relit le choix et le
+  passe à Calamares).
+- Limite assumée : le panneau COSMIC **déjà affiché** garde sa langue jusqu’à
+  la session suivante. C’est dit explicitement dans la fenêtre d’accueil,
+  plutôt que payé par une déconnexion.
+
+## Démarrage du système installé
+
+- **Le mode d’échec « écran noir infini » est corrigé à la racine.** Reproduit
+  en VM le 2026-09-09 : `cosmic-greeter.service` déclare
+  `Conflicts=getty@tty1.service` (il arrête la console texte) et
+  `Restart=always` avec `StartLimitBurst=5`. Si le greeter échoue cinq fois,
+  systemd renonce (`start-limit-hit`) et **plus rien ne reprend tty1** :
+  l’écran est noir à 100 %, définitivement, sans un seul message — alors que
+  le système tourne (vérifié : 14 services actifs, connexion possible par la
+  console série). L’utilisateur en conclut que le démarrage ne se termine
+  jamais.
+- Correctif : le drop-in
+  `etc/systemd/system/cosmic-greeter.service.d/50-auxinux-fallback.conf` ajoute
+  `OnFailure=getty@tty1.service`. Vérifié en VM : greeter en échec →
+  invite de connexion à l’écran au lieu du noir.
+- `quiet splash` a été retiré du live **et** du système installé (`grubcfg.conf`
+  et `/etc/default/grub`). `splash` était inerte — plymouth n’est pas dans
+  l’image — et `quiet` masquait tout, y compris la raison d’un démarrage qui
+  n’aboutit pas. `check-rootfs.sh` refuse désormais une image qui les
+  réintroduirait sans plymouth.
+- Les montages non essentiels (`/.snapshots`, `/var/lib/flatpak`, `/var/tmp`,
+  `/var/cache`, `/var/log`, `/swap` et l’espace d’échange) passent en `nofail`
+  au nettoyage post-installation. Sans cela, un seul d’entre eux absent faisait
+  basculer systemd en mode urgence ; et comme le compte root n’a pas de mot de
+  passe (`setRootPassword: false`), `sulogin` refuse la console et le démarrage
+  s’arrête là. `/`, `/home` et `/boot/efi` restent volontairement bloquants.
+- La commande de session greetd est celle d’**amont** (`cosmic-greeter-start`)
+  et non plus la forme héritée de Pop!\_OS. Le script amont purge l’état
+  résiduel de `CosmicSettingsDaemon` avant de lancer le compositeur.
+- `accounts-daemon` échouait à **chaque** démarrage
+  (`226/NAMESPACE`, `/run/systemd/seats: No such file or directory`) : course
+  avec `systemd-logind`. Un drop-in ordonne les deux ; le système passe de
+  `degraded` à `running`.
 
 ## Installation et validation
 
+- **Ce qui est validé en VM** (`tests/vm-install-boot.sh`, 2026-09-09) : une
+  installation reconstituée démarre de bout en bout — GRUB EFI, racine BTRFS
+  sur `subvol=@`, `graphical.target` atteint, écran de connexion COSMIC
+  affiché, `snapper` configuré avec l’instantané « Installation initiale »,
+  `systemctl is-system-running` = `running`.
+- **Ce qui ne l’est pas** : les modules Calamares eux-mêmes. Le banc part du
+  rootfs de construction, pas du squashfs, et pose GRUB à la main. Le parcours
+  Calamares graphique → installation → redémarrage reste à valider sur une
+  machine réelle.
+- Le module Calamares `displaymanager` **ne connaît pas greetd** (sa liste se
+  limite à slim, sddm, lightdm, gdm, mdm, lxdm, kdm). Il sort proprement sans
+  rien faire — vérifié dans son `main.py` —, mais **l’option « connexion
+  automatique » de l’installateur reste donc sans effet**. Le lien
+  `display-manager.service` est rétabli par le nettoyage post-installation.
+- Le sous-volume `/@swap` manquait dans `btrfsSubvolumes` : `btrfsSwapSubvol`
+  dit seulement où créer le sous-volume, c’est `btrfsSubvolumes` qui produit
+  les lignes de `/etc/fstab`. Résultat, `@swap` n’était jamais monté et
+  `swapon` échouait à chaque démarrage. Corrigé.
 - Le nettoyage masque encore les erreurs de suppression du compte live, de
   purge des paquets live et de régénération de l’initramfs.
-- Le parcours Calamares graphique → installation → redémarrage sans ISO →
-  ouverture de session n’est pas encore validé pour l’image finale.
 - Le compte live utilise l’UID 60000 pour que le compte créé par Calamares
   obtienne bien l’UID 1000. **À vérifier sur une installation réelle.**
 - La suite de tests couvre : choix d’identifiant par source, agrégation des

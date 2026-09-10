@@ -55,7 +55,7 @@ vt = "1"
 service = "cosmic-greeter"
 
 [default_session]
-command = "cosmic-comp systemd-cat -t cosmic-greeter cosmic-greeter"
+command = "cosmic-greeter-start"
 user = "cosmic-greeter"
 GREETD_EOF
 fi
@@ -70,6 +70,42 @@ rm -f "${prefix}/etc/sddm.conf.d/10-auxinuxos-live.conf"
 if [ -e "${prefix}/usr/lib/systemd/system/cosmic-greeter.service" ]; then
   ln -sf /usr/lib/systemd/system/cosmic-greeter.service \
     "${prefix}/etc/systemd/system/display-manager.service"
+fi
+
+# 4. Montages non essentiels en `nofail`.
+#
+#    Le /etc/fstab ecrit par Calamares monte @snapshots, @var_lib_flatpak,
+#    @var_tmp, @var_cache et @var_log SANS `nofail`. Si l'un d'eux manque ou
+#    refuse de se monter, systemd echoue local-fs.target et bascule en mode
+#    urgence. Or ce systeme n'a PAS de mot de passe root (users.conf:
+#    setRootPassword: false): sulogin refuse alors la console avec « cannot
+#    open access to console, the root account is locked » et le demarrage
+#    s'arrete la, DEFINITIVEMENT, sur un ecran que l'utilisateur ne peut ni
+#    lire ni quitter.
+#
+#    Aucun de ces cinq points de montage n'est necessaire pour demarrer: sans
+#    eux le systeme perd des instantanes ou des journaux, il ne perd pas la
+#    capacite de s'amorcer. `nofail` transforme donc une panne totale en une
+#    degradation visible dans `systemctl --failed`.
+#
+#    / , /home et /boot/efi ne sont volontairement PAS touches: si la racine
+#    ou le repertoire personnel manquent, il n'y a rien a sauver et le silence
+#    serait pire.
+if [ -f "${prefix}/etc/fstab" ]; then
+  awk '
+    {
+      if ($0 ~ /^[^#]/ && NF >= 4 &&
+          ($2 == "/.snapshots" || $2 == "/var/lib/flatpak" || $2 == "/var/tmp" ||
+           $2 == "/var/cache"  || $2 == "/var/log"         || $2 == "/swap"  ||
+           $3 == "swap")) {
+        if ($4 !~ /(^|,)nofail(,|$)/) { $4 = $4 ",nofail" }
+        printf "%-46s %-16s %-8s %-42s %s %s\n", $1, $2, $3, $4, $5, $6
+        next
+      }
+      print
+    }
+  ' "${prefix}/etc/fstab" > "${prefix}/etc/fstab.auxinux" &&
+    mv "${prefix}/etc/fstab.auxinux" "${prefix}/etc/fstab"
 fi
 
 # 5. Compte live par defaut (mot de passe connu "auxinux"). Calamares cree le
@@ -107,6 +143,11 @@ chroot "${TARGET_ROOT}" apt-get purge -y \
   calamares calamares-settings-debian 2>/dev/null || true
 rm -f "${prefix}/usr/share/applications/calamares.desktop" \
       "${prefix}/usr/share/applications/calamares-install-debian.desktop"
+#     Nos propres fichiers de configuration Calamares survivent a la purge du
+#     paquet (dpkg les signale: « directory /etc/calamares/modules not empty
+#     so not removed »). Ils decrivent comment partitionner et formater un
+#     disque: rien a faire sur un systeme en service.
+rm -rf "${prefix}/etc/calamares"
 
 # 6b. Regenere l'initramfs maintenant que live-boot est purge. Le module
 #     Calamares `initramfs` a deja tourne plus tot dans la sequence (avec

@@ -1,0 +1,5 @@
+AuxiNux OS EN 0.1-BETA \n \l
+
+Cette console texte s'affiche quand le bureau n'a pas demarre.
+Connectez-vous avec votre compte, puis:   journalctl -b -u cosmic-greeter
+

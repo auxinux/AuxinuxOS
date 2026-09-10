@@ -20,6 +20,22 @@ export QT_AUTO_SCREEN_SCALE_FACTOR=1
 DISPLAY="${DISPLAY:-:0}"
 export DISPLAY
 
+# Langue choisie dans l'ecran d'accueil (auxinux-welcome). C'est le seul effet
+# visible qu'attend l'utilisateur apres ce choix: l'installateur doit s'ouvrir
+# dans SA langue. L'accueil ne redemarre plus la session pour l'obtenir, donc
+# la valeur est relue ici et transmise explicitement a Calamares.
+CHOICE_FILE="${HOME}/.config/auxinux/language"
+if [ -r "${CHOICE_FILE}" ]; then
+    if [ "$(cat "${CHOICE_FILE}")" = "en" ]; then
+        LANG=en_CA.UTF-8
+        LANGUAGE=en_CA:en:fr_CA:fr
+    else
+        LANG=fr_CA.UTF-8
+        LANGUAGE=fr_CA:fr:en_CA:en
+    fi
+    export LANG LANGUAGE
+fi
+
 # Make sure an X server is actually answering before we grant access and
 # elevate; otherwise tell the user instead of failing invisibly.
 if ! xset q >/dev/null 2>&1; then
@@ -34,7 +50,26 @@ if ! xset q >/dev/null 2>&1; then
 fi
 
 # Stale fstab left by live-boot confuses Calamares partitioning.
-sudo mv /etc/fstab /etc/fstab.orig.calamares 2>/dev/null || true
+#
+# La restauration passe par un trap et non par une derniere ligne du script:
+# l'utilisateur termine normalement l'installation en cliquant « Redemarrer
+# maintenant », ce qui tue ce script sur place. La ligne finale n'etait donc
+# jamais atteinte, et le live restait sans /etc/fstab -- sans consequence sur
+# un systeme jetable, mais un lancement ulterieur de l'installateur trouvait
+# une sauvegarde bidon a restaurer.
+FSTAB_MOVED=0
+restore_fstab() {
+    [ "${FSTAB_MOVED}" -eq 1 ] || return 0
+    sudo mv /etc/fstab.orig.calamares /etc/fstab 2>/dev/null || true
+    FSTAB_MOVED=0
+}
+trap 'restore_fstab' EXIT HUP INT TERM
+
+if [ -f /etc/fstab ]; then
+    if sudo mv /etc/fstab /etc/fstab.orig.calamares 2>/dev/null; then
+        FSTAB_MOVED=1
+    fi
+fi
 
 # Let the root-owned Calamares process connect to our X server.
 #
@@ -47,9 +82,8 @@ if ! xhost +SI:localuser:root >/dev/null 2>&1; then
 fi
 
 sudo -E env DISPLAY="${DISPLAY}" QT_QPA_PLATFORM=xcb \
-    QT_AUTO_SCREEN_SCALE_FACTOR=1 calamares || true
+    QT_AUTO_SCREEN_SCALE_FACTOR=1 \
+    LANG="${LANG:-fr_CA.UTF-8}" LANGUAGE="${LANGUAGE:-fr_CA:fr:en_CA:en}" \
+    calamares || true
 
 xhost -SI:localuser:root >/dev/null 2>&1 || true
-
-# Restore the fstab we moved aside.
-sudo mv /etc/fstab.orig.calamares /etc/fstab 2>/dev/null || true

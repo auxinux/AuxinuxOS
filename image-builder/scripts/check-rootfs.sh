@@ -150,6 +150,51 @@ need_exec /usr/bin/cosmic-session "le bureau ne demarrerait pas"
 need_exec /usr/bin/cosmic-comp "aucun compositeur"
 need_file /etc/greetd/cosmic-greeter.toml "aucun gestionnaire de session"
 need_package login "PAM sans /etc/pam.d/login: greetd boucle et l'ecran reste noir"
+need_exec /usr/sbin/greetd "cosmic-greeter.service lance greetd: sans lui, aucune connexion possible"
+need_exec /usr/bin/cosmic-greeter "l'ecran de connexion du systeme installe"
+need_exec /usr/bin/cosmic-greeter-daemon "le greeter ne pourrait pas lister les comptes"
+need_file /etc/pam.d/cosmic-greeter "greetd utilise ce service PAM ([general] service): absent, il refuse d'ouvrir la session"
+
+# La commande de [default_session] doit exister. C'est la seule ligne qui
+# separe un ecran de connexion d'un ECRAN NOIR DEFINITIF: si greetd ne peut pas
+# lancer le greeter, il echoue cinq fois, systemd abandonne
+# (start-limit-hit), et comme cosmic-greeter.service declare
+# Conflicts=getty@tty1.service, plus rien ne reprend la console. Panne
+# reproduite en VM le 2026-09-09.
+GREETD_CONF="${ROOTFS}/etc/greetd/cosmic-greeter.toml"
+if [[ -f "${GREETD_CONF}" ]]; then
+  greeter_cmd="$(awk -F'"' '/^command[[:space:]]*=/{print $2}' "${GREETD_CONF}" | tail -n1)"
+  greeter_bin="${greeter_cmd%% *}"
+  case "${greeter_bin}" in
+    /*) greeter_path="${greeter_bin}" ;;
+    "") greeter_path="" ;;
+    *)  greeter_path="/usr/bin/${greeter_bin}" ;;
+  esac
+  if [[ -n "${greeter_path}" && -x "${ROOTFS}${greeter_path}" ]]; then
+    ok "greetd: commande de session '${greeter_bin}' presente"
+  else
+    fail "greetd: commande de session '${greeter_bin:-absente}' introuvable — l'ecran resterait noir sans console"
+  fi
+fi
+
+# Sans ce drop-in, un greeter qui echoue laisse un ecran 100 % noir, sans
+# console de secours ni message: c'est le symptome « le systeme ne finit
+# jamais de demarrer ».
+need_file /etc/systemd/system/cosmic-greeter.service.d/50-auxinux-fallback.conf \
+  "aucune console de secours si l'ecran de connexion echoue"
+
+echo "-- Demarrage observable"
+# `quiet` masque noyau ET systemd; sans plymouth (absent de l'image) `splash`
+# est inerte. Les deux reunis transforment n'importe quelle panne de session en
+# ecran noir muet, impossible a diagnostiquer pour l'utilisateur.
+for grub_file in /etc/default/grub /etc/calamares/modules/grubcfg.conf; do
+  if [[ -f "${ROOTFS}${grub_file}" ]] &&
+     grep -qE '^[^#]*GRUB_CMDLINE_LINUX_DEFAULT.*(quiet|splash)' "${ROOTFS}${grub_file}"; then
+    fail "${grub_file}: 'quiet'/'splash' actif alors que plymouth est absent — un demarrage en echec n'afficherait rien"
+  else
+    ok "${grub_file}: demarrage bavard"
+  fi
+done
 
 echo "-- Couche Windows"
 if sudo chroot "${ROOTFS}" dpkg --print-foreign-architectures 2>/dev/null | grep -qx i386; then
