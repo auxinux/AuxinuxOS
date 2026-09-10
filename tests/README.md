@@ -10,6 +10,7 @@ bash tests/test-windows-wizard.sh
 bash tests/test-apt-snapshot-hook.sh
 bash tests/test-post-install.sh
 bash tests/test-welcome.sh
+bash tests/test-verify-boot.sh
 (cd packages/auxinux-center && cargo test --no-default-features)
 ```
 
@@ -22,6 +23,12 @@ se retrouverait sinon sans racine amorçable.
 en erreur explicite quand `zenity` manque, annulation, et — le cas critique —
 l’usage d’un préfixe Wine dédié avec vérification que `~/.wine` n’est jamais
 créé.
+
+`test-verify-boot.sh` couvre la verification finale d'amorcabilite. Le cas
+critique : `grub.cfg` qui designe un noyau absent, et noyau tronque sur le
+disque — les deux formes de la panne « error: premature end of file » qui,
+jusqu'ici, ne se voyait qu'au redemarrage, apres une installation annoncee
+reussie.
 
 `test-welcome.sh` couvre l’écran d’accueil live et le lanceur d’installation.
 Le cas critique : **aucun chemin ne doit fermer la session**. L’accueil

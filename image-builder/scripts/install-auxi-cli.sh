@@ -26,6 +26,10 @@ sudo install -D -m 0755 "${PROJECT_DIR}/installer/post-install-cleanup.sh" "${RO
 # toute fin de sequence Calamares.
 sudo install -D -m 0755 "${PROJECT_DIR}/installer/setup-btrfs-rollback.sh" "${ROOTFS}/usr/lib/auxinux/setup-btrfs-rollback.sh"
 
+# Verification finale d'amorcabilite (shellprocess@verifyboot), dernier job
+# avant le demontage de la cible.
+sudo install -D -m 0755 "${PROJECT_DIR}/installer/verify-installed-boot.sh" "${ROOTFS}/usr/lib/auxinux/verify-installed-boot.sh"
+
 sudo install -d -m 0755 "${ROOTFS}/usr/lib/auxinux/apt-real"
 
 # On detourne les vrais binaires APT avec dpkg-divert (et non mv + symlink):

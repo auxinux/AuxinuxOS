@@ -131,16 +131,19 @@ fi
 #    (panne rapportee: "l'ecran change... mais ne termine jamais de
 #    charger"). On purge ces paquets ici, pendant que enableapt (module
 #    Calamares execute plus tot dans la sequence) a encore APT_ENABLED=1.
-chroot "${TARGET_ROOT}" apt-get purge -y \
-  live-boot live-boot-initramfs-tools live-config live-config-systemd \
-  2>/dev/null || true
+if ! chroot "${TARGET_ROOT}" apt-get purge -y \
+     live-boot live-boot-initramfs-tools live-config live-config-systemd; then
+  echo "post-install-cleanup: AVERTISSEMENT: purge de live-boot/live-config echouee." >&2
+  echo "  L'initramfs du systeme installe peut encore contenir les scripts live." >&2
+fi
 
 # 6a. Installateur lui-meme. Calamares partitionne et formate des disques; le
 #     laisser sur le systeme installe, avec son entree de menu, revient a
 #     livrer un outil capable d'effacer la machine a un utilisateur qui vient
 #     d'en terminer l'installation. Il n'a plus aucune raison d'etre presente.
-chroot "${TARGET_ROOT}" apt-get purge -y \
-  calamares calamares-settings-debian 2>/dev/null || true
+if ! chroot "${TARGET_ROOT}" apt-get purge -y calamares calamares-settings-debian; then
+  echo "post-install-cleanup: AVERTISSEMENT: purge de Calamares echouee; l'installateur reste sur le systeme installe." >&2
+fi
 rm -f "${prefix}/usr/share/applications/calamares.desktop" \
       "${prefix}/usr/share/applications/calamares-install-debian.desktop"
 #     Nos propres fichiers de configuration Calamares survivent a la purge du
@@ -153,7 +156,14 @@ rm -rf "${prefix}/etc/calamares"
 #     Calamares `initramfs` a deja tourne plus tot dans la sequence (avec
 #     live-boot encore present) -- sans cette regeneration, l'initrd sur
 #     disque resterait celui, contamine, construit avant la purge.
-chroot "${TARGET_ROOT}" update-initramfs -u -k all 2>/dev/null || true
+#     Cet echec-la n'est PAS anodin: un initramfs non regenere laisse les
+#     scripts live-boot en place, et le systeme installe cherche un medium
+#     live inexistant au demarrage. On le dit fort; shellprocess@verifyboot
+#     relira ensuite l'initrd depuis le disque et fera echouer l'installation
+#     s'il est inexploitable.
+if ! chroot "${TARGET_ROOT}" update-initramfs -u -k all; then
+  echo "post-install-cleanup: AVERTISSEMENT: regeneration de l'initramfs echouee." >&2
+fi
 
 # 7. Restaure la politique APT du systeme installe. Pendant l'installation, le
 #    module enableapt a mis APT_ENABLED=1 (pour permettre l'install de GRUB);

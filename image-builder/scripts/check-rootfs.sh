@@ -137,6 +137,7 @@ need_exec /usr/bin/auxinux-center "centre de controle"
 need_exec /usr/libexec/auxinux/auxinux-source-helper "l'ajout de depot depuis le centre echouerait"
 need_file /usr/share/polkit-1/actions/ca.auxinux.center.policy "l'assistant privilegie n'aurait pas d'action polkit"
 need_exec /usr/lib/auxinux/post-install-cleanup.sh "les artefacts du live resteraient sur le systeme installe"
+need_exec /usr/lib/auxinux/verify-installed-boot.sh "une installation produisant un noyau illisible s'annoncerait reussie"
 need_exec /usr/lib/auxinux/wrappers/apt-wrapper "la politique APT ne serait pas appliquee"
 
 echo "-- Assistants graphiques"

@@ -164,6 +164,42 @@
   avec `systemd-logind`. Un drop-in ordonne les deux ; le système passe de
   `degraded` à `running`.
 
+## Amorcabilite du systeme installe
+
+- **Panne rapportee le 2026-09-10** : une installation menee jusqu'au bout,
+  sans la moindre erreur affichee, produit au redemarrage
+  `error: premature end of file /@/boot/vmlinuz-7.1.12-auxinuxos-amd64`.
+  GRUB trouve le noyau (le chemin et le sous-volume `@` sont corrects) mais ne
+  peut pas en lire tout le contenu. **Cause premiere non encore identifiee.**
+- Hypotheses **eliminees par test en VM**, pas par raisonnement :
+  1. *Compression zstd* — un noyau recompresse en zstd (4 extents `encoded`)
+     demarre sans probleme ; `btrfs.mod` declare `zstd` en dependance, le
+     decompresseur est donc embarque.
+  2. *Contenu ecrit par l'installation* — une installation reconstituee
+     fidelement (btrfs vierge monte en `compress=zstd:1`, copie depuis le vrai
+     squashfs, `grub-install` et `update-grub` en chroot) demarre jusqu'a
+     l'ecran de connexion.
+  3. *Arret brutal* — ecrire sur la cible puis couper par `reboot -ff` sans
+     `sync` ni demontage ne casse pas le demarrage : BTRFS revient a un etat
+     coherent.
+  4. *GRUB signe Debian sans zstd* — `grubx64.efi.signed` embarque bien
+     `btrfs`, `zstd`, `lzopio` et `gzio`.
+- Pistes restantes, a departager avec les donnees de la machine touchee :
+  cible saturee en fin d'installation (ecritures differees perdues),
+  demarrage **BIOS legacy** (chemin `i386-pc`, jamais teste ici), ou
+  specificite de l'hyperviseur.
+- **Garde-fou ajoute** (`shellprocess@verifyboot`, dernier job avant `umount`) :
+  `installer/verify-installed-boot.sh` fait `sync` puis vide le cache
+  (`drop_caches`) et **relit le noyau et l'initrd depuis le disque**, comme le
+  fera GRUB. Il verifie aussi que chaque entree de `grub.cfg` designe un
+  fichier existant et qu'il reste de la place. C'est le seul job de la sequence
+  autorise a **faire echouer l'installation** : mieux vaut une erreur affichee
+  pendant que l'utilisateur est devant l'ecran qu'une machine morte au
+  redemarrage.
+- Le nettoyage post-installation ne masque plus les echecs de purge de
+  `live-boot`/Calamares ni de regeneration de l'initramfs : ils sont ecrits sur
+  stderr, donc dans le journal de l'installateur.
+
 ## Installation et validation
 
 - **Ce qui est validé en VM** (`tests/vm-install-boot.sh`, 2026-09-09) : une
