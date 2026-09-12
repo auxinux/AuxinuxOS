@@ -64,6 +64,40 @@ sudo chmod 0755 \
 
 sudo chroot "${ROOTFS}" /usr/local/lib/auxinux/install-auxinux-sources-DEB.sh
 
+# ----------------------------------------------------------------------------
+# Neutralise le /etc/apt/sources.list laisse par mmdebstrap.
+#
+# PANNE OBSERVEE LE 2026-09-12, a la premiere construction depuis le miroir
+# AuxiNux: mmdebstrap ecrit un sources.list a l'ancienne
+# (« deb https://dep.auxinux.ca/DEBIAN trixie main contrib ... ») qui ne porte
+# AUCUNE restriction d'architecture. install-auxinux-sources-DEB.sh ne le
+# desactive pas: il ne desactive que les sources contenant « debian.org », et
+# dep.auxinux.ca n'y ressemble pas.
+#
+# Deux consequences:
+#   1. chaque cible est declaree deux fois (« configured multiple times »);
+#   2. surtout, des que i386 est ajoute comme architecture etrangere, apt
+#      reclame dists/trixie/main/binary-i386/Packages au miroir -- qui repond
+#      404, faute de miroiter i386 -- et `apt-get update` sort en erreur. La
+#      construction s'arretait la, apres 45 minutes de bootstrap.
+#
+# Le fichier deb822 pose par le script officiel decrit exactement le meme
+# miroir avec « Architectures: amd64 »: celui-ci est donc redondant. On le vide
+# au lieu de le supprimer, pour qu'un lecteur comprenne ce qui s'est passe.
+if [[ -f "${ROOTFS}/etc/apt/sources.list" ]] &&
+   grep -q 'dep\.auxinux\.ca' "${ROOTFS}/etc/apt/sources.list"; then
+  sudo tee "${ROOTFS}/etc/apt/sources.list" >/dev/null <<'EOF'
+# Volontairement vide.
+#
+# Les sources d'AuxiNuxOS sont dans /etc/apt/sources.list.d/ au format deb822.
+# Le sources.list produit par mmdebstrap au bootstrap a ete neutralise ici
+# (image-builder/scripts/configure-apt-sources.sh): il decrivait le meme miroir
+# que auxinux-debian.sources, mais SANS restriction d'architecture, ce qui
+# faisait echouer `apt-get update` des l'ajout de l'architecture i386 (le
+# miroir ne porte pas binary-i386).
+EOF
+fi
+
 # AuxiNuxOS kernel repository. Keep this local and pinned so the build cannot
 # silently fall back to the retired /VIRTUA repository configuration.
 fetch_verified \
