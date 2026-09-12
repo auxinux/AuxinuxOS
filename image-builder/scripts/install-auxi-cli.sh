@@ -42,6 +42,10 @@ for unit in auxinux-boot-arm.service auxinux-boot-sentinel.service auxinux-rescu
     "${ROOTFS}/etc/systemd/system/graphical.target.wants/${unit}"
 done
 
+# Controle de la configuration requise. Utilise par le lanceur d'installation
+# (blocage sous le minimum) et destine a l'installateur maison (--json).
+sudo install -D -m 0755 "${PROJECT_DIR}/packages/auxinux-hwcheck/auxinux-hwcheck" "${ROOTFS}/usr/bin/auxinux-hwcheck"
+
 # Profil d'usage (bureautique / multimedia / jeu).
 sudo install -D -m 0755 "${PROJECT_DIR}/packages/auxinux-profile/auxinux-profile" "${ROOTFS}/usr/bin/auxinux-profile"
 sudo install -D -m 0644 "${PROJECT_DIR}/packages/auxinux-profile/auxinux-profile.service" "${ROOTFS}/etc/systemd/system/auxinux-profile.service"

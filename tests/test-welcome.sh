@@ -106,5 +106,57 @@ check "transmet LANG a calamares" \
 check "restauration du fstab par trap" \
   "$(grep -c "trap 'restore_fstab' EXIT HUP INT TERM" "${LAUNCHER}")" "1"
 
+echo "== 6. Lanceur: la configuration requise bloque, mais seulement sur un verdict =="
+# Stubs du chemin d'elevation: sans eux, ce test deplacerait le /etc/fstab de la
+# machine qui l'execute.
+for tool in sudo xset xhost; do
+  cat > "${STUBS}/${tool}" <<STUB
+#!/usr/bin/env bash
+printf '${tool} %s\n' "\$*" >> "\${STUB_LOG}"
+exit 0
+STUB
+done
+chmod +x "${STUBS}/sudo" "${STUBS}/xset" "${STUBS}/xhost"
+
+run_launcher() {
+  : > "${STUB_LOG}"
+  HOME="${WORK}/home-fr" USER=auxinux PATH="${STUBS}:${PATH}" \
+    bash "${LAUNCHER}" >/dev/null 2>&1
+  echo "$?"
+}
+
+# a) verdict explicite de blocage: sous le minimum, on refuse AVANT d'installer.
+cat > "${STUBS}/auxinux-hwcheck" <<'STUB'
+#!/bin/sh
+echo "INSTALLATION IMPOSSIBLE: un minimum n'est pas atteint."
+exit 1
+STUB
+chmod +x "${STUBS}/auxinux-hwcheck"
+rc="$(run_launcher)"
+check "installation refusee" "${rc}" "1"
+check "l'utilisateur est averti" "$(grep -c 'zenity --error' "${STUB_LOG}")" "1"
+check "installateur non lance" "$(grep -c 'calamares' "${STUB_LOG}")" "0"
+check "fstab non touche" "$(grep -c 'mv /etc/fstab' "${STUB_LOG}")" "0"
+
+# b) l'outil de controle plante: SECURITE POSITIVE, l'installation continue. Un
+# defaut de l'outil accessoire ne doit jamais rendre une ISO inutilisable.
+cat > "${STUBS}/auxinux-hwcheck" <<'STUB'
+#!/bin/sh
+echo "erreur interne" >&2
+exit 2
+STUB
+chmod +x "${STUBS}/auxinux-hwcheck"
+rc="$(run_launcher)"
+check "installation poursuivie malgre le plantage" "${rc}" "0"
+check "installateur lance" \
+  "$([[ $(grep -c 'calamares' "${STUB_LOG}") -ge 1 ]] && echo oui || echo non)" "oui"
+
+# c) outil absent: l'installation continue aussi.
+rm -f "${STUBS}/auxinux-hwcheck"
+rc="$(run_launcher)"
+check "installation poursuivie sans l'outil" "${rc}" "0"
+check "installateur lance" \
+  "$([[ $(grep -c 'calamares' "${STUB_LOG}") -ge 1 ]] && echo oui || echo non)" "oui"
+
 echo
 if [[ "${fail}" == "0" ]]; then echo "TOUS LES TESTS PASSENT"; else echo "DES TESTS ECHOUENT"; exit 1; fi

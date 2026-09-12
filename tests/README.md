@@ -13,6 +13,7 @@ bash tests/test-welcome.sh
 bash tests/test-verify-boot.sh
 bash tests/test-boot-sentinel.sh
 bash tests/test-profile.sh
+bash tests/test-hwcheck.sh
 bash tests/test-no-telemetry.sh
 bash tests/test-version-consistency.sh
 (cd packages/auxinux-center && cargo test --no-default-features)

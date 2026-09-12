@@ -38,6 +38,30 @@ if [ -r "${CHOICE_FILE}" ]; then
     export LANG LANGUAGE
 fi
 
+# Controle de la configuration requise AVANT d'ouvrir l'installateur.
+#
+# La regle demandee: sous le minimum (4 Go de RAM, 2 coeurs, 40 Go de disque),
+# on BLOQUE. Mieux vaut le dire ici qu'apres quarante minutes d'installation.
+#
+# SECURITE POSITIVE: on ne bloque que sur un verdict EXPLICITE (code 1 et
+# message correspondant). Si auxinux-hwcheck est absent, plante, ou repond
+# autre chose, l'installation continue. Un defaut de l'outil de controle ne
+# doit jamais rendre une ISO inutilisable -- c'est le controle qui est
+# accessoire, pas l'installation.
+if command -v auxinux-hwcheck >/dev/null 2>&1; then
+    HW_REPORT="$(auxinux-hwcheck 2>/dev/null)" || HW_RC=$?
+    HW_RC="${HW_RC:-0}"
+    if [ "${HW_RC}" = "1" ] && printf '%s' "${HW_REPORT}" | grep -q 'INSTALLATION IMPOSSIBLE'; then
+        zenity --error --no-wrap --title "AuxiNuxOS — configuration insuffisante"             --text "Cette machine n'atteint pas la configuration minimale requise.
+
+${HW_REPORT}
+
+Vous pouvez continuer a utiliser le systeme live, mais l'installation est
+bloquee pour eviter un systeme installe inutilisable." 2>/dev/null             || echo "${HW_REPORT}" >&2
+        exit 1
+    fi
+fi
+
 # Make sure an X server is actually answering before we grant access and
 # elevate; otherwise tell the user instead of failing invisibly.
 if ! xset q >/dev/null 2>&1; then

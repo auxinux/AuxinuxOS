@@ -234,6 +234,7 @@ need_file /etc/systemd/system/multi-user.target.wants/auxinux-profile.service \
   "le profil d'usage ne serait pas reapplique au demarrage"
 
 echo "-- Profil d'usage"
+need_exec /usr/bin/auxinux-hwcheck "le lanceur d'installation ne pourrait pas verifier la configuration requise"
 need_exec /usr/bin/auxinux-profile "aucun reglage par usage (bureautique / multimedia / jeu)"
 need_file /etc/auxinux/profile "auxinux-profile.service ne demarrerait pas (ConditionPathExists)"
 need_file /etc/systemd/system/auxinux-profile.service "le profil serait perdu a chaque redemarrage"

@@ -5,6 +5,7 @@
 - [Rollback système](rollback.md)
 - [Protection au démarrage](protection-demarrage.md)
 - [Profils d'usage : bureautique, multimédia, jeu](profils-usage.md)
+- [Configuration requise](configuration-requise.md)
 - [Applications Windows et jeux](windows-support.md)
 - [Fluidité](performance.md)
 - [Politique APT](apt-policy.md)

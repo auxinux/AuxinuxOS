@@ -1,0 +1,227 @@
+#!/bin/sh
+# auxinux-hwcheck — controle de la configuration materielle requise.
+#
+# C'est la premiere page de l'installateur maison demandee le 2026-09-12:
+# « courte explication du projet et en dessous une validation du systeme
+# requis ». Cette partie-la ne depend NI du partitionnement NI d'un toolkit
+# graphique, donc elle est livree separement, utilisable des maintenant en
+# console et par l'installateur quand il existera (--json).
+#
+# Regle de decision (exigee telle quelle):
+#   minimum non atteint  -> X rouge, installation BLOQUEE (code de sortie 1)
+#   minimum atteint      -> jaune, installation autorisee
+#   recommande atteint   -> vert
+#
+# Seuils: RAM 4 Go / 8 Go+ ; CPU 2 coeurs / 4+ ; disque 40 Go / 80 Go+.
+# La carte video ne bloque JAMAIS: elle est evaluee POUR CHAQUE USAGE, parce
+# que la vraie question de l'utilisateur n'est pas « ai-je un GPU » mais
+# « est-ce que le jeu est possible sur cette machine ».
+set -u
+
+# Prefixes reglables pour les tests (tests/test-hwcheck.sh).
+SYS="${AUXINUX_HW_SYS:-/sys}"
+PROC="${AUXINUX_HW_PROC:-/proc}"
+
+JSON=0
+[ "${1:-}" = "--json" ] && JSON=1
+case "${1:-}" in
+  -h|--help)
+    sed -n '2,20p' "$0"
+    exit 0
+    ;;
+esac
+
+# --- Seuils -----------------------------------------------------------------
+# 4 Go annonces ne font jamais 4 GiB de MemTotal: le firmware, le GPU integre
+# et le noyau en prelevent. 3,6 GiB est la borne basse observee sur une machine
+# vendue avec 4 Go; exiger 4,0 GiB refuserait des machines conformes.
+RAM_MIN_KB=3774873        # ~3,6 GiB
+RAM_REC_KB=7864320        # ~7,5 GiB
+CPU_MIN=2
+CPU_REC=4
+DISK_MIN_GB=40
+DISK_REC_GB=80
+
+# --- Mesures ----------------------------------------------------------------
+ram_kb=$(awk '/^MemTotal:/ {print $2; exit}' "${PROC}/meminfo" 2>/dev/null)
+[ -n "${ram_kb:-}" ] || ram_kb=0
+ram_gib=$(awk -v k="${ram_kb}" 'BEGIN{printf "%.1f", k/1048576}')
+
+cpu_cores=$(awk '/^processor/ {n++} END{print n+0}' "${PROC}/cpuinfo" 2>/dev/null)
+[ "${cpu_cores:-0}" -gt 0 ] 2>/dev/null || cpu_cores=0
+cpu_model=$(awk -F': ' '/^model name/ {print $2; exit}' "${PROC}/cpuinfo" 2>/dev/null)
+[ -n "${cpu_model:-}" ] || cpu_model="inconnu"
+
+# Le plus GRAND disque, pas la somme: on installe sur un seul.
+# /sys/block/<dev>/size est en secteurs de 512 octets, toujours, quelle que
+# soit la taille de secteur physique.
+disk_gb=0
+disk_name=""
+for d in "${SYS}"/block/*; do
+  [ -d "${d}" ] || continue
+  n=$(basename "${d}")
+  # loop, ram, zram et les lecteurs optiques ne sont pas des cibles
+  # d'installation.
+  case "${n}" in loop*|ram*|zram*|sr*|fd*|dm-*|md*) continue ;; esac
+  # Une cle USB amorcee EST une cible possible (installation sur un second
+  # disque), on ne l'exclut donc pas.
+  s=$(cat "${d}/size" 2>/dev/null) || continue
+  case "${s}" in ''|*[!0-9]*) continue ;; esac
+  g=$(( s / 2 / 1024 / 1024 ))
+  if [ "${g}" -gt "${disk_gb}" ]; then disk_gb="${g}"; disk_name="${n}"; fi
+done
+
+# --- Carte video ------------------------------------------------------------
+# On lit /sys/class/drm et non lspci: c'est le pilote REELLEMENT charge qui
+# compte. Une carte que le noyau ne pilote pas n'accelere rien.
+gpu_count=0
+gpu_drivers=""
+gpu_vram_mb=0
+gpu_dedicated=no
+gpu_virtual=no
+for c in "${SYS}"/class/drm/card*; do
+  [ -e "${c}" ] || continue
+  case "$(basename "${c}")" in *-*) continue ;; esac   # ignore card0-DP-1
+  gpu_count=$((gpu_count + 1))
+  drv=""
+  [ -L "${c}/device/driver" ] && drv=$(basename "$(readlink -f "${c}/device/driver")")
+  [ -n "${drv}" ] || drv="inconnu"
+  gpu_drivers="${gpu_drivers}${gpu_drivers:+,}${drv}"
+  vendor=$(cat "${c}/device/vendor" 2>/dev/null)
+  vram=$(cat "${c}/device/mem_info_vram_total" 2>/dev/null)
+  case "${vram}" in ''|*[!0-9]*) vram=0 ;; esac
+  mb=$(( vram / 1024 / 1024 ))
+  [ "${mb}" -gt "${gpu_vram_mb}" ] && gpu_vram_mb="${mb}"
+
+  case "${drv}" in
+    virtio-pci|virtio_gpu|bochs-drm|bochs|vmwgfx|qxl|simple-framebuffer|vboxvideo)
+      gpu_virtual=yes ;;
+  esac
+  # NVIDIA (0x10de) n'est jamais integre a un processeur x86.
+  [ "${vendor}" = "0x10de" ] && gpu_dedicated=yes
+  # Un GPU AMD avec 4 Gio de VRAM dediee n'est pas un APU: les APU exposent une
+  # fenetre de 512 Mo a 2 Go prelevee sur la RAM. HEURISTIQUE, donc faillible
+  # sur une carte dediee recente de moins de 4 Gio -- cas devenu rare.
+  [ "${gpu_vram_mb}" -ge 4096 ] && gpu_dedicated=yes
+done
+# Deux GPU pilotes = machine hybride, donc un GPU dedie est present.
+[ "${gpu_count}" -ge 2 ] && gpu_dedicated=yes
+
+# Acceleration reelle ou rendu logiciel? C'est la difference entre un bureau
+# fluide et un diaporama, et elle ne se lit pas dans lspci.
+gpu_renderer="non verifie"
+# « non verifie » et non « aucun »: sans glxinfo on ne SAIT pas, et annoncer
+# une absence qu'on n'a pas constatee est pire que dire qu'on n'a pas regarde.
+gpu_accel="non verifie"
+if command -v glxinfo >/dev/null 2>&1; then
+  gpu_renderer=$(glxinfo -B 2>/dev/null | awk -F': ' '/OpenGL renderer string/ {print $2; exit}')
+  [ -n "${gpu_renderer:-}" ] || gpu_renderer="aucun"
+  case "${gpu_renderer}" in
+    *llvmpipe*|*softpipe*|*"Software Rasterizer"*) gpu_accel=logiciel ;;
+    aucun) gpu_accel=aucun ;;
+    *) gpu_accel=materiel ;;
+  esac
+fi
+
+gpu_vulkan=non
+if command -v vulkaninfo >/dev/null 2>&1; then
+  vulkaninfo --summary >/dev/null 2>&1 && gpu_vulkan=oui
+fi
+
+gpu_vaapi=non
+if command -v vainfo >/dev/null 2>&1; then
+  vainfo >/dev/null 2>&1 && gpu_vaapi=oui
+fi
+
+# --- Verdicts ---------------------------------------------------------------
+# vert | jaune | rouge
+verdict() {
+  value="$1" min="$2" rec="$3"
+  if [ "${value}" -lt "${min}" ]; then echo rouge
+  elif [ "${value}" -lt "${rec}" ]; then echo jaune
+  else echo vert; fi
+}
+
+ram_v=$(verdict "${ram_kb}" "${RAM_MIN_KB}" "${RAM_REC_KB}")
+cpu_v=$(verdict "${cpu_cores}" "${CPU_MIN}" "${CPU_REC}")
+disk_v=$(verdict "${disk_gb}" "${DISK_MIN_GB}" "${DISK_REC_GB}")
+
+# Le GPU par USAGE. Aucun de ces verdicts ne bloque l'installation.
+if [ "${gpu_count}" -eq 0 ] || [ "${gpu_accel}" = "aucun" ] \
+   || [ "${gpu_accel}" = "logiciel" ]; then
+  # Aucun GPU pilote, ou rendu logiciel (llvmpipe): le bureau fonctionne, mais
+  # tout ce qui bouge coute du processeur. Jaune partout, jamais bloquant.
+  gpu_bureautique=jaune; gpu_multimedia=jaune; gpu_gaming=jaune
+else
+  gpu_bureautique=vert
+  if [ "${gpu_vaapi}" = "oui" ]; then gpu_multimedia=vert; else gpu_multimedia=jaune; fi
+  if [ "${gpu_dedicated}" = "yes" ] && [ "${gpu_vulkan}" = "oui" ]; then
+    gpu_gaming=vert
+  else
+    gpu_gaming=jaune
+  fi
+fi
+[ "${gpu_virtual}" = "yes" ] && gpu_gaming=jaune
+
+blocked=no
+for v in "${ram_v}" "${cpu_v}" "${disk_v}"; do
+  [ "${v}" = "rouge" ] && blocked=yes
+done
+
+# --- Sortie -----------------------------------------------------------------
+if [ "${JSON}" -eq 1 ]; then
+  printf '{\n'
+  printf '  "ram_gib": %s, "ram_verdict": "%s",\n' "${ram_gib}" "${ram_v}"
+  printf '  "cpu_cores": %s, "cpu_model": "%s", "cpu_verdict": "%s",\n' "${cpu_cores}" "${cpu_model}" "${cpu_v}"
+  printf '  "disk_gb": %s, "disk_device": "%s", "disk_verdict": "%s",\n' "${disk_gb}" "${disk_name}" "${disk_v}"
+  printf '  "gpu_count": %s, "gpu_drivers": "%s", "gpu_vram_mb": %s,\n' "${gpu_count}" "${gpu_drivers}" "${gpu_vram_mb}"
+  printf '  "gpu_dedicated": "%s", "gpu_virtual": "%s", "gpu_accel": "%s",\n' "${gpu_dedicated}" "${gpu_virtual}" "${gpu_accel}"
+  printf '  "gpu_renderer": "%s", "gpu_vulkan": "%s", "gpu_vaapi": "%s",\n' "${gpu_renderer}" "${gpu_vulkan}" "${gpu_vaapi}"
+  printf '  "gpu_bureautique": "%s", "gpu_multimedia": "%s", "gpu_gaming": "%s",\n' "${gpu_bureautique}" "${gpu_multimedia}" "${gpu_gaming}"
+  printf '  "install_blocked": "%s"\n' "${blocked}"
+  printf '}\n'
+  [ "${blocked}" = "yes" ] && exit 1
+  exit 0
+fi
+
+mark() {
+  case "$1" in
+    vert)  printf '[ OK ]' ;;
+    jaune) printf '[ !  ]' ;;
+    rouge) printf '[ X  ]' ;;
+  esac
+}
+
+echo "Configuration requise — AuxiNuxOS"
+echo "---------------------------------------------------------------"
+printf '%s  Memoire      %s Gio   (minimum 4 Go, recommande 8 Go et plus)\n' "$(mark "${ram_v}")" "${ram_gib}"
+printf '%s  Processeur   %s coeurs (minimum 2, recommande 4 et plus)\n' "$(mark "${cpu_v}")" "${cpu_cores}"
+printf '                %s\n' "${cpu_model}"
+printf '%s  Disque       %s Go%s (minimum 40 Go, recommande 80 Go et plus)\n' \
+  "$(mark "${disk_v}")" "${disk_gb}" "$([ -n "${disk_name}" ] && printf ' sur %s' "${disk_name}")"
+echo "---------------------------------------------------------------"
+printf 'Carte video   %s pilote(s): %s%s\n' "${gpu_count}" "${gpu_drivers:-aucun}" \
+  "$([ "${gpu_virtual}" = yes ] && printf ' (virtualisee)')"
+printf '              rendu: %s (%s)%s\n' "${gpu_accel}" "${gpu_renderer}" \
+  "$([ "${gpu_vulkan}" = oui ] && printf ', Vulkan')"
+printf '%s  bureautique   %s  multimedia   %s  jeu\n' \
+  "$(mark "${gpu_bureautique}")" "$(mark "${gpu_multimedia}")" "$(mark "${gpu_gaming}")"
+echo "              (la carte video ne bloque jamais l'installation)"
+echo "---------------------------------------------------------------"
+if [ "${blocked}" = "yes" ]; then
+  echo "INSTALLATION IMPOSSIBLE: un minimum n'est pas atteint."
+  exit 1
+fi
+if [ "${ram_v}" = "jaune" ] || [ "${cpu_v}" = "jaune" ] || [ "${disk_v}" = "jaune" ]; then
+  echo "Installation possible. Les elements en [ ! ] sont au minimum requis:"
+  echo "le systeme fonctionnera, sans confort sur les taches lourdes."
+  exit 0
+fi
+echo "Installation recommandee: memoire, processeur et disque sont au niveau"
+echo "conseille."
+if [ "${gpu_gaming}" != "vert" ]; then
+  echo
+  echo "Le JEU n'est pas recommande sur cette carte video. Les usages"
+  echo "bureautique et multimedia ne sont pas concernes."
+fi
+exit 0
