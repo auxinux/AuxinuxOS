@@ -74,6 +74,44 @@ sudo tee "${ROOTFS}/etc/apt/sources.list.d/auxinuxos-kernel.list" >/dev/null <<'
 deb [signed-by=/usr/share/keyrings/auxinuxos-archive-keyring.gpg arch=amd64,arm64] https://dep.auxinux.ca/AUXINUXOS kernel main
 EOF
 
+# ----------------------------------------------------------------------------
+# Architecture i386, indispensable a la couche jeu.
+#
+# LE MIROIR AUXINUX NE MIROITE PAS i386 (verifie le 2026-09-12:
+# dists/trixie/main/ ne contient que binary-all et binary-amd64, et
+# binary-i386/Packages.xz repond 404). Le script officiel
+# install-auxinux-sources-DEB.sh en tient compte en epinglant
+# « Architectures: amd64 » -- ce qui evite un 404 a chaque apt update, mais
+# rend AUCUN paquet 32 bits installable sur un systeme AuxiNuxOS.
+#
+# Consequence concrete, passee inapercue jusqu'ici: wine32 n'arrivait dans la
+# 0.1 que parce que mmdebstrap bootstrappait depuis deb.debian.org. Sur la
+# machine INSTALLEE, ni Steam, ni un jeu 32 bits, ni une bibliotheque
+# Vulkan 32 bits ne pouvaient etre installes -- et le message d'apt ne dit pas
+# pourquoi.
+#
+# Tant que le miroir ne porte pas i386, cette architecture vient de Debian
+# directement. Le depot est epingle a « Architectures: i386 »: il ne peut donc
+# pas servir un seul paquet amd64, et le miroir AuxiNux reste la source unique
+# de tout le systeme 64 bits.
+#
+# A SUPPRIMER le jour ou dep.auxinux.ca/DEBIAN miroitera i386.
+sudo tee "${ROOTFS}/etc/apt/sources.list.d/debian-i386.sources" >/dev/null <<'EOF'
+Types: deb
+URIs: https://deb.debian.org/debian
+Suites: trixie trixie-updates
+Components: main contrib non-free non-free-firmware
+Architectures: i386
+Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
+
+Types: deb
+URIs: https://security.debian.org/debian-security
+Suites: trixie-security
+Components: main contrib non-free non-free-firmware
+Architectures: i386
+Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
+EOF
+
 # Brave: methode officielle (brave.com/linux), avec verification d'empreinte.
 fetch_verified \
   https://brave-browser-apt-release.s3.brave.com/brave-browser-archive-keyring.gpg \

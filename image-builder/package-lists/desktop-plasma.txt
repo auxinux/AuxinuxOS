@@ -75,8 +75,9 @@ ark
 gwenview
 okular
 kcalc
-spectacle
 kwalletmanager
+# Capture d'ecran: le paquet Debian s'appelle kde-spectacle, pas spectacle.
+kde-spectacle
 kdialog
 # zenity RESTE la base des assistants maison (accueil live, ouverture de .exe,
 # couche jeu). Leur syntaxe (--radiolist, --checklist, --progress --pulsate)

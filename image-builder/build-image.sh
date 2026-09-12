@@ -199,12 +199,13 @@ else
   # signatures de la trixie): mmdebstrap le valide avec
   # debian-archive-keyring exactement comme deb.debian.org. Aucun contournement
   # de verification n'est necessaire, et aucun ne doit etre ajoute.
-  # i386 est requis par wine32, lui-meme tire par le metapaquet `wine`. Sans
-  # cette architecture, seules les applications Windows 64 bits fonctionnent --
-  # ce qui exclut une grande partie des logiciels anciens, precisement ceux
-  # pour lesquels on garde Wine.
+  # amd64 SEUL au bootstrap: le miroir AuxiNux ne porte pas i386 (verifie le
+  # 2026-09-12), donc mmdebstrap echouerait a recuperer binary-i386/Packages.
+  # L'architecture i386 est ajoutee juste apres, avec son propre depot
+  # (configure-apt-sources.sh), et la couche jeu est installee a ce
+  # moment-la.
   sudo mmdebstrap \
-    --architectures=amd64,i386 \
+    --architectures=amd64 \
     --variant=apt \
     --components=main,contrib,non-free,non-free-firmware \
     --include="${BASE_PACKAGES}" \
@@ -226,9 +227,11 @@ echo "==> Installing AuxiNux kernel and applications"
 # package_csv strips comment and blank lines; a plain `tr '\n' ' '` would feed
 # `#` comment words to apt-get (desktop-base.txt now carries a comment block).
 INSTALL_PACKAGES="$(package_csv "${ALL_PATHS[@]}" | tr ',' ' ')"
-# i386 doit exister AVANT l'installation: le metapaquet `wine` tire wine32,
-# introuvable sans cette architecture. mmdebstrap l'ajoute sur un rootfs neuf,
-# mais un rootfs reutilise (--reuse-rootfs) peut en etre depourvu.
+# i386 doit exister AVANT l'installation: le metapaquet `wine` tire wine32, et
+# la couche jeu demande explicitement les bibliotheques Vulkan/GL 32 bits.
+# mmdebstrap ne l'ajoute plus (le miroir ne porte pas i386), donc c'est ICI que
+# l'architecture entre, avec le depot i386 pose par configure-apt-sources.sh
+# juste avant.
 if ! sudo chroot "${ROOTFS_DIR}" dpkg --print-foreign-architectures | grep -qx i386; then
   sudo chroot "${ROOTFS_DIR}" dpkg --add-architecture i386
   sudo chroot "${ROOTFS_DIR}" apt-get update
