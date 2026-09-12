@@ -40,8 +40,19 @@ sudo install -D -m 0644 "${PKG_DIR}/data/ca.auxinux.Center.metainfo.xml" \
 # mesa-vulkan-drivers -- de simples Recommends que --no-install-recommends
 # aurait laisses de cote.
 #
-# Nettoyage des reliquats: sur un rootfs reutilise (--reuse-rootfs), les
-# modules QML installes par les versions precedentes resteraient dans l'image
-# sans que rien ne les utilise.
-sudo chroot "${ROOTFS}" apt-get autoremove -y --purge \
-  qml6-module-org-kde-kirigami 2>/dev/null || true
+# LE NETTOYAGE QUI SE TROUVAIT ICI A ETE SUPPRIME, ET IL FAUT COMPRENDRE
+# POURQUOI AVANT DE LE REMETTRE:
+#
+#   apt-get autoremove -y --purge qml6-module-org-kde-kirigami
+#
+# Il datait de l'interface Kirigami de la 0.1: ce module QML ne servait plus a
+# rien apres le passage a libcosmic, et sur un rootfs reutilise il restait dans
+# l'image. Depuis le retour a KDE Plasma (2026-09-12), ce paquet est une
+# DEPENDANCE de plasma-desktop. Avec `-y`, la commande aurait donc purge
+# qml6-module-org-kde-kirigami ET tout ce qui en depend -- c'est-a-dire le
+# bureau. Sans question, et avec `2>/dev/null || true` pour ne rien dire.
+#
+# Le controle d'image (check-rootfs.sh) l'aurait attrape en constatant
+# l'absence de plasmashell, mais apres une heure de construction.
+#
+# Le Center n'a aucun reliquat a nettoyer: c'est un binaire unique.
