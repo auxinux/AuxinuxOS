@@ -60,8 +60,11 @@ actif**, et ne l'incrémente qu'autrement.
 
 Conséquence assumée : un greeter qui tourne en affichant une fenêtre noire — donc
 `active` — n'est pas détecté. On préfère cette lacune à une restauration
-automatique déclenchée sur une machine qui marche. Dans ce cas, `tty1` reste
-accessible (SDDM occupe `tty7`) et `auxi rollback` est utilisable à la main.
+automatique déclenchée sur une machine qui marche. Dans ce cas, une console reste
+joignable par **Ctrl+Alt+F2** (`sddm.service` déclare
+`Conflicts=getty@tty1.service getty@tty7.service`, mais les autres terminaux
+virtuels sont démarrés à la demande), et `auxi rollback` y est utilisable à la
+main.
 
 ## Quel instantané est restauré
 
