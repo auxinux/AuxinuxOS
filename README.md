@@ -1,9 +1,15 @@
 # AuxiNuxOS
 
 Distribution Linux de bureau basée sur Debian 13 (Trixie), avec le bureau
-**KDE Plasma** sous Wayland, un installateur maison et le noyau
-`kernel-auxinuxos` fourni par les dépôts AuxiNux. Trois usages assumés :
-bureautique, multimédia, jeu.
+**KDE Plasma** sous Wayland et le noyau `kernel-auxinuxos` fourni par les dépôts
+AuxiNux. Trois usages assumés : **bureautique, multimédia, jeu** — le noyau est
+construit pour les trois, et le [profil d'usage](docs/profils-usage.md) règle le
+reste.
+
+L'installation se fait par Calamares en 0.2.0 ; son remplacement par un
+installateur maison est le chantier suivant. Le
+[contrôle de configuration requise](docs/configuration-requise.md), lui, est
+déjà là et bloque une installation sous le minimum.
 
 Dépôt : https://git.auxinux.ca/Auxinux/AuxinuxOS.git
 
@@ -23,6 +29,8 @@ n'a encore été construite. Voir [les limites connues](docs/limitations.md).
 - `packages/boot-sentinel/` : protection au démarrage, console de secours et
   restauration automatique.
 - `packages/auxinux-profile/` : profils d'usage bureautique / multimédia / jeu.
+- `packages/auxinux-hwcheck/` : contrôle de la configuration requise (bloquant
+  sous le minimum).
 - `packages/welcome/` : accueil live et lanceur de l'installateur.
 - `packages/windows-support/` : assistant `.exe` et installation de la couche Windows/jeux.
 - `docs/` : documentation technique.
