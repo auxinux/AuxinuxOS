@@ -11,6 +11,13 @@
 # L'hote de build n'a pas /dev/kvm: QEMU emule (TCG). Un demarrage complet se
 # compte donc en MINUTES, pas en secondes. C'est lent, c'est suffisant.
 #
+# serial.log RESTE VIDE sur un demarrage live: les entrees de menu de l'ISO
+# n'ajoutent pas « console=ttyS0 » a la ligne de commande du noyau, donc rien
+# ne part sur le port serie. Ce n'est pas genant ici: le demarrage etant
+# volontairement bavard (ni `quiet` ni `splash`), les messages du noyau et de
+# systemd s'affichent a l'ECRAN, et les captures les montrent. A ajouter aux
+# entrees GRUB du live si l'on veut un journal exploitable par grep.
+#
 # Usage:
 #   tests/vm-live-boot.sh --iso CHEMIN [--minutes 12] [--uefi] [--vga std]
 #
@@ -44,7 +51,21 @@ done
 command -v qemu-system-x86_64 >/dev/null || { echo "qemu-system-x86_64 manquant" >&2; exit 69; }
 command -v socat >/dev/null || { echo "socat manquant (dialogue avec le moniteur QEMU)" >&2; exit 69; }
 
-rm -rf "${WORK}"; mkdir -p "${WORK}"
+# /mnt/build appartient a root sur l'hote de build: un `mkdir` de l'utilisateur
+# y echoue. Sans ce garde-fou, le script continuait sur un repertoire absent et
+# produisait un faux verdict -- QEMU « arrete avant la fin », aucune capture,
+# aucun journal. Un banc d'essai qui echoue doit le DIRE.
+sudo rm -rf "${WORK}" 2>/dev/null || rm -rf "${WORK}" 2>/dev/null || true
+if ! mkdir -p "${WORK}" 2>/dev/null; then
+  sudo install -d -m 0755 -o "$(id -u)" -g "$(id -g)" "${WORK}" || {
+    echo "impossible de creer le repertoire de travail: ${WORK}" >&2
+    exit 73
+  }
+fi
+if [[ ! -w "${WORK}" ]]; then
+  echo "repertoire de travail non inscriptible: ${WORK}" >&2
+  exit 73
+fi
 SERIAL="${WORK}/serial.log"
 MON="${WORK}/monitor.sock"
 
