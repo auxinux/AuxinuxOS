@@ -207,7 +207,7 @@ if [ -f "${GRUB_BTRFS_CONF}" ]; then
   if ! grep -q 'AuxiNux OS' "${GRUB_BTRFS_CONF}"; then
     cat >>"${GRUB_BTRFS_CONF}" <<'GRUB_BTRFS_EOF'
 
-# --- AuxiNux OS EN -----------------------------------------------------
+# --- AuxiNux OS -----------------------------------------------------
 # Ces affectations sont ajoutees en fin de fichier: le fichier est source par
 # grub-btrfs, donc la derniere valeur l'emporte sur les defauts ci-dessus.
 GRUB_BTRFS_SUBMENUNAME="AuxiNux OS - instantanes (restauration)"

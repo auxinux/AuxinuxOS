@@ -1,4 +1,4 @@
-/* Slideshow Calamares — AuxiNux OS EN 0.1-BETA */
+/* Slideshow Calamares — AuxiNux OS 0.2.0 */
 import QtQuick 2.15
 import calamares.slideshow 1.0
 
@@ -52,7 +52,7 @@ Presentation {
                         color: "#f8fafc"
                         font.pixelSize: 28
                         font.bold: true
-                        text: "Bienvenue dans l'installateur de AuxiNux OS EN 0.1-BETA"
+                        text: "Bienvenue dans l'installateur de AuxiNux OS 0.2.0"
                     }
 
                     Text {

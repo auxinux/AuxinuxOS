@@ -1,4 +1,4 @@
-# Desktop base for AuxiNux OS EN. COSMIC replaced KDE Plasma (2026-07,
+# Desktop base for AuxiNux OS. COSMIC replaced KDE Plasma (2026-07,
 # aligned with the ATOMIC ADR-0006 migration). These are the Debian-native
 # desktop dependencies only; the COSMIC packages themselves come from the
 # OBS repository and are installed in-chroot by build-image.sh, because they

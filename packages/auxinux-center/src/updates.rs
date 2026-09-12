@@ -34,7 +34,7 @@ pub fn os_version() -> String {
     let out = run("sh", &["-c", ". /etc/os-release 2>/dev/null && printf '%s' \"$PRETTY_NAME\""]);
     let v = out.stdout.trim();
     if v.is_empty() {
-        "AuxiNux OS EN".into()
+        "AuxiNux OS".into()
     } else {
         v.to_string()
     }

@@ -1,4 +1,4 @@
-# Branding Calamares — AuxiNux OS EN 0.1-BETA
+# Branding Calamares — AuxiNux OS 0.2.0
 ---
 componentName: auxinuxos
 
@@ -12,11 +12,11 @@ windowSize: 800px,520px
 windowPlacement: center
 
 strings:
-    productName:         AuxiNux OS EN
+    productName:         AuxiNux OS
     shortProductName:    AuxiNux OS
-    version:             0.1-BETA
+    version:             0.2.0
     shortVersion:        0.1
-    versionedName:       AuxiNux OS EN 0.1-BETA
+    versionedName:       AuxiNux OS 0.2.0
     shortVersionedName:  AuxiNux OS 0.1
     bootloaderEntryName: AuxiNuxOS
     productUrl:          https://auxinux.ca/

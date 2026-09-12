@@ -5,7 +5,7 @@ PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DEFAULT_WORK_DIR="/mnt/build/Auxinuxos-normal"
 OUTPUT_DIR="${PROJECT_DIR}/image-builder/output"
 WORK_DIR="${AUXINUX_NORMAL_BUILD_DIR:-${DEFAULT_WORK_DIR}}"
-PROFILE="en-0.1-beta-live"
+PROFILE="0.2.0-live"
 FORCE=0
 REUSE_ROOTFS=0
 
@@ -13,7 +13,7 @@ usage() {
   cat <<EOF
 usage: $0 [--work-dir PATH] [--force] [--reuse-rootfs]
 
-Builds AuxiNux OS Edition-Normal 0.1-BETA live ISO.
+Builds AuxiNux OS 0.2.0 live ISO.
 
 Defaults:
   work dir : ${DEFAULT_WORK_DIR}
@@ -114,7 +114,7 @@ purge_build_dir() {
 BUILD_DIR="${WORK_DIR}/${PROFILE}"
 ROOTFS_DIR="${BUILD_DIR}/rootfs"
 ISO_ROOT="${BUILD_DIR}/iso-root"
-OUTPUT_ISO="${OUTPUT_DIR}/auxinuxos-en-0.1-beta-amd64.iso"
+OUTPUT_ISO="${OUTPUT_DIR}/auxinuxos-0.2.0-amd64.iso"
 
 if [[ "${FORCE}" -eq 1 && "${REUSE_ROOTFS}" -eq 1 ]]; then
   echo "--force and --reuse-rootfs cannot be used together" >&2
@@ -465,24 +465,24 @@ cat >"${ISO_ROOT}/boot/grub/grub.cfg" <<'EOF'
 set timeout=5
 set default=0
 
-menuentry "AuxiNux OS EN 0.1-BETA Live" {
+menuentry "AuxiNux OS 0.2.0 Live" {
     linux /live/vmlinuz boot=live components username=auxinux hostname=auxinuxos-live pci=noaer pcie_aspm=off
     initrd /live/initrd.img
 }
 
-menuentry "AuxiNux OS EN 0.1-BETA (graphiques de secours / nomodeset)" {
+menuentry "AuxiNux OS 0.2.0 (graphiques de secours / nomodeset)" {
     linux /live/vmlinuz boot=live components username=auxinux hostname=auxinuxos-live pci=noaer pcie_aspm=off nomodeset
     initrd /live/initrd.img
 }
 
-menuentry "AuxiNux OS EN 0.1-BETA (copie en RAM / toram)" {
+menuentry "AuxiNux OS 0.2.0 (copie en RAM / toram)" {
     linux /live/vmlinuz boot=live components username=auxinux hostname=auxinuxos-live pci=noaer pcie_aspm=off toram
     initrd /live/initrd.img
 }
 EOF
 
 cat >"${ISO_ROOT}/README.txt" <<'EOF'
-AuxiNux OS EN 0.1-BETA
+AuxiNux OS 0.2.0
 
 Live user: auxinux
 Live password: auxinux

@@ -1,8 +1,8 @@
 # NAME = nom court: c'est CE champ que KDE Discover affiche comme source des
 # paquets DEB (ex: "AuxiNux"). PRETTY_NAME garde le nom produit complet.
 NAME="AuxiNux OS"
-PRETTY_NAME="AuxiNux OS EN 0.1-BETA"
-VERSION="0.1-BETA (trixie)"
+PRETTY_NAME="AuxiNux OS 0.2.0"
+VERSION="0.2.0 (trixie)"
 VERSION_ID="13"
 VERSION_CODENAME=trixie
 # ID reste debian volontairement: les depots, Brave et apt ciblent Debian 13.

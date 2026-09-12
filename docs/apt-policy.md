@@ -1,6 +1,6 @@
 # Politique APT
 
-AuxiNux OS Edition-Normal reste une distribution conventionnelle: APT doit
+AuxiNux OS reste une distribution conventionnelle: APT doit
 continuer d'exister et de fonctionner.
 
 ## Comportement par defaut

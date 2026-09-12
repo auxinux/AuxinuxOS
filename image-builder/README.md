@@ -21,7 +21,7 @@ Depuis la racine du dépôt, sur l’hôte Linux :
 ./image-builder/build-image.sh --work-dir /mnt/build/Auxinuxos-normal
 ```
 
-La sortie est `image-builder/output/auxinuxos-en-0.1-beta-amd64.iso`.
+La sortie est `image-builder/output/auxinuxos-0.2.0-amd64.iso`.
 `--force` supprime le répertoire de construction du profil avant de repartir.
 `--reuse-rootfs` réutilise un rootfs existant ; ces options sont incompatibles.
 

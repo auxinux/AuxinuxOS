@@ -1,6 +1,6 @@
 # Bilingue Canada
 
-AuxiNux OS EN 0.1-BETA vise le Canada et doit fournir un environnement
+AuxiNux OS 0.2.0 vise le Canada et doit fournir un environnement
 francais/anglais pret a l'emploi.
 
 ## Defaut beta

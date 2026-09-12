@@ -1,17 +1,18 @@
-# AuxiNuxOS — Édition normale
+# AuxiNuxOS
 
-Distribution Linux conventionnelle basée sur Debian 13 (Trixie), avec le
-bureau COSMIC, une installation sur disque via Calamares et le noyau
-`kernel-auxinuxos` fourni par les dépôts AuxiNux.
+Distribution Linux de bureau basée sur Debian 13 (Trixie), avec le bureau
+**KDE Plasma** sous Wayland, un installateur maison et le noyau
+`kernel-auxinuxos` fourni par les dépôts AuxiNux. Trois usages assumés :
+bureautique, multimédia, jeu.
 
 Dépôt : https://git.auxinux.ca/Auxinux/AuxinuxOS.git
 
 ## État
 
-Version **0.1-BETA**. Une ISO a été construite et un démarrage live a été
-rapporté. La validation complète de l’installation graphique, du redémarrage
-sans le média live et de l’ouverture de session reste à effectuer.
-Voir [les limites connues](docs/limitations.md).
+**0.2.0 en développement.** La 0.1-BETA publiée utilisait le bureau COSMIC et
+Calamares ; les deux sont abandonnés en 0.2.0 (décision du 2026-09-12). La
+migration vers Plasma et l'installateur maison est en cours, aucune ISO 0.2.0
+n'a encore été construite. Voir [les limites connues](docs/limitations.md).
 
 ## Composants
 

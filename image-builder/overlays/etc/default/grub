@@ -1,9 +1,9 @@
-# GRUB par defaut - AuxiNux OS EN. Cet overlay est copie dans le rootfs (donc
+# GRUB par defaut - AuxiNux OS. Cet overlay est copie dans le rootfs (donc
 # le squashfs), puis le module Calamares `grubcfg`/`bootloader` execute
 # grub-mkconfig sur le systeme INSTALLE en s'appuyant sur ces valeurs.
 GRUB_DEFAULT=0
 GRUB_TIMEOUT=5
-GRUB_DISTRIBUTOR="AuxiNux OS EN"
+GRUB_DISTRIBUTOR="AuxiNux OS"
 
 # pci=noaer + pcie_aspm=off: certaines cartes WiFi Atheros (pilote ath10k)
 # declenchent une tempete d'erreurs PCIe AER corrigibles

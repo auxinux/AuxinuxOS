@@ -92,7 +92,7 @@ fn product_name() -> String {
             }
         }
     }
-    "AuxiNux OS EN".into()
+    "AuxiNux OS".into()
 }
 
 /// Opens the COSMIC settings application (replaces the old KDE

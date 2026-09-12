@@ -35,7 +35,7 @@ say_err() {
 usage() {
   if is_english; then
     cat <<'EOF'
-auxi - AuxiNux OS Edition-Normal administration command
+auxi - AuxiNux OS administration command
 
 Usage:
   auxi update [--deb|--flatpak]
@@ -55,7 +55,7 @@ Usage:
 EOF
   else
     cat <<'EOF'
-auxi - commande d'administration AuxiNux OS Edition-Normal
+auxi - commande d'administration AuxiNux OS
 
 Usage:
   auxi update [--deb|--flatpak]
@@ -592,7 +592,7 @@ case "${1:-}" in
     esac
     ;;
   status)
-    echo "AuxiNux OS EN 0.1-BETA"
+    echo "AuxiNux OS 0.2.0"
     if apt_enabled; then
       say "APT direct: actif" "Direct APT: enabled"
     else

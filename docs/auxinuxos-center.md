@@ -1,7 +1,6 @@
 # AuxiNux OS Center — conception
 
-Centre de contrôle d'AuxiNuxOS, en Rust + libcosmic, intégré à l'ISO
-Edition-Normal.
+Centre de contrôle d'AuxiNuxOS, en Rust + libcosmic, intégré à l'ISO d'AuxiNuxOS.
 
 ## Objectifs
 

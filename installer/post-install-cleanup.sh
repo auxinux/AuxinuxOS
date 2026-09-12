@@ -38,7 +38,7 @@ rm -f "${prefix}/etc/fstab.orig.calamares"
 # 2. Sudo NOPASSWD du live.
 rm -f "${prefix}/etc/sudoers.d/90-auxinux-live"
 
-# 3. Autologin du live. AuxiNuxOS EN utilise COSMIC + greetd: l'autologin
+# 3. Autologin du live. AuxiNuxOS utilise COSMIC + greetd: l'autologin
 #    live est le bloc [initial_session] de /etc/greetd/cosmic-greeter.toml,
 #    qui connecte automatiquement le compte live "auxinux". Ce compte est
 #    supprime a l'etape 5. Si l'autologin reste, le systeme INSTALLE tente de

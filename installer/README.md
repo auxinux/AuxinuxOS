@@ -1,4 +1,4 @@
-# Installateur Edition-Normal
+# Installateur AuxiNuxOS
 
 Installateur graphique et backend pour l'installation classique d'AuxiNuxOS.
 

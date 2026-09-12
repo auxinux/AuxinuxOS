@@ -61,7 +61,7 @@ compression du squashfs et **arrête la construction** si une fonction annoncée
 manque à l’image. Il peut aussi être lancé seul sur un rootfs existant :
 
 ```bash
-./image-builder/scripts/check-rootfs.sh /mnt/build/Auxinuxos-normal/en-0.1-beta-live/rootfs
+./image-builder/scripts/check-rootfs.sh /mnt/build/Auxinuxos-normal/0.2.0-live/rootfs
 ```
 
 ## Vérifications locales

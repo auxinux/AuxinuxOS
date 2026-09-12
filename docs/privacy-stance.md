@@ -1,6 +1,6 @@
 # Vie privee
 
-AuxiNux OS EN 0.1-BETA vise une posture vie privee elevee pour le Canada.
+AuxiNux OS 0.2.0 vise une posture vie privee elevee pour le Canada.
 
 ## Regles
 
