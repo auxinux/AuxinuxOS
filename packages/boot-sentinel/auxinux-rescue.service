@@ -1,0 +1,30 @@
+# Console de secours. Ne demarre que si le compteur a atteint le seuil: le
+# fichier /run/auxinux/rescue est pose par auxinux-boot-arm.service.
+[Unit]
+Description=AuxiNuxOS - console de secours et restauration
+Documentation=file:/usr/share/doc/auxinux/boot-sentinel.md
+ConditionPathExists=/run/auxinux/rescue
+After=auxinux-boot-arm.service systemd-user-sessions.service
+# On prend tty1 a la place de la console de connexion texte: sinon les deux
+# ecrivent sur le meme terminal et le menu devient illisible.
+Conflicts=getty@tty1.service
+After=getty@tty1.service
+
+[Service]
+# Type=idle: on laisse les messages de demarrage finir de defiler avant
+# d'afficher un menu, sinon les premieres lignes du menu sont noyees.
+Type=idle
+ExecStart=/usr/lib/auxinux/auxinux-rescue
+StandardInput=tty-force
+StandardOutput=tty
+StandardError=journal+console
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+TTYVTDisallocate=yes
+Restart=no
+# L'utilisateur peut mettre des minutes a lire et decider.
+TimeoutStartSec=infinity
+
+[Install]
+WantedBy=graphical.target

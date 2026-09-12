@@ -1,6 +1,12 @@
 //! Interface libcosmic du centre de controle.
 //!
-//! Pourquoi libcosmic et non Kirigami: le bureau d'AuxiNuxOS est COSMIC.
+//! Pourquoi libcosmic alors que le bureau est KDE Plasma depuis la 0.2.0:
+//! l'interface existe, elle fonctionne sous n'importe quel compositeur Wayland
+//! (libcosmic est iced + winit + wgpu, pas COSMIC), et la reecrire en Kirigami
+//! est un chantier a part -- 1 500 lignes d'interface contre trois lignes a
+//! changer ici. Le prix a payer est visuel: l'application ne suit pas le theme
+//! Breeze. Le backend etant separe par la feature `gui`, une interface
+//! Kirigami/QML pourra s'y brancher sans toucher a la logique.
 //! Kirigami affichait une fenetre Qt/KDE au milieu d'un bureau en Iced --
 //! theme, coins, boutons et police differents -- et imposait toute la pile KF6
 //! dans l'ISO. libcosmic est le toolkit natif du bureau: l'application herite

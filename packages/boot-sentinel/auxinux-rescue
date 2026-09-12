@@ -1,0 +1,181 @@
+#!/bin/sh
+# auxinux-rescue — console de secours d'AuxiNuxOS, avec restauration.
+#
+# Elle ne s'affiche que si auxinux-boot-sentinel a constate que le bureau n'a
+# pas demarre deux fois de suite (voir /run/auxinux/rescue). Son role: ne JAMAIS
+# laisser l'utilisateur devant un ecran noir sans recours.
+#
+# --auto : restaure sans rien demander (3e echec consecutif).
+set -u
+
+STATE_DIR=/var/lib/auxinux
+SENTINEL=/usr/lib/auxinux/auxinux-boot-sentinel
+AUTO=0
+[ "${1:-}" = "--auto" ] && AUTO=1
+
+# Sans argument, le seuil decide: au 3e echec consecutif, plus de question.
+# Le compteur est la seule source de verite, l'unite systemd n'a pas a la
+# dupliquer.
+if [ "${AUTO}" = "0" ] && [ -x /usr/lib/auxinux/auxinux-boot-sentinel ]; then
+  _st=$(/usr/lib/auxinux/auxinux-boot-sentinel status 2>/dev/null)
+  _f=$(printf '%s\n' "${_st}" | sed -n 's/^failures=//p')
+  _a=$(printf '%s\n' "${_st}" | sed -n 's/^auto_threshold=//p')
+  case "${_f}${_a}" in
+    ''|*[!0-9]*) : ;;
+    *) [ "${_f}" -ge "${_a}" ] && AUTO=1 ;;
+  esac
+fi
+
+say() { printf '%s\n' "$1"; printf '%s\n' "$2"; }
+rule() { printf '%s\n' "------------------------------------------------------------------------"; }
+
+snapper_ready() {
+  [ -x /usr/bin/snapper ] || return 1
+  [ -f /etc/snapper/configs/root ] || return 1
+  snapper -c root list >/dev/null 2>&1
+}
+
+# Instantane vise par la restauration.
+#
+# On prefere le dernier instantane « pre »: il a ete pose juste AVANT une
+# transaction de paquets, et une transaction de paquets est de loin la premiere
+# cause d'un bureau qui ne demarre plus sur cette distribution (hook dpkg,
+# voir docs/rollback.md). A defaut, le plus recent quel qu'il soit.
+pick_snapshot() {
+  csv=$(snapper -c root --csvout list --columns number,type,date,description 2>/dev/null) || return 1
+  echo "${csv}" | awk -F',' '
+    NR == 1 { next }
+    $1 == 0 { next }
+    $2 == "pre" { pre = $1 }
+    { last = $1 }
+    END { if (pre != "") print pre; else if (last != "") print last }
+  '
+}
+
+# Mode de diagnostic: affiche l'instantane que la restauration automatique
+# choisirait, sans rien modifier. Sert aussi de point d'entree de test
+# (tests/test-boot-sentinel.sh): la regle de choix est la partie de ce script
+# qui peut se tromper en silence.
+if [ "${1:-}" = "--pick-snapshot" ]; then
+  pick_snapshot
+  exit 0
+fi
+
+show_why() {
+  rule
+  say "Le bureau n'a pas demarre lors des derniers essais." \
+      "The desktop failed to start on the last attempts."
+  rule
+  if command -v journalctl >/dev/null 2>&1; then
+    say "Dernieres erreurs du demarrage precedent :" \
+        "Last errors from the previous boot:"
+    journalctl -b -1 -p err -n 12 --no-pager 2>/dev/null \
+      || journalctl -b -p err -n 12 --no-pager 2>/dev/null \
+      || echo "  (journal indisponible)"
+    rule
+  fi
+}
+
+do_rollback() {
+  target="$1"
+  say "Restauration de l'instantane ${target}..." \
+      "Restoring snapshot ${target}..."
+  if auxi rollback "${target}" --yes; then
+    [ -x "${SENTINEL}" ] && "${SENTINEL}" reset
+    say "Restauration prete. Redemarrage dans 10 secondes." \
+        "Restore staged. Rebooting in 10 seconds."
+    sleep 10
+    systemctl reboot
+    return 0
+  fi
+  say "ECHEC de la restauration. Un interpreteur de commandes va s'ouvrir." \
+      "Restore FAILED. A root shell will be opened."
+  return 1
+}
+
+clear 2>/dev/null || true
+cat <<'BANNER'
+   _              _ _   _            ___  ____
+  /_\  _   ___  _(_) \ | |_   ___  __/ _ \/ ___|
+ //_\\| | | \ \/ / |  \| | | | \ \/ / | | \___ \
+/  _  \ |_| |>  <| | |\  | |_| |>  <| |_| |___) |
+\_/ \_/\__,_/_/\_\_|_| \_|\__,_/_/\_\\___/|____/
+                         CONSOLE DE SECOURS
+BANNER
+show_why
+
+if ! snapper_ready; then
+  say "Aucune restauration disponible sur ce systeme (racine non BTRFS, ou" \
+      "No restore available on this system (root is not BTRFS, or"
+  say "snapper non configure). Ouverture d'un interpreteur de commandes root." \
+      "snapper is not configured). Opening a root shell."
+  [ -x "${SENTINEL}" ] && "${SENTINEL}" reset
+  rule
+  exec /bin/bash -l
+fi
+
+TARGET="$(pick_snapshot)"
+if [ -z "${TARGET:-}" ]; then
+  say "Aucun instantane utilisable. Ouverture d'un interpreteur root." \
+      "No usable snapshot. Opening a root shell."
+  [ -x "${SENTINEL}" ] && "${SENTINEL}" reset
+  exec /bin/bash -l
+fi
+
+say "Instantanes disponibles :" "Available snapshots:"
+snapper -c root list 2>/dev/null | tail -n 12
+rule
+say "Instantane propose : ${TARGET}" "Proposed snapshot: ${TARGET}"
+rule
+
+if [ "${AUTO}" = "1" ]; then
+  say "Troisieme echec consecutif : restauration AUTOMATIQUE." \
+      "Third failure in a row: AUTOMATIC restore."
+  do_rollback "${TARGET}" || exec /bin/bash -l
+  exit 0
+fi
+
+while :; do
+  cat <<'MENU'
+
+  1) Restaurer l'instantane propose  /  Restore the proposed snapshot
+  2) Choisir un autre numero         /  Pick another number
+  3) Interpreteur de commandes root  /  Root shell
+  4) Redemarrer normalement          /  Reboot normally
+
+MENU
+  printf 'Choix / Choice [1] : '
+  # 120 s puis choix 1: personne ne doit rester bloque devant ce menu, et
+  # l'inaction ne doit pas laisser la machine inutilisable.
+  if ! read -r -t 120 choice; then
+    echo
+    say "Aucune reponse : restauration de l'instantane ${TARGET}." \
+        "No answer: restoring snapshot ${TARGET}."
+    choice=1
+  fi
+  [ -z "${choice:-}" ] && choice=1
+
+  case "${choice}" in
+    1) do_rollback "${TARGET}" || exec /bin/bash -l ; exit 0 ;;
+    2)
+      printf 'Numero / Number : '
+      read -r n
+      case "${n}" in
+        ''|*[!0-9]*) say "Numero invalide." "Invalid number." ;;
+        *) do_rollback "${n}" || exec /bin/bash -l ; exit 0 ;;
+      esac
+      ;;
+    3)
+      # Le compteur est remis a zero: l'utilisateur a pris la main, le prochain
+      # demarrage doit reessayer le bureau normalement.
+      [ -x "${SENTINEL}" ] && "${SENTINEL}" reset
+      exec /bin/bash -l
+      ;;
+    4)
+      [ -x "${SENTINEL}" ] && "${SENTINEL}" reset
+      systemctl reboot
+      exit 0
+      ;;
+    *) say "Choix invalide." "Invalid choice." ;;
+  esac
+done

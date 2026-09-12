@@ -11,6 +11,10 @@ bash tests/test-apt-snapshot-hook.sh
 bash tests/test-post-install.sh
 bash tests/test-welcome.sh
 bash tests/test-verify-boot.sh
+bash tests/test-boot-sentinel.sh
+bash tests/test-profile.sh
+bash tests/test-no-telemetry.sh
+bash tests/test-version-consistency.sh
 (cd packages/auxinux-center && cargo test --no-default-features)
 ```
 
@@ -29,6 +33,26 @@ critique : `grub.cfg` qui designe un noyau absent, et noyau tronque sur le
 disque — les deux formes de la panne « error: premature end of file » qui,
 jusqu'ici, ne se voyait qu'au redemarrage, apres une installation annoncee
 reussie.
+
+`test-boot-sentinel.sh` couvre la protection au démarrage. Les cas critiques
+sont **symétriques** : trop prudente, elle laisse l’utilisateur devant un écran
+noir ; trop zélée, elle fait basculer en mode secours une machine qui démarre
+volontairement en console, ou une session live. Une session `tty` active ne doit
+jamais compter comme un succès — c’est l’état d’une machine déjà tombée sur la
+console de secours.
+
+`test-profile.sh` couvre les profils d’usage. Le cas critique : un réglage qui
+ne **part pas** quand on quitte un profil (la priorité temps réel audio qui
+resterait accordée en bureautique), car le système cumulerait alors les réglages
+de tous les profils déjà essayés.
+
+`test-no-telemetry.sh` est un audit statique de la promesse « aucune
+télémétrie ». Il ne regarde **aucun trafic réseau** : l’audit réel demande une
+VM avec capture du trafic, et reste à faire.
+
+`test-version-consistency.sh` prend `os-release` comme source de vérité et exige
+que les huit autres emplacements de la version s’alignent. Une version oubliée
+ne casse rien — elle s’affiche — donc rien ne la signale avant une release.
 
 `test-welcome.sh` couvre l’écran d’accueil live et le lanceur d’installation.
 Le cas critique : **aucun chemin ne doit fermer la session**. L’accueil

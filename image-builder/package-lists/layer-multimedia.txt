@@ -1,0 +1,33 @@
+# Couche MULTIMEDIA.
+#
+# Le noyau 7.2.5 est deja configure pour cet usage (HZ=1000, PREEMPT complet,
+# NO_HZ_FULL). Ce qui manque cote espace utilisateur: les CODECS, un ordonnan-
+# cement temps reel pour l'audio, et les vignettes video.
+
+vlc
+ffmpeg
+# Les plugins GStreamer conditionnent la lecture de la plupart des formats
+# courants. Sans -bad/-ugly/-libav, une bonne partie des videos ne s'ouvre pas
+# -- et l'utilisateur conclut que le lecteur est casse.
+gstreamer1.0-plugins-good
+gstreamer1.0-plugins-bad
+gstreamer1.0-plugins-ugly
+gstreamer1.0-libav
+ffmpegthumbs
+elisa
+
+# Creation
+kdenlive
+audacity
+gimp
+
+# rtkit accorde la priorite temps reel a PipeWire pour les utilisateurs du
+# groupe audio. Sans lui, l'enregistrement multipiste decroche sous charge.
+rtkit
+
+# Decodage video MATERIEL (VA-API/VDPAU). C'est ce qui separe une lecture 4K
+# fluide a 5 % de CPU d'un ventilateur a fond: le controle materiel de
+# l'installateur s'appuie sur vainfo pour le dire a l'utilisateur.
+va-driver-all
+mesa-vdpau-drivers
+vainfo

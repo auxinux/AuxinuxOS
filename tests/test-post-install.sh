@@ -61,6 +61,9 @@ make_target() {
   mkdir -p "${t}/etc/xdg/autostart" "${t}/usr/share/applications" \
            "${t}/usr/lib/auxinux" "${t}/usr/bin" "${t}/etc/auxinux" \
            "${t}/etc/apt/sources.list.d" "${t}/etc/greetd" \
+           "${t}/etc/sddm.conf.d" "${t}/etc/systemd/system" \
+           "${t}/usr/lib/systemd/system" "${t}/etc/X11" \
+           "${t}/var/lib/auxinux" \
            "${t}/etc/snapper/configs" "${t}/etc/default" \
            "${t}/etc/default/grub-btrfs" "${t}/.snapshots" \
            "${t}/home/utilisateur/Desktop"
@@ -89,23 +92,25 @@ UUID=BBBB-CCCC /boot/efi vfat umask=0077 0 2
 /swap/swapfile none swap defaults 0 0
 FSTAB
 
-  # Config greetd du live: elle porte l'autologin [initial_session] sur un
-  # compte que ce script supprime.
+  # Autologin SDDM du live: il ouvre une session pour le compte `auxinux`, que
+  # ce script supprime.
+  cat > "${t}/etc/sddm.conf.d/90-auxinux-live-autologin.conf" <<'SDDM'
+[Autologin]
+User=auxinux
+Session=plasma
+Relogin=false
+SDDM
+  # Reliquat d'une image COSMIC: le squashfs peut venir d'une construction
+  # precedente.
   cat > "${t}/etc/greetd/cosmic-greeter.toml" <<'GREETD'
-[terminal]
-vt = "1"
-
-[general]
-service = "cosmic-greeter"
-
 [initial_session]
 command = "/usr/bin/start-cosmic"
 user = "auxinux"
-
-[default_session]
-command = "cosmic-greeter-start"
-user = "cosmic-greeter"
 GREETD
+  touch "${t}/usr/lib/systemd/system/sddm.service"
+  # Compteur de la protection au demarrage, incremente par les demarrages du
+  # LIVE avant la construction du squashfs.
+  printf '2\n' > "${t}/var/lib/auxinux/boot-failures"
 
   mkdir -p "${t}/etc/calamares/modules"
   touch "${t}/etc/calamares/modules/partition.conf"
@@ -152,14 +157,29 @@ check "source APT locale retiree" \
   "$([[ -e "${TARGET}/etc/apt/sources.list.d/media.list" ]] && echo present || echo absent)" "absent"
 
 # L'autologin du live pointe sur un compte que ce script supprime. S'il
-# survit, greetd tente d'ouvrir une session pour un utilisateur inexistant,
-# echoue cinq fois, systemd renonce -- et comme cosmic-greeter.service declare
-# Conflicts=getty@tty1.service, plus rien ne reprend la console: ecran noir
-# definitif, symptome « le systeme ne finit jamais de demarrer ».
-check "autologin du live retire de greetd" \
-  "$(grep -c 'initial_session' "${TARGET}/etc/greetd/cosmic-greeter.toml")" "0"
-check "session par defaut = commande amont" \
-  "$(grep -c 'command = "cosmic-greeter-start"' "${TARGET}/etc/greetd/cosmic-greeter.toml")" "1"
+# survit, SDDM tente d'ouvrir une session pour un utilisateur inexistant,
+# echoue, recommence, atteint sa limite de redemarrages -- et le demarrage
+# n'aboutit jamais. C'est la panne rapportee sur la 0.1 (avec greetd a
+# l'epoque), et c'est le controle le plus important de ce fichier.
+check "autologin SDDM du live retire" \
+  "$([[ -e "${TARGET}/etc/sddm.conf.d/90-auxinux-live-autologin.conf" ]] && echo present || echo absent)" \
+  "absent"
+# Le reliquat COSMIC doit partir AUSSI: une config greetd laissee sur place
+# avec un [initial_session] sur un compte supprime reintroduirait exactement la
+# meme panne si greetd revenait a etre installe.
+check "reliquat greetd/cosmic retire" \
+  "$([[ -e "${TARGET}/etc/greetd" ]] && echo present || echo absent)" "absent"
+check "gestionnaire d'affichage = sddm" \
+  "$(readlink "${TARGET}/etc/systemd/system/display-manager.service")" \
+  "/usr/lib/systemd/system/sddm.service"
+check "default-display-manager ecrit" \
+  "$(cat "${TARGET}/etc/X11/default-display-manager" 2>/dev/null)" "/usr/bin/sddm"
+# Un compteur herite des demarrages du live enverrait le systeme installe en
+# console de secours des son PREMIER demarrage, pour proposer de restaurer un
+# instantane qui n'existe pas encore.
+check "compteur de demarrages remis a zero" \
+  "$([[ -e "${TARGET}/var/lib/auxinux/boot-failures" ]] && echo present || echo absent)" \
+  "absent"
 
 # Sans `nofail`, un seul de ces montages absent fait basculer systemd en mode
 # urgence -- et comme le compte root n'a pas de mot de passe (users.conf:

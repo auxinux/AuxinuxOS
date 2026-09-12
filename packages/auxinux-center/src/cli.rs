@@ -2,7 +2,7 @@
 //!
 //! Permet de valider toute la logique (recherche, sources, sante, restauration)
 //! avec `auxinux-center --cli <commande> [args]`, y compris sur une machine
-//! sans COSMIC ni pile graphique. Affiche le JSON des modules.
+//! sans aucune pile graphique. Affiche le JSON des modules.
 //!
 //! Ce mode est aussi le seul disponible quand le binaire est compile avec
 //! `--no-default-features` (backend seul).

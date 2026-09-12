@@ -1,0 +1,11 @@
+# Telemetrie de Plasma: DESACTIVEE, et pas seulement « par defaut ».
+#
+# KDE livre KUserFeedback desactive, mais la promesse d'AuxiNuxOS est
+# verifiable: aucune collecte, aucun envoi, y compris apres une mise a jour de
+# Plasma qui changerait le defaut amont. Ce fichier est le defaut systeme
+# (/etc/xdg est lu avant ~/.config), l'utilisateur reste libre de l'activer
+# pour lui-meme -- c'est ce que « consentement » veut dire.
+#
+# FeedbackLevel=0 = NoTelemetry dans KUserFeedback.
+[Global]
+FeedbackLevel=0

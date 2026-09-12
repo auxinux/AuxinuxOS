@@ -7,8 +7,8 @@
 #   - libxkbcommon-dev libwayland-dev libudev-dev libinput-dev
 #   - libssl-dev
 #
-# Qt6 et KF6 ne sont PLUS necessaires: l'interface Kirigami/CXX-Qt a ete
-# remplacee par libcosmic, le toolkit natif du bureau COSMIC.
+# Qt6 et KF6 ne sont pas necessaires pour compiler: l'interface Kirigami/CXX-Qt
+# a ete remplacee par libcosmic (iced), qui ne depend d'aucun toolkit du bureau.
 #
 # Resultat: target/release/auxinux-center
 set -euo pipefail

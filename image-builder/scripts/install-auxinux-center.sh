@@ -33,9 +33,12 @@ sudo install -D -m 0644 "${PKG_DIR}/data/ca.auxinux.Center.desktop" \
 sudo install -D -m 0644 "${PKG_DIR}/data/ca.auxinux.Center.metainfo.xml" \
   "${ROOTFS}/usr/share/metainfo/ca.auxinux.Center.metainfo.xml"
 
-# Depuis la 0.2, le Center est un binaire libcosmic: il n'a plus AUCUNE
-# dependance QML/Kirigami/KF6 a installer dans l'image. Ses dependances
-# d'execution (wayland, libxkbcommon, mesa) sont deja tirees par COSMIC.
+# Le Center est un binaire libcosmic: aucune dependance QML/Kirigami/KF6 a
+# installer. Ses dependances d'execution (libwayland-client, libxkbcommon,
+# pilotes mesa GL/Vulkan) sont toutes tirees par le bureau Plasma et par
+# desktop-plasma.txt, qui declare explicitement libgl1-mesa-dri et
+# mesa-vulkan-drivers -- de simples Recommends que --no-install-recommends
+# aurait laisses de cote.
 #
 # Nettoyage des reliquats: sur un rootfs reutilise (--reuse-rootfs), les
 # modules QML installes par les versions precedentes resteraient dans l'image

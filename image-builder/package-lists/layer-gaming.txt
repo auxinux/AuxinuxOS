@@ -1,0 +1,35 @@
+# Couche JEU (ex windows-support.txt).
+#
+# Steam n'est PAS ici: il est installe en FLATPAK a la demande (arbitrage du
+# 2026-09-12), ce qui l'isole et evite de figer un client qui se met a jour
+# tout seul dans l'ISO. Meme logique pour Heroic. Voir
+# packages/windows-support/auxinux-windows-setup.
+#
+# Ce que la couche fournit: la pile Wine/Vulkan 64 ET 32 bits, les outils de
+# mesure et de bridage, et Lutris pour lancer les jeux non-Steam.
+
+wine
+winetricks
+lutris
+dxvk
+
+# Vulkan 64 bits ET 32 bits. Les jeux Windows passes par Proton/Wine sont
+# massivement 32 bits: sans les variantes i386, Vulkan retombe sur un rendu
+# logiciel ou refuse de demarrer. L'architecture i386 est ajoutee par
+# build-image.sh.
+libvulkan1
+libvulkan1:i386
+mesa-vulkan-drivers
+mesa-vulkan-drivers:i386
+libgl1-mesa-dri
+libgl1-mesa-dri:i386
+vulkan-tools
+
+# gamemode ajuste gouverneur CPU et priorites pendant une partie; mangohud
+# affiche le compteur d'images. Les deux ont besoin de leur variante 32 bits
+# pour s'injecter dans un jeu 32 bits.
+gamemode
+gamemode:i386
+mangohud
+mangohud:i386
+goverlay

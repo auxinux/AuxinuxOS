@@ -1,0 +1,224 @@
+#!/bin/sh
+# auxinux-profile — profil d'usage d'AuxiNuxOS: bureautique, multimedia, jeu.
+#
+# POURQUOI CE N'EST PAS DANS LE NOYAU: le noyau 7.2.5 est deja construit pour
+# les trois usages (HZ=1000, PREEMPT complet, NO_HZ_FULL, NTSYNC pour
+# Wine/Proton, MGLRU). Il n'expose EN REVANCHE aucun ordonnanceur commutable:
+# CONFIG_SCHED_CLASS_EXT (sched_ext) n'est pas active dans ce build. Tout ce
+# qui differencie les trois usages se joue donc en espace utilisateur, et c'est
+# exactement ce que fait ce script.
+#
+# Un seul proprietaire pour le CPU: power-profiles-daemon. On ne touche pas
+# directement a scaling_governor ni a energy_performance_preference, sinon
+# powerdevil (l'applet batterie de Plasma) et ce script se battraient pour le
+# meme reglage, et le dernier a ecrire gagnerait au hasard.
+set -u
+
+# PREFIX est vide sur un systeme reel. Il n'existe que pour les tests
+# (tests/test-profile.sh), qui ne peuvent evidemment pas ecrire dans /etc.
+PREFIX="${AUXINUX_PROFILE_ROOT:-}"
+PROFILE_FILE="${PREFIX}/etc/auxinux/profile"
+SYSCTL_FILE="${PREFIX}/etc/sysctl.d/60-auxinux-profile.conf"
+LIMITS_FILE="${PREFIX}/etc/security/limits.d/60-auxinux-profile.conf"
+PIPEWIRE_FILE="${PREFIX}/etc/pipewire/pipewire.conf.d/60-auxinux-profile.conf"
+DEFAULT_PROFILE=bureautique
+
+usage() {
+  cat <<'EOF'
+usage: auxinux-profile <commande>
+
+  show              profil courant et reglages appliques
+  status            sortie machine (cle=valeur), pour le centre de controle
+  list              profils disponibles
+  set <profil>      change de profil et l'applique (root)
+  apply             reapplique le profil enregistre (root, au demarrage)
+
+Profils: bureautique | multimedia | gaming
+EOF
+}
+
+die() { echo "auxinux-profile: $*" >&2; exit 1; }
+need_root() {
+  # Un prefixe de test n'ecrit rien dans /etc: exiger root n'aurait aucun sens.
+  [ -n "${PREFIX}" ] && return 0
+  [ "$(id -u)" = "0" ] || die "cette commande demande les privileges root"
+}
+
+valid_profile() {
+  case "$1" in
+    bureautique|multimedia|gaming) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+current_profile() {
+  if [ -r "${PROFILE_FILE}" ]; then
+    p=$(tr -d ' \t\n\r' < "${PROFILE_FILE}")
+    valid_profile "${p}" && { echo "${p}"; return; }
+  fi
+  echo "${DEFAULT_PROFILE}"
+}
+
+# --- Valeurs par profil -----------------------------------------------------
+#
+# swappiness eleve et non l'inverse: l'echange se fait dans la RAM compressee
+# (zram), ou il coute quelques microsecondes. Le conseil « swappiness=10 »
+# vise un echange sur disque et n'a pas de sens ici.
+#
+# max_map_count: Proton et une partie des jeux Windows depassent la limite par
+# defaut et se ferment sans explication. La valeur retenue est celle que Valve
+# applique sur SteamOS.
+#
+# split_lock_mitigate=0: la mitigation penalise lourdement certains jeux
+# Windows sous Proton. On ne la desactive QUE pour le profil jeu, et jamais par
+# defaut: c'est une protection contre un deni de service local.
+profile_sysctl() {
+  case "$1" in
+    bureautique)
+      echo "vm.swappiness=100"
+      echo "vm.vfs_cache_pressure=100"
+      echo "kernel.split_lock_mitigate=1"
+      ;;
+    multimedia)
+      echo "vm.swappiness=60"
+      echo "vm.vfs_cache_pressure=50"
+      echo "kernel.split_lock_mitigate=1"
+      ;;
+    gaming)
+      echo "vm.swappiness=60"
+      echo "vm.vfs_cache_pressure=50"
+      echo "vm.max_map_count=2147483642"
+      echo "vm.compaction_proactiveness=0"
+      echo "kernel.split_lock_mitigate=0"
+      ;;
+  esac
+}
+
+# Quantum PipeWire: nombre d'echantillons par periode. Plus il est petit, plus
+# la latence est basse et plus le processeur travaille.
+profile_quantum() {
+  case "$1" in
+    bureautique) echo 1024 ;;
+    multimedia)  echo 256 ;;
+    gaming)      echo 512 ;;
+  esac
+}
+
+profile_power() {
+  case "$1" in
+    bureautique) echo balanced ;;
+    multimedia)  echo performance ;;
+    gaming)      echo performance ;;
+  esac
+}
+
+# Priorite temps reel pour le groupe audio: indispensable des qu'on enregistre
+# ou qu'on joue plusieurs pistes, inutile en bureautique.
+profile_rtprio() {
+  case "$1" in
+    bureautique) echo 0 ;;
+    multimedia)  echo 95 ;;
+    gaming)      echo 90 ;;
+  esac
+}
+
+apply_profile() {
+  prof="$1"
+  rc=0
+
+  # 1. sysctl
+  mkdir -p "${PREFIX}/etc/sysctl.d"
+  {
+    echo "# Genere par auxinux-profile — profil: ${prof}"
+    echo "# Ne pas editer: toute modification est ecrasee au prochain changement"
+    echo "# de profil. Pour un reglage permanent, utilisez un autre fichier de"
+    echo "# /etc/sysctl.d avec un numero superieur a 60."
+    profile_sysctl "${prof}"
+  } > "${SYSCTL_FILE}" || rc=1
+  # `sysctl --system` continue sur une cle inconnue (un avertissement, pas un
+  # arret): un noyau depourvu de split_lock_mitigate n'empeche pas le reste
+  # d'etre applique.
+  sysctl --system >/dev/null 2>&1 || rc=1
+
+  # 2. limites temps reel audio
+  rt=$(profile_rtprio "${prof}")
+  if [ "${rt}" = "0" ]; then
+    rm -f "${LIMITS_FILE}"
+  else
+    mkdir -p "${PREFIX}/etc/security/limits.d"
+    {
+      echo "# Genere par auxinux-profile — profil: ${prof}"
+      echo "@audio   -  rtprio     ${rt}"
+      echo "@audio   -  memlock    unlimited"
+      echo "@audio   -  nice       -19"
+    } > "${LIMITS_FILE}" || rc=1
+  fi
+
+  # 3. PipeWire
+  mkdir -p "${PREFIX}/etc/pipewire/pipewire.conf.d"
+  q=$(profile_quantum "${prof}")
+  {
+    echo "# Genere par auxinux-profile — profil: ${prof}"
+    echo "context.properties = {"
+    echo "    default.clock.quantum     = ${q}"
+    echo "    default.clock.min-quantum = 32"
+    echo "    default.clock.max-quantum = 2048"
+    echo "}"
+  } > "${PIPEWIRE_FILE}" || rc=1
+
+  # 4. Profil d'alimentation, via son proprietaire unique.
+  pp=$(profile_power "${prof}")
+  if command -v powerprofilesctl >/dev/null 2>&1; then
+    # Une machine sans batterie n'expose pas toujours « power-saver »; un echec
+    # ici ne doit pas faire echouer le changement de profil.
+    powerprofilesctl set "${pp}" >/dev/null 2>&1 \
+      || echo "auxinux-profile: profil d'alimentation '${pp}' refuse par power-profiles-daemon" >&2
+  fi
+
+  return "${rc}"
+}
+
+case "${1:-}" in
+  show)
+    prof=$(current_profile)
+    echo "Profil d'usage : ${prof}"
+    echo
+    echo "  alimentation      : $(profile_power "${prof}")"
+    echo "  quantum PipeWire  : $(profile_quantum "${prof}") echantillons"
+    echo "  rtprio audio      : $(profile_rtprio "${prof}")"
+    echo "  sysctl            :"
+    profile_sysctl "${prof}" | sed 's/^/      /'
+    ;;
+  status)
+    prof=$(current_profile)
+    echo "profile=${prof}"
+    echo "power=$(profile_power "${prof}")"
+    echo "quantum=$(profile_quantum "${prof}")"
+    echo "rtprio=$(profile_rtprio "${prof}")"
+    echo "applied=$([ -f "${SYSCTL_FILE}" ] && echo yes || echo no)"
+    ;;
+  list)
+    echo "bureautique  — reactivite du bureau, autonomie preservee"
+    echo "multimedia   — latence audio basse, priorite temps reel, plein regime"
+    echo "gaming       — limites Proton, mitigation split-lock levee, plein regime"
+    ;;
+  set)
+    need_root
+    prof="${2:-}"
+    valid_profile "${prof}" || die "profil inconnu: '${prof}' (bureautique|multimedia|gaming)"
+    mkdir -p "${PREFIX}/etc/auxinux"
+    printf '%s\n' "${prof}" > "${PROFILE_FILE}"
+    apply_profile "${prof}" || die "profil enregistre mais appliquer a echoue partiellement"
+    echo "Profil d'usage: ${prof} (applique)"
+    ;;
+  apply)
+    need_root
+    apply_profile "$(current_profile)"
+    ;;
+  -h|--help|help|"")
+    usage
+    ;;
+  *)
+    die "commande inconnue: $1"
+    ;;
+esac

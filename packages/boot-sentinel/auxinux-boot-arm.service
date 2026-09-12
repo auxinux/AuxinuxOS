@@ -1,0 +1,19 @@
+# Compteur de demarrages. Doit tourner AVANT le gestionnaire d'affichage: c'est
+# lui qui decide, a partir du compteur, si ce demarrage-ci va au bureau ou a la
+# console de secours.
+[Unit]
+Description=AuxiNuxOS - compteur de demarrages (protection au demarrage)
+Documentation=file:/usr/share/doc/auxinux/boot-sentinel.md
+# La protection ne doit jamais devenir un piege: ce parametre de noyau la
+# desactive completement pour un demarrage.
+ConditionKernelCommandLine=!auxinux.nosentinel
+Before=display-manager.service auxinux-rescue.service
+After=local-fs.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/lib/auxinux/auxinux-boot-sentinel arm
+
+[Install]
+WantedBy=graphical.target

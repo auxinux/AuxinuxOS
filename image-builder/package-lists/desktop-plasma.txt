@@ -1,0 +1,126 @@
+# Bureau KDE Plasma 6.3 (Debian 13), session Wayland.
+#
+# COSMIC a ete abandonne le 2026-09-12. Il n'existe dans AUCUN depot Debian
+# (verifie: ni main, ni contrib, ni non-free) et il n'etait meme pas empaquete
+# ici: build-cosmic-source.sh compilait cosmic-epoch et COPIAIT les fichiers
+# dans le rootfs. Consequences: aucune mise a jour du bureau sur les machines
+# installees, aucun `apt purge` possible, et surtout aucun retour a COSMIC
+# apres un passage a GNOME ou KDE. Plasma vient de Debian: signe, corrige par
+# l'equipe securite, purgeable -- donc reellement commutable.
+#
+# Liste EXPLICITE plutot que le metapaquet `kde-plasma-desktop`: l'image
+# installe avec --no-install-recommends, donc ses Recommends (dont
+# plasma-discover et plasma-welcome, tous deux ecartes ici) ne seraient pas
+# tires de toute facon, et son Depends kde-baseapps ramene konqueror.
+
+# --- Session ---------------------------------------------------------------
+plasma-desktop
+plasma-workspace
+plasma-integration
+polkit-kde-agent-1
+qt6-wayland
+qt6-translations-l10n
+xwayland
+# Les DEUX compositeurs. La session par defaut est Wayland (kwin-wayland);
+# kwin-x11 ne sert qu'a proposer une session X11 au greeter, filet de secours
+# sur un GPU qui ne rend pas correctement en Wayland. Xorg est de toute facon
+# present: sddm en depend FERMEMENT dans Debian (pas un Recommends).
+kwin-wayland
+kwin-x11
+
+# --- Ecran de connexion ----------------------------------------------------
+# Greeter SDDM en X11 (son defaut) et session utilisateur en Wayland: c'est la
+# combinaison que Debian et KDE testent. Un greeter Wayland a deja coute deux
+# semaines a ce projet (greetd + cosmic-greeter laissait un ecran 100 % noir
+# SANS console de secours, reproduit en VM le 2026-09-09).
+sddm
+sddm-theme-debian-breeze
+kde-config-sddm
+kde-config-screenlocker
+
+# --- Reglages et integration ----------------------------------------------
+systemsettings
+kinfocenter
+kscreen
+powerdevil
+plasma-nm
+plasma-pa
+bluedevil
+kde-config-gtk-style
+# power-profiles-daemon n'est qu'un Recommends de powerdevil: sans cette ligne,
+# l'applet batterie de Plasma n'a aucun profil d'alimentation a proposer, et
+# auxinux-profile n'a personne a qui parler pour le reglage CPU.
+power-profiles-daemon
+breeze-gtk-theme
+kio-extras
+ksshaskpass
+kwrited
+plasma-systemmonitor
+# Interface UFW native, elle remplace gufw (GTK) retire avec COSMIC.
+plasma-firewall
+# Bascule GPU integre/dedie pour les machines hybrides (profil jeu).
+switcheroo-control
+dconf-gsettings-backend
+
+# --- Portails (Flatpak et applications hors KDE) ---------------------------
+xdg-desktop-portal
+xdg-desktop-portal-kde
+xdg-desktop-portal-gtk
+
+# --- Applications de base du bureau ---------------------------------------
+dolphin
+konsole
+kate
+ark
+gwenview
+okular
+kcalc
+spectacle
+kwalletmanager
+kdialog
+# zenity RESTE la base des assistants maison (accueil live, ouverture de .exe,
+# couche jeu). Leur syntaxe (--radiolist, --checklist, --progress --pulsate)
+# n'a pas d'equivalent direct en kdialog, et ils sont couverts par des tests.
+# Les porter sur kdialog est un chantier a part; les dialogues GTK s'affichent
+# correctement sous Plasma en attendant.
+zenity
+partitionmanager
+gnome-disk-utility
+
+# --- Materiel et services ------------------------------------------------
+udisks2
+upower
+bluez
+cups
+cups-filters
+system-config-printer
+libnotify-bin
+
+# --- Audio ---------------------------------------------------------------
+pipewire
+pipewire-pulse
+pipewire-audio
+wireplumber
+libspa-0.2-bluetooth
+
+# --- Pilotes graphiques ---------------------------------------------------
+# libgl1-mesa-dri n'est qu'un RECOMMENDS de xserver-xorg-core et de la pile
+# Qt/KWin. L'image installe avec --no-install-recommends: sans cette ligne,
+# l'ISO embarque un serveur graphique SANS AUCUN pilote DRI, KWin ne demarre
+# pas, et on retombe exactement sur l'ecran noir qu'on vient de quitter.
+libgl1-mesa-dri
+libglx-mesa0
+libegl1
+libgl1
+# mesa-vulkan-drivers sert aussi au controle materiel de l'installateur
+# (savoir si le jeu est possible), pas seulement aux jeux.
+mesa-vulkan-drivers
+# glxinfo/eglinfo: c'est ainsi que le controle materiel distingue une
+# acceleration reelle d'un rendu logiciel (llvmpipe).
+mesa-utils
+
+# --- Polices --------------------------------------------------------------
+fonts-noto
+fonts-noto-color-emoji
+fonts-hack
+fonts-open-sans

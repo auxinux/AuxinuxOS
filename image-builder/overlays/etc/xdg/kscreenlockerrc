@@ -1,0 +1,10 @@
+# Verrouillage de l'ecran: actif, 10 minutes, et au reveil.
+#
+# Un poste de travail qui ne se verrouille pas est le plus gros trou de
+# confidentialite d'un OS qui se reclame de la loi 25 -- bien avant la
+# telemetrie. Valeurs modifiables dans Reglages > Verrouillage de l'ecran.
+[Daemon]
+Autolock=true
+LockGrace=5
+LockOnResume=true
+Timeout=10

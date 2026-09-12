@@ -20,13 +20,21 @@ n'a encore été construite. Voir [les limites connues](docs/limitations.md).
 - `installer/` : nettoyage du système après installation et configuration du rollback.
 - `packages/auxi-cli/` : gestion des applications et politique APT.
 - `packages/auxinux-center/` : centre de contrôle Rust et libcosmic.
-- `packages/welcome/` : accueil live et lanceur Calamares.
+- `packages/boot-sentinel/` : protection au démarrage, console de secours et
+  restauration automatique.
+- `packages/auxinux-profile/` : profils d'usage bureautique / multimédia / jeu.
+- `packages/welcome/` : accueil live et lanceur de l'installateur.
 - `packages/windows-support/` : assistant `.exe` et installation de la couche Windows/jeux.
 - `docs/` : documentation technique.
 - `tests/` : procédure de validation.
 
 Les applications Flatpak sont privilégiées ; les paquets DEB restent
 accessibles. Les langues visées sont le français et l’anglais canadiens.
+
+Si le bureau ne démarre pas deux fois de suite, la machine bascule sur une
+console de secours et propose la restauration ; au troisième échec, elle
+restaure sans rien demander. Voir
+[la protection au démarrage](docs/protection-demarrage.md).
 
 L’installation se fait sur **BTRFS** avec instantanés : un instantané est créé
 automatiquement avant chaque transaction DEB, et le système peut être restauré

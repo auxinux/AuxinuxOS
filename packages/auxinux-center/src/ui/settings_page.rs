@@ -1,6 +1,6 @@
 //! Page REGLAGES: politique APT maison et acces aux reglages du bureau.
 //!
-//! Le Center ne reimplemente pas les reglages de COSMIC: il y renvoie.
+//! Le Center ne reimplemente pas les reglages du bureau: il y renvoie.
 //! Dupliquer les panneaux du bureau produirait deux endroits pour changer la
 //! meme chose, avec des valeurs qui finissent par diverger.
 
@@ -52,10 +52,10 @@ pub fn view(app: &App) -> Element<'_, Message> {
             .push(widget::text::heading("Reglages du bureau"))
             .push(widget::text::caption(
                 "Affichage, apparence, clavier, langue, reseau et comptes se \
-                 configurent dans les reglages de COSMIC.",
+                 configurent dans les reglages du bureau.",
             ))
             .push(
-                widget::button::suggested("Ouvrir les reglages de COSMIC")
+                widget::button::suggested("Ouvrir les reglages du bureau")
                     .on_press(Message::OpenSystemSettings),
             ),
     )

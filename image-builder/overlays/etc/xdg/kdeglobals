@@ -1,0 +1,15 @@
+# Defauts KDE d'AuxiNuxOS. /etc/xdg est lu AVANT ~/.config: ce sont des
+# defauts, chaque utilisateur peut les changer et sa version l'emporte.
+[General]
+BrowserApplication=brave-browser.desktop
+
+[KDE]
+# Simple clic pour ouvrir: c'est le defaut de KDE. On l'ecrit explicitement
+# parce que c'est la premiere chose que les nouveaux venus signalent, et qu'on
+# veut un defaut STABLE d'une version de Plasma a l'autre.
+SingleClick=false
+
+[UserFeedback]
+# Meme intention que /etc/xdg/PlasmaUserFeedback, pour les applications KDE
+# qui lisent leur propre section au lieu du fichier global.
+StatisticsCollectionMode=NoTelemetry

@@ -137,7 +137,48 @@ package_csv() {
   awk 'NF && $1 !~ /^#/' "$@" | paste -sd,
 }
 
-BASE_PACKAGES="$(package_csv "${PROJECT_DIR}/image-builder/package-lists/base.txt" "${PROJECT_DIR}/image-builder/package-lists/firmware.txt" "${PROJECT_DIR}/image-builder/package-lists/desktop-base.txt" "${PROJECT_DIR}/image-builder/package-lists/i18n-canada.txt" "${PROJECT_DIR}/image-builder/package-lists/live-installer.txt" "${PROJECT_DIR}/image-builder/package-lists/windows-support.txt" "${PROJECT_DIR}/image-builder/package-lists/rollback.txt" "${PROJECT_DIR}/image-builder/package-lists/performance.txt")"
+# Listes de paquets. UNE seule declaration sert au bootstrap et a
+# l'installation: deux enumerations separees, c'etait deux sources de verite
+# pour le meme contenu.
+#
+# L'ISO embarque LES TROIS couches d'usage (bureautique, multimedia, jeu):
+# l'installation est une copie du squashfs, donc le medium doit contenir tout
+# ce qu'une installation peut recevoir. Retirer les couches non choisies
+# appartient a l'installateur maison; tant qu'il n'existe pas, toute
+# installation est « complete ».
+BOOTSTRAP_LISTS=(
+  base.txt
+  firmware.txt
+  desktop-plasma.txt
+  i18n-canada.txt
+  live-installer.txt
+  rollback.txt
+  performance.txt
+  layer-bureautique.txt
+  layer-multimedia.txt
+)
+# Ces trois listes ne peuvent PAS etre traitees par mmdebstrap:
+#   - layer-gaming.txt contient des paquets :i386, et l'architecture etrangere
+#     n'est garantie qu'apres le `dpkg --add-architecture` ci-dessous;
+#   - apps-socle.txt contient brave-browser, qui vient du depot Brave;
+#   - auxinux-system.txt contient le noyau, qui vient du depot AuxiNux.
+# Les trois depots n'existent qu'apres configure-apt-sources.sh.
+EXTRA_LISTS=(
+  layer-gaming.txt
+  apps-socle.txt
+  auxinux-system.txt
+)
+
+list_paths() {
+  local name
+  for name in "$@"; do
+    printf '%s\n' "${PROJECT_DIR}/image-builder/package-lists/${name}"
+  done
+}
+
+mapfile -t BOOTSTRAP_PATHS < <(list_paths "${BOOTSTRAP_LISTS[@]}")
+mapfile -t ALL_PATHS < <(list_paths "${BOOTSTRAP_LISTS[@]}" "${EXTRA_LISTS[@]}")
+BASE_PACKAGES="$(package_csv "${BOOTSTRAP_PATHS[@]}")"
 
 if [[ "${REUSE_ROOTFS}" -eq 1 ]]; then
   if [[ ! -e "${ROOTFS_DIR}/etc/os-release" ]]; then
@@ -146,7 +187,18 @@ if [[ "${REUSE_ROOTFS}" -eq 1 ]]; then
   fi
   echo "==> Reusing rootfs: ${ROOTFS_DIR}"
 else
-  echo "==> Creating Debian 13.5 rootfs"
+  echo "==> Creating Debian 13 rootfs (miroir AuxiNux)"
+  # Le miroir AuxiNux et non deb.debian.org: c'est la source declaree des
+  # paquets Debian du projet, et c'est celle vers laquelle le systeme installe
+  # pointe de toute facon (install-auxinux-sources-DEB.sh). Bootstrapper
+  # ailleurs, c'etait construire l'image avec des paquets qui ne sont pas ceux
+  # dont la machine recevra ses mises a jour.
+  #
+  # C'est un VRAI miroir Debian, signe par les cles de l'archive Debian
+  # (verifie: 4CB50190207B4758A3F73A796ED0E7B82643E131 et les deux autres
+  # signatures de la trixie): mmdebstrap le valide avec
+  # debian-archive-keyring exactement comme deb.debian.org. Aucun contournement
+  # de verification n'est necessaire, et aucun ne doit etre ajoute.
   # i386 est requis par wine32, lui-meme tire par le metapaquet `wine`. Sans
   # cette architecture, seules les applications Windows 64 bits fonctionnent --
   # ce qui exclut une grande partie des logiciels anciens, precisement ceux
@@ -158,7 +210,7 @@ else
     --include="${BASE_PACKAGES}" \
     trixie \
     "${ROOTFS_DIR}" \
-    http://deb.debian.org/debian
+    https://dep.auxinux.ca/DEBIAN
 fi
 
 if [[ -x "${ROOTFS_DIR}/usr/bin/auxi" ]]; then
@@ -173,18 +225,7 @@ mount_chroot_api_filesystems
 echo "==> Installing AuxiNux kernel and applications"
 # package_csv strips comment and blank lines; a plain `tr '\n' ' '` would feed
 # `#` comment words to apt-get (desktop-base.txt now carries a comment block).
-INSTALL_PACKAGES="$(package_csv \
-  "${PROJECT_DIR}/image-builder/package-lists/base.txt" \
-  "${PROJECT_DIR}/image-builder/package-lists/firmware.txt" \
-  "${PROJECT_DIR}/image-builder/package-lists/desktop-base.txt" \
-  "${PROJECT_DIR}/image-builder/package-lists/i18n-canada.txt" \
-  "${PROJECT_DIR}/image-builder/package-lists/live-installer.txt" \
-  "${PROJECT_DIR}/image-builder/package-lists/windows-support.txt" \
-  "${PROJECT_DIR}/image-builder/package-lists/rollback.txt" \
-  "${PROJECT_DIR}/image-builder/package-lists/performance.txt" \
-  "${PROJECT_DIR}/image-builder/package-lists/auxinux-system.txt" \
-  "${PROJECT_DIR}/image-builder/package-lists/apps-privacy.txt" \
-  | tr ',' ' ')"
+INSTALL_PACKAGES="$(package_csv "${ALL_PATHS[@]}" | tr ',' ' ')"
 # i386 doit exister AVANT l'installation: le metapaquet `wine` tire wine32,
 # introuvable sans cette architecture. mmdebstrap l'ajoute sur un rootfs neuf,
 # mais un rootfs reutilise (--reuse-rootfs) peut en etre depourvu.
@@ -207,64 +248,15 @@ sudo chroot "${ROOTFS_DIR}" apt-get install -y --no-install-recommends ${INSTALL
 sudo chroot "${ROOTFS_DIR}" apt-get purge -y q4wine 2>/dev/null || true
 sudo chroot "${ROOTFS_DIR}" apt-get autoremove -y --purge
 
-echo "==> Installing COSMIC runtime dependencies (OBS home:nomispaz Debian_13)"
-# COSMIC has no Debian package; the only APT source for trixie is the
-# community OBS repo. Its key is VENDORED here (never fetched blindly), the
-# repo is enabled only inside this build chroot, and the runtime auxi/apt
-# policy still applies to the installed system.
-COSMIC_KEY="${PROJECT_DIR}/image-builder/keys/obs-cosmic-debian13.asc"
-if [[ ! -s "${COSMIC_KEY}" ]]; then
-  echo "missing vendored OBS COSMIC key: ${COSMIC_KEY}" >&2
-  exit 70
-fi
-sudo install -D -m 0644 "${COSMIC_KEY}" \
-  "${ROOTFS_DIR}/usr/share/keyrings/obs-cosmic-debian13.asc"
+# Le bureau vient desormais de Debian: voir package-lists/desktop-plasma.txt,
+# installe par le bloc apt ci-dessus comme n'importe quel autre paquet.
 #
-# downloadcontent.opensuse.org, PAS download.opensuse.org: ce dernier redirige
-# vers un miroir choisi geographiquement, et slc-mirror.opensuse.org a servi
-# des .deb corrompus (taille et sha differents de l'index) pour cosmic-edit,
-# cosmic-files, cosmic-settings, cosmic-term et xdg-desktop-portal-cosmic. La
-# construction echouait alors sur une verification de somme, ou pire,
-# produisait une ISO amputee. downloadcontent sert le contenu directement,
-# sans redirection de miroir.
-sudo tee "${ROOTFS_DIR}/etc/apt/sources.list.d/obs-cosmic.sources" >/dev/null <<'EOF'
-Types: deb
-URIs: https://downloadcontent.opensuse.org/repositories/home:/nomispaz:/debian:/cosmic-desktop/Debian_13/
-Suites: /
-Signed-By: /usr/share/keyrings/obs-cosmic-debian13.asc
-EOF
-sudo chroot "${ROOTFS_DIR}" apt-get update
-
-# `cosmic-session` n'est PAS installe depuis OBS, volontairement.
-#
-# Le depot communautaire est incoherent: il publie cosmic-session, qui declare
-# « Depends: cosmic-applets », alors que cosmic-applets N'EXISTE PAS dans le
-# depot (58 paquets, verifie). apt echoue donc en « Unable to satisfy
-# dependencies », et rien de tout cela n'est sous notre controle -- c'est un
-# depot tiers qui a change sous nos pieds depuis la construction de juillet.
-#
-# Ces paquets OBS ne servent de toute facon qu'a tirer les DEPENDANCES
-# D'EXECUTION dans le rootfs: les binaires COSMIC reels sont ensuite compiles
-# depuis les sources officielles et ecrasent ceux-ci (build-cosmic-source.sh),
-# cosmic-applets et cosmic-session compris. On enumere donc explicitement ce
-# que cosmic-session aurait tire, ce qui a l'avantage de ne plus dependre d'un
-# metapaquet tiers susceptible de casser a nouveau.
-sudo chroot "${ROOTFS_DIR}" env DEBIAN_FRONTEND=noninteractive \
-  apt-get install -y --no-install-recommends \
-  cosmic-app-library cosmic-bg cosmic-comp cosmic-greeter cosmic-greeter-daemon \
-  cosmic-icons cosmic-idle cosmic-launcher cosmic-notifications cosmic-osd \
-  cosmic-panel cosmic-randr cosmic-screenshot cosmic-settings \
-  cosmic-settings-daemon cosmic-workspaces \
-  cosmic-term cosmic-files cosmic-edit cosmic-wallpapers \
-  xdg-desktop-portal-cosmic adw-gtk3 pop-fonts pop-launcher \
-  fonts-open-sans switcheroo-control dconf-gsettings-backend
-
-# The OBS repo must not remain enabled on the shipped system.
-sudo rm -f "${ROOTFS_DIR}/etc/apt/sources.list.d/obs-cosmic.sources"
-
-echo "==> Building coherent COSMIC Epoch stack from official sources"
-"${PROJECT_DIR}/image-builder/scripts/build-cosmic-source.sh" \
-  "${ROOTFS_DIR}" "${WORK_DIR}/cosmic-source-cache"
+# Ce qui se trouvait ICI a ete supprime avec l'abandon de COSMIC (2026-09-12):
+# un depot OBS tiers pour les dependances, puis la compilation de cosmic-epoch
+# depuis les sources (cache de 21 Go, plusieurs heures). Le resultat n'etait
+# meme pas empaquete -- des fichiers copies dans le rootfs, donc invisibles de
+# dpkg: aucune mise a jour du bureau, aucun `apt purge`, et aucun retour
+# possible a COSMIC apres un passage a GNOME ou KDE.
 
 echo "==> Installing grub-btrfs from source"
 # Absent de Debian 13: sans lui, aucun sous-menu GRUB pour demarrer sur un
@@ -306,59 +298,63 @@ echo 'auxinux ALL=(ALL) NOPASSWD:ALL' | sudo tee "${ROOTFS_DIR}/etc/sudoers.d/90
 sudo chmod 0440 "${ROOTFS_DIR}/etc/sudoers.d/90-auxinux-live"
 sudo install -m 0755 "${ROOTFS_DIR}/usr/share/applications/auxinux-install.desktop" "${ROOTFS_DIR}/home/auxinux/Desktop/Install AuxiNuxOS.desktop"
 sudo chroot "${ROOTFS_DIR}" chown -R auxinux:auxinux /home/auxinux/Desktop
-# COSMIC shows no desktop icons; also autostart the installer in the live
-# session so it opens on login (it stays in the app library to relaunch).
+# Plasma affiche bien les icones du bureau (vue dossier), mais on garde AUSSI
+# l'autodemarrage: l'installateur doit s'ouvrir seul sur une session live, sans
+# que l'utilisateur ait a comprendre quoi cliquer. Il reste dans le menu pour
+# etre relance.
 sudo install -d -m 0755 "${ROOTFS_DIR}/etc/xdg/autostart"
 sudo install -m 0644 "${ROOTFS_DIR}/usr/share/applications/auxinux-install.desktop" \
   "${ROOTFS_DIR}/etc/xdg/autostart/auxinux-install.desktop"
 
-# Suppress noisy first-run wizards that autostart on the live COSMIC session
-# (KGpg's key-setup assistant, the disk-utility notifier). They are launchable
-# from the app library if the user wants them; they must not pop over the
-# installer on boot.
-# calamares-desktop-icon adds a second, X11-only "Install Debian" icon that
-# is broken under COSMIC/Wayland; AuxiNuxOS ships its own working launcher
-# (auxinux-install-launcher) and desktop icon, so suppress the duplicate.
+# Assistants de premier demarrage a museler dans la session live (assistant de
+# creation de cle de KGpg, notificateur de disques). Ils restent lancables
+# depuis le menu; ils ne doivent pas s'ouvrir PAR-DESSUS l'installateur au
+# demarrage du live.
+# calamares-desktop-icon ajoute une deuxieme icone « Install Debian », non
+# traduite et sans notre branding, a cote de la notre. AuxiNuxOS fournit son
+# propre lanceur (auxinux-install-launcher): on supprime le doublon.
 for noisy in org.kde.kgpg org.gnome.SettingsDaemon.DiskUtilityNotify calamares-desktop-icon; do
   if [[ -e "${ROOTFS_DIR}/etc/xdg/autostart/${noisy}.desktop" ]]; then
     echo "Hidden=true" | sudo tee -a "${ROOTFS_DIR}/etc/xdg/autostart/${noisy}.desktop" >/dev/null
   fi
 done
 
-# Live autologin via greetd + cosmic-greeter. cosmic-greeter runs
-# `greetd --config /etc/greetd/cosmic-greeter.toml`; we add greetd's
-# [initial_session] so the live user is logged straight into cosmic-session
-# on boot, with the regular greeter shown on subsequent logouts. cosmic-comp
-# renders through llvmpipe when the VM has no GPU, so no X11 fallback is
-# needed (unlike Plasma-Wayland). SDDM is not installed anymore.
-sudo install -d -m 0755 "${ROOTFS_DIR}/etc/greetd"
+# Ecran de connexion: SDDM, greeter en X11 (son defaut dans Debian) et session
+# utilisateur en WAYLAND. C'est la combinaison que Debian et KDE testent.
 #
-# `command` de [default_session] est celui d'AMONT: `cosmic-greeter-start`.
-# On ecrivait `cosmic-comp systemd-cat -t cosmic-greeter cosmic-greeter`, une
-# forme heritee de Pop!_OS que System76 ne teste plus. Le script amont fait
-# davantage: il purge /run/cosmic-greeter/cosmic/...CosmicSettingsDaemon avant
-# de lancer le compositeur. Sans cette purge, un etat residuel du daemon de
-# reglages suffit a faire echouer le greeter au demarrage suivant -- et un
-# greeter qui echoue, c'est un ecran noir sans console (voir le drop-in
-# etc/systemd/system/cosmic-greeter.service.d/50-auxinux-fallback.conf).
-sudo tee "${ROOTFS_DIR}/etc/greetd/cosmic-greeter.toml" >/dev/null <<'EOF'
-[terminal]
-vt = "1"
+# Un greeter Wayland a deja coute deux semaines a ce projet: greetd +
+# cosmic-greeter arretait getty@tty1 (Conflicts=), echouait cinq fois, et
+# laissait un ecran 100 % noir SANS console de secours -- panne reproduite en
+# VM le 2026-09-09. On ne recommence pas avec un greeter experimental.
+#
+# Xorg est present de toute facon: dans Debian, `sddm` en depend FERMEMENT
+# (xserver-xorg | xserver), ce n'est pas un Recommends qu'on pourrait eviter.
+sudo install -d -m 0755 "${ROOTFS_DIR}/etc/sddm.conf.d"
 
-[general]
-service = "cosmic-greeter"
-
-[initial_session]
-command = "/usr/bin/start-cosmic"
-user = "auxinux"
-
-[default_session]
-command = "cosmic-greeter-start"
-user = "cosmic-greeter"
+# Autologin du LIVE uniquement. post-install-cleanup.sh supprime ce fichier sur
+# le systeme installe -- sinon la machine installee ouvrirait une session sans
+# mot de passe, sur un compte `auxinux` qui n'existe plus.
+#
+# Session=plasma est le fichier /usr/share/wayland-sessions/plasma.desktop.
+# Ecrire `plasmax11` ici basculerait tout le live en X11 sans que rien ne le
+# signale.
+sudo tee "${ROOTFS_DIR}/etc/sddm.conf.d/90-auxinux-live-autologin.conf" >/dev/null <<'EOF'
+[Autologin]
+User=auxinux
+Session=plasma
+# false: apres une deconnexion, on veut l'ecran de connexion, pas une nouvelle
+# session automatique en boucle.
+Relogin=false
 EOF
+
+# display-manager.service est un lien symbolique, pas un Alias: `systemctl
+# enable sddm` ne le cree pas dans un chroot. Sans lui, graphical.target n'a
+# aucun gestionnaire d'affichage a demarrer et le systeme s'arrete sur une
+# console.
 sudo chroot "${ROOTFS_DIR}" ln -sf \
-  /usr/lib/systemd/system/cosmic-greeter.service \
+  /usr/lib/systemd/system/sddm.service \
   /etc/systemd/system/display-manager.service
+printf '/usr/bin/sddm\n' | sudo tee "${ROOTFS_DIR}/etc/X11/default-display-manager" >/dev/null
 
 # Tor and OnionShare are available for privacy workflows, but Tor must be
 # user-started instead of running by default on every boot.
@@ -385,7 +381,17 @@ done
 # systemd-oomd.service declare `Also=systemd-oomd.socket` -- un lien pose a la
 # main activerait le service sans sa socket.
 mount_chroot_api_filesystems
-for unit in zramswap.service systemd-oomd.service fstrim.timer; do
+# sddm.service: le lien display-manager.service ci-dessus suffit a
+# graphical.target, mais l'activation explicite protege d'un preset qui aurait
+# desactive l'unite dans le chroot.
+#
+# auxinux-boot-arm.service et auxinux-boot-sentinel.service forment la
+# protection au demarrage (voir packages/boot-sentinel/README.md): la premiere
+# compte les demarrages, la seconde confirme qu'une session graphique s'est
+# reellement ouverte.
+for unit in zramswap.service systemd-oomd.service fstrim.timer sddm.service \
+            auxinux-boot-arm.service auxinux-boot-sentinel.service \
+            auxinux-profile.service; do
   if ! sudo chroot "${ROOTFS_DIR}" systemctl enable "${unit}" >/dev/null 2>&1; then
     echo "AVERTISSEMENT: activation de ${unit} echouee." >&2
   fi

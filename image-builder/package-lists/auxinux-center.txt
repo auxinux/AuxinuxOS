@@ -1,9 +1,9 @@
 # AuxiNux OS Center n'a plus de dependance de paquet propre depuis la 0.2.
 #
-# L'interface Kirigami/Qt6 a ete remplacee par libcosmic: le Center est
-# desormais un binaire statique du point de vue du bureau, dont les seules
-# dependances d'execution (wayland, libxkbcommon, mesa) sont deja fournies par
-# COSMIC lui-meme.
+# L'interface Kirigami/Qt6 a ete remplacee par libcosmic: le Center est un
+# binaire statique du point de vue du bureau, dont les seules dependances
+# d'execution (wayland, libxkbcommon, pilotes mesa) sont deja declarees par
+# desktop-plasma.txt.
 #
 # Ce fichier est conserve volontairement vide pour que build-image.sh et la
 # documentation gardent une place ou declarer une future dependance.

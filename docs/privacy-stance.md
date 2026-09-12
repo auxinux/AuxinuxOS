@@ -11,6 +11,35 @@ AuxiNux OS 0.2.0 vise une posture vie privee elevee pour le Canada.
 - outils de chiffrement et de nettoyage de metadonnees visibles;
 - pare-feu disponible via UFW/GUFW.
 
+## Bureau KDE Plasma (0.2.0)
+
+Plasma livre sa telemetrie desactivee. AuxiNuxOS ne s'en contente pas: la
+promesse doit tenir meme apres une mise a jour qui changerait un defaut amont.
+Trois fichiers sous `/etc/xdg` (donc des DEFAUTS, que l'utilisateur reste libre
+de changer pour lui-meme -- c'est ce que « consentement » veut dire):
+
+| Fichier | Effet |
+|---|---|
+| `PlasmaUserFeedback` | `FeedbackLevel=0` — aucune statistique d'usage |
+| `kdeglobals` | `StatisticsCollectionMode=NoTelemetry` pour les applications KDE |
+| `baloofilerc` | indexation du contenu des fichiers desactivee |
+| `kscreenlockerrc` | verrouillage automatique apres 10 min, et au reveil |
+
+Baloo n'envoie rien a personne: il est desactive pour la performance ET parce
+que son index contient le TEXTE de tous les documents, dans une base non
+chiffree, creee sans que l'utilisateur l'ait demandee.
+
+Ecartes par arbitrage, pour la meme raison:
+
+- `plasma-discover` (ramene PackageKit, un second chemin vers dpkg);
+- `plasma-welcome` (recupere du contenu en ligne au premier demarrage);
+- `plasma-browser-integration` et `kdeconnect` (service a l'ecoute sur le
+  reseau local).
+
+`tests/test-no-telemetry.sh` verifie tout ce tableau, plus l'absence de
+`popularity-contest`, `whoopsie` et `apport` des listes de paquets. C'est un
+controle STATIQUE: il ne regarde aucun trafic reseau.
+
 ## Mesures appliquees
 
 - Brave: policy managee `/etc/brave/policies/managed/auxinux-privacy.json`
@@ -20,8 +49,16 @@ AuxiNux OS 0.2.0 vise une posture vie privee elevee pour le Canada.
 
 ## Points a auditer
 
+- **Audit reseau reel**: demarrer l'image en VM avec capture du trafic et
+  refuser toute destination hors liste blanche. C'est la seule verification qui
+  transformerait la promesse en preuve; `tests/test-no-telemetry.sh` n'en est
+  que la moitie statique.
+- A decider explicitement, destination par destination: NTP, verification de
+  connectivite de NetworkManager, requetes Flathub du centre de controle.
+- Steam (couche jeu) collecte pour son compte: son installation en Flatpak, a la
+  demande, doit etre un acte explicite de l'utilisateur -- jamais une case
+  pre-cochee.
 - Brave: confirmer la couverture P3A et les services optionnels restants;
-- KDE Discover/PackageKit: privileges et confirmations;
 - Wine: execution de binaires Windows et messages utilisateur;
 - Calamares: partitionnement, creation utilisateur, permissions post-install;
 - wrappers APT: contournement volontaire via `auxi set apt=true`.

@@ -1,0 +1,15 @@
+# Indexation des fichiers (Baloo): DESACTIVEE par defaut.
+#
+# Deux raisons, dans cet ordre:
+#   1. Performance. Baloo indexe le contenu de tous les fichiers du dossier
+#      personnel. Sur un disque mecanique ou pendant une compilation, c'est la
+#      premiere cause de ralentissement d'un Plasma neuf.
+#   2. Vie privee. L'index contient le TEXTE des documents, dans une base non
+#      chiffree de ~/.local/share/baloo. Ce n'est pas un envoi vers un tiers,
+#      donc pas un probleme de loi 25, mais c'est une copie de tout ce que
+#      l'utilisateur ecrit, creee sans qu'il l'ait demandee.
+#
+# Activable en un clic depuis Reglages > Recherche, ou via le centre de
+# controle AuxiNux.
+[Basic Settings]
+Indexing-Enabled=false

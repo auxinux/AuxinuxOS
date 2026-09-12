@@ -95,13 +95,23 @@ fn product_name() -> String {
     "AuxiNux OS".into()
 }
 
-/// Opens the COSMIC settings application (replaces the old KDE
-/// systemsettings:// URL handler). Detached: the Center does not wait for it.
+/// Ouvre les reglages du bureau, detache: le Center ne l'attend pas.
+///
+/// Le bureau par defaut est KDE Plasma depuis la 0.2.0, mais le Center doit
+/// survivre a un CHANGEMENT de bureau (Plasma <-> GNOME): un binaire code en
+/// dur laisserait un bouton mort sur toute machine qui a change de bureau.
+/// On essaie donc les candidats dans l'ordre et on s'arrete au premier qui
+/// demarre.
 pub fn open_system_settings() {
     use std::process::{Command, Stdio};
-    let _ = Command::new("cosmic-settings")
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn();
+    for candidate in ["systemsettings", "gnome-control-center", "cosmic-settings"] {
+        let spawned = Command::new(candidate)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn();
+        if spawned.is_ok() {
+            return;
+        }
+    }
 }

@@ -38,39 +38,34 @@ rm -f "${prefix}/etc/fstab.orig.calamares"
 # 2. Sudo NOPASSWD du live.
 rm -f "${prefix}/etc/sudoers.d/90-auxinux-live"
 
-# 3. Autologin du live. AuxiNuxOS utilise COSMIC + greetd: l'autologin
-#    live est le bloc [initial_session] de /etc/greetd/cosmic-greeter.toml,
-#    qui connecte automatiquement le compte live "auxinux". Ce compte est
-#    supprime a l'etape 5. Si l'autologin reste, le systeme INSTALLE tente de
-#    connecter un utilisateur inexistant -> greetd echoue en boucle et le
-#    demarrage reste bloque en console (panne rapportee). On reecrit donc la
-#    config greetd SANS [initial_session]: le systeme installe affiche l'ecran
-#    de connexion COSMIC normal pour le compte cree par Calamares.
-if [ -f "${prefix}/etc/greetd/cosmic-greeter.toml" ]; then
-  cat > "${prefix}/etc/greetd/cosmic-greeter.toml" <<'GREETD_EOF'
-[terminal]
-vt = "1"
-
-[general]
-service = "cosmic-greeter"
-
-[default_session]
-command = "cosmic-greeter-start"
-user = "cosmic-greeter"
-GREETD_EOF
-fi
-# Ancien autologin SDDM (images pre-COSMIC), au cas ou.
+# 3. Autologin du live. AuxiNuxOS utilise SDDM: l'autologin live est le
+#    fichier /etc/sddm.conf.d/90-auxinux-live-autologin.conf, qui connecte
+#    automatiquement le compte live "auxinux". Ce compte est supprime a
+#    l'etape 5. Laisse en place, il ferait ouvrir au systeme INSTALLE une
+#    session pour un utilisateur inexistant: SDDM echoue, recommence, atteint
+#    sa limite de redemarrages, et le demarrage n'aboutit jamais. C'est la
+#    panne rapportee sur la 0.1 (avec greetd a l'epoque).
+rm -f "${prefix}/etc/sddm.conf.d/90-auxinux-live-autologin.conf"
+# Autologins des images precedentes (greetd + cosmic-greeter, et l'ancien SDDM
+# pre-COSMIC), au cas ou le squashfs viendrait d'une image plus ancienne.
 rm -f "${prefix}/etc/sddm.conf.d/10-auxinuxos-live.conf"
+rm -rf "${prefix}/etc/greetd"
 
 # 3b. Reaffirme le gestionnaire d'affichage. Le module Calamares
-#     "displaymanager" ne connait pas greetd/cosmic-greeter et peut avoir
-#     retire le lien display-manager.service -> le systeme installe
-#     demarrerait alors sans interface graphique (console). On retablit le
-#     lien vers cosmic-greeter.
-if [ -e "${prefix}/usr/lib/systemd/system/cosmic-greeter.service" ]; then
-  ln -sf /usr/lib/systemd/system/cosmic-greeter.service \
+#     "displaymanager" reecrit ce lien selon SA liste de gestionnaires connus:
+#     s'il ne trouve pas celui de l'image, il peut le retirer, et le systeme
+#     installe demarre alors sans interface graphique. On retablit SDDM.
+if [ -e "${prefix}/usr/lib/systemd/system/sddm.service" ]; then
+  ln -sf /usr/lib/systemd/system/sddm.service \
     "${prefix}/etc/systemd/system/display-manager.service"
+  printf '/usr/bin/sddm\n' > "${prefix}/etc/X11/default-display-manager"
 fi
+
+# 3c. Compteur de la protection au demarrage. Le squashfs a ete produit apres
+#     des demarrages du LIVE; si le compteur en gardait la trace, le systeme
+#     installe pourrait basculer en console de secours a son PREMIER demarrage,
+#     et proposer de restaurer un instantane qui n'existe pas encore.
+rm -f "${prefix}/var/lib/auxinux/boot-failures"
 
 # 4. Montages non essentiels en `nofail`.
 #

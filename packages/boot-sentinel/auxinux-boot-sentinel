@@ -1,0 +1,167 @@
+#!/bin/sh
+# auxinux-boot-sentinel — protection au demarrage d'AuxiNuxOS.
+#
+# PROBLEME RESOLU: un systeme qui demarre mais n'aboutit pas a une session
+# graphique laisse l'utilisateur devant un ecran noir, sans console et sans
+# message. Il en conclut que « le demarrage ne finit jamais ». C'est arrive sur
+# ce projet (reproduit en VM le 2026-09-09) et c'est la panne la plus couteuse
+# possible: la machine tourne, le rollback est pret, mais rien n'est joignable.
+#
+# MECANISME (entierement dans le systeme, aucun script GRUB):
+#   arm    au demarrage, AVANT le gestionnaire d'affichage: incremente un
+#          compteur persistant. A partir de 2 echecs, pose /run/auxinux/rescue,
+#          ce qui empeche sddm de demarrer (ConditionPathExists) et laisse
+#          auxinux-rescue prendre tty1.
+#   watch  apres graphical.target: attend qu'une session graphique soit
+#          reellement ACTIVE, puis remet le compteur a zero.
+#   reset  remise a zero manuelle.
+#   status etat lisible (consomme par le centre de controle).
+#
+# CE QUE CA NE COUVRE PAS: un noyau ou un initramfs qui ne demarre pas du tout.
+# Ce cas-la reste du ressort du sous-menu d'instantanes de GRUB (grub-btrfs),
+# qui ne depend d'aucun service de cette machine.
+set -u
+
+# Chemins reglables UNIQUEMENT pour les tests (tests/test-boot-sentinel.sh).
+# Sur un systeme reel, aucune de ces variables n'est definie: les valeurs par
+# defaut sont les seules utilisees.
+STATE_DIR="${AUXINUX_STATE_DIR:-/var/lib/auxinux}"
+COUNT_FILE="${STATE_DIR}/boot-failures"
+RUN_DIR="${AUXINUX_RUN_DIR:-/run/auxinux}"
+RESCUE_FLAG="${RUN_DIR}/rescue"
+CMDLINE_FILE="${AUXINUX_CMDLINE:-/proc/cmdline}"
+LIVE_MARKER="${AUXINUX_LIVE_MARKER:-/run/live/medium}"
+
+# 2 echecs -> console de secours proposee. 3 -> restauration sans rien demander.
+# Pourquoi pas 1: un seul demarrage rate peut venir d'une extinction brutale ou
+# d'un ecran branche apres le demarrage. Deux d'affilee, c'est une panne.
+RESCUE_THRESHOLD=${AUXINUX_RESCUE_THRESHOLD:-2}
+AUTO_THRESHOLD=${AUXINUX_AUTO_THRESHOLD:-3}
+
+# Attente maximale d'une session graphique. Une machine lente avec un disque
+# mecanique et un premier demarrage (creation des caches Plasma) peut depasser
+# la minute; en dessous de 180 s on declarerait en panne un systeme qui marche.
+WATCH_TIMEOUT=${AUXINUX_WATCH_TIMEOUT:-180}
+
+log() { echo "auxinux-boot-sentinel: $*"; }
+
+# Le medium live n'est jamais concerne: il ouvre une session en autologin, n'a
+# pas d'instantane a restaurer, et son / est un squashfs en lecture seule.
+is_live() {
+  [ -d "${LIVE_MARKER}" ] && return 0
+  grep -qw 'boot=live' "${CMDLINE_FILE}" 2>/dev/null && return 0
+  return 1
+}
+
+# Une machine dont la cible par defaut n'est pas graphique n'a pas a etre
+# jugee sur l'absence de bureau (serveur, ou utilisateur qui a choisi la
+# console). Sans ce garde-fou, deux demarrages volontaires en multi-user
+# suffisaient a declencher le mode secours.
+wants_graphical() {
+  [ "$(systemctl get-default 2>/dev/null)" = "graphical.target" ]
+}
+
+read_count() {
+  count=0
+  if [ -r "${COUNT_FILE}" ]; then
+    count=$(cat "${COUNT_FILE}" 2>/dev/null)
+    case "${count}" in
+      ''|*[!0-9]*) count=0 ;;
+    esac
+  fi
+  echo "${count}"
+}
+
+write_count() {
+  mkdir -p "${STATE_DIR}" 2>/dev/null || true
+  printf '%s\n' "$1" > "${COUNT_FILE}.tmp" 2>/dev/null || return 1
+  mv -f "${COUNT_FILE}.tmp" "${COUNT_FILE}" 2>/dev/null || return 1
+}
+
+cmd_arm() {
+  if is_live; then log "medium live: protection inactive"; return 0; fi
+  if ! wants_graphical; then log "cible par defaut non graphique: protection inactive"; return 0; fi
+
+  count=$(read_count)
+  count=$((count + 1))
+  write_count "${count}" || log "compteur non ecrit (racine en lecture seule ?)"
+
+  if [ "${count}" -ge "${RESCUE_THRESHOLD}" ]; then
+    mkdir -p "${RUN_DIR}" 2>/dev/null || true
+    : > "${RESCUE_FLAG}"
+    log "tentative ${count}: bureau NON demarre, bascule en mode secours (tty1)"
+  else
+    log "tentative ${count} sur ${RESCUE_THRESHOLD} avant mode secours"
+  fi
+  return 0
+}
+
+# Vrai des qu'une session de type graphique est active pour un utilisateur.
+# On interroge logind et non un processus: c'est la seule source qui dise
+# « une session est ouverte ET active », indepandamment du bureau installe
+# (Plasma aujourd'hui, GNOME apres un changement de bureau).
+graphical_session_active() {
+  ids=$(loginctl list-sessions --no-legend 2>/dev/null | awk '{print $1}')
+  [ -n "${ids}" ] || return 1
+  for id in ${ids}; do
+    type=$(loginctl show-session "${id}" -p Type --value 2>/dev/null)
+    state=$(loginctl show-session "${id}" -p State --value 2>/dev/null)
+    case "${type}" in
+      wayland|x11)
+        [ "${state}" = "active" ] && return 0
+        ;;
+    esac
+  done
+  return 1
+}
+
+cmd_watch() {
+  if is_live; then log "medium live: rien a surveiller"; return 0; fi
+  if ! wants_graphical; then return 0; fi
+
+  waited=0
+  while [ "${waited}" -lt "${WATCH_TIMEOUT}" ]; do
+    if graphical_session_active; then
+      write_count 0
+      rm -f "${RESCUE_FLAG}" 2>/dev/null || true
+      log "session graphique confirmee apres ${waited} s: compteur remis a zero"
+      return 0
+    fi
+    sleep 3
+    waited=$((waited + 3))
+  done
+
+  # Volontairement un code de RETOUR 0 malgre l'echec: une unite en echec
+  # ferait passer le systeme en « degraded » a chaque demarrage console
+  # legitime, et la page Sante du centre de controle crierait pour rien. Le
+  # compteur, lui, a deja fait son travail: le prochain demarrage basculera.
+  log "AUCUNE session graphique apres ${WATCH_TIMEOUT} s"
+  log "le prochain demarrage proposera la console de secours (auxinux-rescue)"
+  return 0
+}
+
+cmd_reset() {
+  write_count 0
+  rm -f "${RESCUE_FLAG}" 2>/dev/null || true
+  log "compteur remis a zero"
+}
+
+cmd_status() {
+  count=$(read_count)
+  echo "failures=${count}"
+  echo "rescue_threshold=${RESCUE_THRESHOLD}"
+  echo "auto_threshold=${AUTO_THRESHOLD}"
+  if [ -e "${RESCUE_FLAG}" ]; then echo "state=rescue"; else echo "state=normal"; fi
+  if is_live; then echo "live=yes"; else echo "live=no"; fi
+}
+
+case "${1:-}" in
+  arm)    cmd_arm ;;
+  watch)  cmd_watch ;;
+  reset)  cmd_reset ;;
+  status) cmd_status ;;
+  *)
+    echo "usage: auxinux-boot-sentinel arm|watch|reset|status" >&2
+    exit 64
+    ;;
+esac

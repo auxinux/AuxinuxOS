@@ -1,0 +1,19 @@
+# Couche BUREAUTIQUE.
+#
+# LibreOffice est installe par composant et non via le metapaquet
+# `libreoffice`, qui ramene Base, Draw, Math et la pile Java pour une suite de
+# bureau courante. libreoffice-kf6 donne les boites de dialogue et le theme de
+# Plasma: sans lui, LibreOffice ouvre des dialogues GTK au milieu du bureau.
+libreoffice-writer
+libreoffice-calc
+libreoffice-impress
+libreoffice-kf6
+libreoffice-l10n-fr
+libreoffice-help-fr
+libreoffice-help-en-us
+
+thunderbird
+thunderbird-l10n-fr
+thunderbird-l10n-en-ca
+
+simple-scan

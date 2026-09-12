@@ -68,6 +68,26 @@ refuse_package() {
   fi
 }
 
+refuse_file() {
+  local path="$1" why="$2"
+  if [[ -e "${ROOTFS}${path}" ]]; then
+    fail "${path} present alors qu'il doit etre absent — ${why}"
+  else
+    ok "${path} absent"
+  fi
+}
+
+need_setting() {
+  local path="$1" pattern="$2" why="$3"
+  if [[ ! -f "${ROOTFS}${path}" ]]; then
+    fail "${path} — ${why}"
+  elif grep -qE "${pattern}" "${ROOTFS}${path}"; then
+    ok "${path}: ${pattern}"
+  else
+    fail "${path}: '${pattern}' absent — ${why}"
+  fi
+}
+
 echo "==> Verification du rootfs"
 
 echo "-- Restauration systeme"
@@ -142,47 +162,78 @@ need_exec /usr/lib/auxinux/wrappers/apt-wrapper "la politique APT ne serait pas 
 
 echo "-- Assistants graphiques"
 need_package zenity "les assistants (accueil live, .exe) n'afficheraient aucune fenetre"
+need_package kdialog "boites de dialogue natives pour les scripts KDE"
 need_exec /usr/bin/auxinux-welcome "premier ecran de la session live"
 need_exec /usr/bin/auxinux-windows-wizard "ouverture des fichiers .exe"
 need_exec /usr/bin/auxinux-windows-setup "installation de la couche Windows et jeux"
 
-echo "-- Bureau et session"
-need_exec /usr/bin/cosmic-session "le bureau ne demarrerait pas"
-need_exec /usr/bin/cosmic-comp "aucun compositeur"
-need_file /etc/greetd/cosmic-greeter.toml "aucun gestionnaire de session"
-need_package login "PAM sans /etc/pam.d/login: greetd boucle et l'ecran reste noir"
-need_exec /usr/sbin/greetd "cosmic-greeter.service lance greetd: sans lui, aucune connexion possible"
-need_exec /usr/bin/cosmic-greeter "l'ecran de connexion du systeme installe"
-need_exec /usr/bin/cosmic-greeter-daemon "le greeter ne pourrait pas lister les comptes"
-need_file /etc/pam.d/cosmic-greeter "greetd utilise ce service PAM ([general] service): absent, il refuse d'ouvrir la session"
+echo "-- Bureau et session (KDE Plasma / Wayland)"
+need_exec /usr/bin/startplasma-wayland "le bureau ne demarrerait pas"
+need_exec /usr/bin/plasmashell "aucun panneau ni bureau"
+need_exec /usr/bin/kwin_wayland "aucun compositeur Wayland"
+need_exec /usr/bin/systemsettings "le centre de controle renvoie vers les reglages de Plasma"
+need_package libgl1-mesa-dri "serveur graphique SANS pilote DRI: KWin ne demarre pas (ce paquet n'est qu'un Recommends)"
+need_package login "PAM sans /etc/pam.d/login: la pile d'authentification du greeter echoue"
 
-# La commande de [default_session] doit exister. C'est la seule ligne qui
-# separe un ecran de connexion d'un ECRAN NOIR DEFINITIF: si greetd ne peut pas
-# lancer le greeter, il echoue cinq fois, systemd abandonne
-# (start-limit-hit), et comme cosmic-greeter.service declare
-# Conflicts=getty@tty1.service, plus rien ne reprend la console. Panne
-# reproduite en VM le 2026-09-09.
-GREETD_CONF="${ROOTFS}/etc/greetd/cosmic-greeter.toml"
-if [[ -f "${GREETD_CONF}" ]]; then
-  greeter_cmd="$(awk -F'"' '/^command[[:space:]]*=/{print $2}' "${GREETD_CONF}" | tail -n1)"
-  greeter_bin="${greeter_cmd%% *}"
-  case "${greeter_bin}" in
-    /*) greeter_path="${greeter_bin}" ;;
-    "") greeter_path="" ;;
-    *)  greeter_path="/usr/bin/${greeter_bin}" ;;
-  esac
-  if [[ -n "${greeter_path}" && -x "${ROOTFS}${greeter_path}" ]]; then
-    ok "greetd: commande de session '${greeter_bin}' presente"
+echo "-- Ecran de connexion (SDDM)"
+need_exec /usr/bin/sddm "aucun gestionnaire de session: le systeme s'arrete sur une console"
+need_file /etc/pam.d/sddm "SDDM refuse d'ouvrir une session sans son service PAM"
+need_file /etc/pam.d/sddm-autologin "l'autologin du live echouerait faute de service PAM"
+need_file /etc/sddm.conf.d/10-auxinux.conf "theme et bornes d'UID de l'ecran de connexion"
+need_file /etc/systemd/system/display-manager.service "graphical.target n'aurait aucun gestionnaire d'affichage a demarrer"
+need_file /etc/systemd/system/sddm.service.d/50-auxinux-fallback.conf \
+  "aucune console de secours si l'ecran de connexion echoue, et le mode secours ne pourrait pas prendre la main"
+
+# LE controle qui compte: la session nommee dans l'autologin doit EXISTER.
+# Une valeur erronee (« plasma-wayland », « plasmawayland », un nom change en
+# amont) ne produit aucune erreur de construction: le live demarre, SDDM tente
+# d'ouvrir une session inexistante, echoue en boucle, et l'utilisateur voit un
+# ecran noir. C'est la meme famille de panne que le greeter de la 0.1.
+AUTOLOGIN="${ROOTFS}/etc/sddm.conf.d/90-auxinux-live-autologin.conf"
+if [[ ! -f "${AUTOLOGIN}" ]]; then
+  fail "/etc/sddm.conf.d/90-auxinux-live-autologin.conf — le live demanderait un mot de passe inconnu de l'utilisateur"
+else
+  ok "/etc/sddm.conf.d/90-auxinux-live-autologin.conf"
+  session="$(awk -F= '/^Session=/{gsub(/[[:space:]]/,"",$2); print $2}' "${AUTOLOGIN}" | tail -n1)"
+  session="${session%.desktop}"
+  if [[ -z "${session}" ]]; then
+    fail "autologin live: aucune cle Session= — SDDM ouvrirait sa session par defaut, pas forcement Wayland"
+  elif [[ -f "${ROOTFS}/usr/share/wayland-sessions/${session}.desktop" ]]; then
+    ok "autologin live: session Wayland '${session}' presente"
+  elif [[ -f "${ROOTFS}/usr/share/xsessions/${session}.desktop" ]]; then
+    fail "autologin live: '${session}' n'existe qu'en X11 — tout le live basculerait en X11 sans que rien ne le signale"
   else
-    fail "greetd: commande de session '${greeter_bin:-absente}' introuvable — l'ecran resterait noir sans console"
+    fail "autologin live: session '${session}' INTROUVABLE — ecran noir au demarrage du live"
+  fi
+  autologin_user="$(awk -F= '/^User=/{gsub(/[[:space:]]/,"",$2); print $2}' "${AUTOLOGIN}" | tail -n1)"
+  if [[ "${autologin_user}" == "auxinux" ]]; then
+    ok "autologin live: compte 'auxinux'"
+  else
+    fail "autologin live: compte '${autologin_user:-absent}' au lieu de 'auxinux'"
   fi
 fi
 
-# Sans ce drop-in, un greeter qui echoue laisse un ecran 100 % noir, sans
-# console de secours ni message: c'est le symptome « le systeme ne finit
-# jamais de demarrer ».
-need_file /etc/systemd/system/cosmic-greeter.service.d/50-auxinux-fallback.conf \
-  "aucune console de secours si l'ecran de connexion echoue"
+echo "-- Protection au demarrage"
+need_exec /usr/lib/auxinux/auxinux-boot-sentinel "rien ne detecterait un demarrage qui n'aboutit pas au bureau"
+need_exec /usr/lib/auxinux/auxinux-rescue "aucune console de secours ni restauration automatique"
+for unit in auxinux-boot-arm.service auxinux-boot-sentinel.service auxinux-rescue.service; do
+  need_file "/etc/systemd/system/${unit}" "unite de la protection au demarrage absente"
+done
+
+echo "-- Profil d'usage"
+need_exec /usr/bin/auxinux-profile "aucun reglage par usage (bureautique / multimedia / jeu)"
+need_file /etc/auxinux/profile "auxinux-profile.service ne demarrerait pas (ConditionPathExists)"
+need_file /etc/systemd/system/auxinux-profile.service "le profil serait perdu a chaque redemarrage"
+
+echo "-- Vie privee (loi 25)"
+need_setting /etc/xdg/PlasmaUserFeedback '^FeedbackLevel=0' \
+  "la telemetrie de Plasma ne serait pas explicitement neutralisee"
+need_setting /etc/xdg/kdeglobals 'StatisticsCollectionMode=NoTelemetry' \
+  "les applications KDE qui lisent leur propre section pourraient collecter"
+need_setting /etc/xdg/baloofilerc '^Indexing-Enabled=false' \
+  "l'indexeur copierait le texte de tous les documents dans une base non chiffree"
+need_setting /etc/xdg/kscreenlockerrc '^Autolock=true' \
+  "un poste non verrouille est le premier trou de confidentialite"
 
 echo "-- Demarrage observable"
 # `quiet` masque noyau ET systemd; sans plymouth (absent de l'image) `splash`
@@ -221,11 +272,19 @@ need_exec /usr/lib/auxinux/apt-real/apt-get "le vrai binaire APT est introuvable
 echo "-- Ce qui doit avoir disparu"
 refuse_package q4wine "interface abandonnee en amont, remplacee par Bottles"
 refuse_package packagekit "chemin vers dpkg parallele, retire de l'image"
-if [[ -e "${ROOTFS}/etc/apt/sources.list.d/obs-cosmic.sources" ]]; then
-  fail "le depot OBS COSMIC est reste active sur le systeme livre"
-else
-  ok "depot OBS COSMIC retire"
-fi
+refuse_file /etc/apt/sources.list.d/obs-cosmic.sources "depot tiers OBS, abandonne avec COSMIC"
+# Un rootfs REUTILISE (--reuse-rootfs) vient peut-etre d'une image COSMIC. Ces
+# fichiers n'appartiennent a aucun paquet (ils etaient copies par
+# build-cosmic-source.sh): dpkg ne les enlevera jamais, et un bureau fantome
+# resterait selectionnable a l'ecran de connexion.
+refuse_file /usr/bin/cosmic-session "reste d'une image COSMIC: relancer la construction sans --reuse-rootfs"
+refuse_file /usr/bin/cosmic-comp "reste d'une image COSMIC: relancer la construction sans --reuse-rootfs"
+refuse_file /etc/greetd/cosmic-greeter.toml "reste de l'ancien gestionnaire de session"
+# Ecartes par arbitrage: Discover ramene PackageKit (un second chemin vers
+# dpkg, deja retire) et duplique le centre de controle; plasma-welcome va
+# chercher du contenu en ligne.
+refuse_package plasma-discover "double du centre de controle et ramene PackageKit"
+refuse_package plasma-welcome "recupere du contenu en ligne au premier demarrage"
 
 echo "-- Compte live"
 live_uid="$(sudo chroot "${ROOTFS}" id -u auxinux 2>/dev/null || true)"

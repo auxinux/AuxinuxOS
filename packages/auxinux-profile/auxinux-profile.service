@@ -1,0 +1,19 @@
+# Reapplique le profil d'usage a chaque demarrage.
+#
+# Les fichiers sysctl et limits survivent seuls a un redemarrage, mais PAS le
+# profil de power-profiles-daemon, qui revient a « balanced » a chaque
+# demarrage. Sans cette unite, le profil jeu se perdait au premier redemarrage
+# et rien ne le signalait.
+[Unit]
+Description=AuxiNuxOS - application du profil d'usage
+After=power-profiles-daemon.service
+Wants=power-profiles-daemon.service
+ConditionPathExists=/etc/auxinux/profile
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/auxinux-profile apply
+
+[Install]
+WantedBy=multi-user.target

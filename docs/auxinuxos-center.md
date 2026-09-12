@@ -11,18 +11,32 @@ Centre de contrôle d'AuxiNuxOS, en Rust + libcosmic, intégré à l'ISO d'AuxiN
 4. **Restauration** : revenir à un état antérieur depuis un instantané BTRFS.
 5. Gestion des **sources** : activer/désactiver les dépôts AuxiNux et autres,
    ajouter des dépôts (Docker, etc.), gérer les remotes Flatpak.
-6. **Configuration** : politique APT maison (`auxi`), raccourcis COSMIC.
+6. **Configuration** : politique APT maison (`auxi`), accès aux réglages du bureau.
 
 ## Stack (0.2)
 
 | Couche | Choix |
 |--------|-------|
-| UI | **libcosmic** (Iced), toolkit natif du bureau COSMIC |
+| UI | **libcosmic** (Iced) — voir la note ci-dessous depuis le retour à Plasma |
 | Asynchrone | `tokio` + `spawn_blocking`, isolé dans `task.rs` |
 | Logique | Rust : `apps`, `sources`, `system`, `health`, `recovery`, `updates` |
 | Types partagés | `model.rs` — un identifiant **par source** |
 | Back-ends | `flatpak`, CLI `auxi`, `apt-cache`, `snapper` ; privilèges via `pkexec`/polkit |
 | Infos système | crate `sysinfo` + `lspci` |
+
+### Note 0.2.0 : libcosmic sur un bureau Plasma
+
+Le bureau est KDE Plasma depuis le 2026-09-12. Le Center reste en libcosmic pour
+cette version : l'interface existe, elle fonctionne sous n'importe quel
+compositeur Wayland (libcosmic est iced + winit + wgpu, pas COSMIC), et la
+réécrire coûterait 1 575 lignes d'interface contre **trois lignes** à changer
+pour la garder. Le prix payé est visuel : l'application ne suit pas le thème
+Breeze.
+
+Le backend étant séparé par la feature `gui`, une interface Kirigami/QML pourra
+s'y brancher sans toucher à la logique — en passant par l'interface
+`auxinux-center --cli` (JSON) plutôt que par CXX-Qt, qui était le point
+douloureux de la 0.1.
 
 Kirigami/CXX-Qt a été abandonné en 0.2 : une fenêtre Qt/KDE au milieu d'un
 bureau en Iced ne s'intègre pas, et la pile KF6 pesait dans l'ISO pour une
@@ -64,7 +78,7 @@ l'identifiant réellement visé sous chaque fiche.
 | Santé | disque, mémoire, services en échec, mises à jour, restauration, démarrage |
 | Restauration | instantanés BTRFS : lister, créer, revenir en arrière |
 | Sources | dépôts APT, dépôts connus, remotes Flatpak |
-| Réglages | politique APT et accès aux réglages COSMIC |
+| Réglages | politique APT et accès aux réglages du bureau |
 
 La section Santé donne un **conseil en français courant** pour chaque anomalie.
 Afficher « swap : 94 % » sans dire quoi faire ne sert qu'à ceux qui savaient

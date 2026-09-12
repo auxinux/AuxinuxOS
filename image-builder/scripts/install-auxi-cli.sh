@@ -11,6 +11,24 @@ sudo install -D -m 0755 "${PROJECT_DIR}/packages/windows-support/auxinux-windows
 sudo install -D -m 0755 "${PROJECT_DIR}/packages/welcome/auxinux-welcome" "${ROOTFS}/usr/bin/auxinux-welcome"
 sudo install -D -m 0755 "${PROJECT_DIR}/packages/welcome/auxinux-install-launcher" "${ROOTFS}/usr/lib/auxinux/auxinux-install-launcher"
 
+# Protection au demarrage: compteur, confirmation de session, console de
+# secours. Les unites sont installees dans /etc/systemd/system (et non
+# /usr/lib) parce qu'elles n'appartiennent a aucun paquet Debian: rien ne
+# viendrait les restaurer si une mise a jour les ecrasait.
+sudo install -D -m 0755 "${PROJECT_DIR}/packages/boot-sentinel/auxinux-boot-sentinel" "${ROOTFS}/usr/lib/auxinux/auxinux-boot-sentinel"
+sudo install -D -m 0755 "${PROJECT_DIR}/packages/boot-sentinel/auxinux-rescue" "${ROOTFS}/usr/lib/auxinux/auxinux-rescue"
+for unit in auxinux-boot-arm.service auxinux-boot-sentinel.service auxinux-rescue.service; do
+  sudo install -D -m 0644 "${PROJECT_DIR}/packages/boot-sentinel/${unit}" "${ROOTFS}/etc/systemd/system/${unit}"
+done
+
+# Profil d'usage (bureautique / multimedia / jeu).
+sudo install -D -m 0755 "${PROJECT_DIR}/packages/auxinux-profile/auxinux-profile" "${ROOTFS}/usr/bin/auxinux-profile"
+sudo install -D -m 0644 "${PROJECT_DIR}/packages/auxinux-profile/auxinux-profile.service" "${ROOTFS}/etc/systemd/system/auxinux-profile.service"
+# Profil par defaut. Sans ce fichier, auxinux-profile.service ne demarre pas
+# (ConditionPathExists) et aucun reglage d'usage ne serait applique.
+sudo install -d -m 0755 "${ROOTFS}/etc/auxinux"
+printf 'bureautique\n' | sudo tee "${ROOTFS}/etc/auxinux/profile" >/dev/null
+
 # Hook d'instantane branche sur dpkg (voir etc/apt/apt.conf.d/80auxinux-snapshot).
 sudo install -D -m 0755 "${PROJECT_DIR}/packages/auxi-cli/apt-snapshot-hook" "${ROOTFS}/usr/lib/auxinux/apt-snapshot-hook"
 

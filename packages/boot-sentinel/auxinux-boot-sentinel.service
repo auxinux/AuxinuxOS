@@ -1,0 +1,20 @@
+# Confirmation qu'une session graphique s'est REELLEMENT ouverte. C'est la
+# seule chose qui remet le compteur a zero: demarrer sddm ne prouve rien, il
+# peut tourner en boucle sur un ecran noir.
+[Unit]
+Description=AuxiNuxOS - confirmation d'une session graphique
+Documentation=file:/usr/share/doc/auxinux/boot-sentinel.md
+ConditionKernelCommandLine=!auxinux.nosentinel
+After=graphical.target systemd-logind.service
+Wants=systemd-logind.service
+
+[Service]
+# Type=simple et non oneshot: le script attend jusqu'a 180 s. En oneshot, il
+# occuperait une place dans la file de travaux de systemd tout ce temps.
+Type=simple
+ExecStart=/usr/lib/auxinux/auxinux-boot-sentinel watch
+# Une seule tentative: c'est un observateur, pas un service a maintenir en vie.
+Restart=no
+
+[Install]
+WantedBy=graphical.target

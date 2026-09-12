@@ -1,11 +1,14 @@
+# Langue: francais et anglais canadiens.
+#
+# Uniquement ce qui ne depend d'AUCUNE application: dictionnaires, cesure,
+# synonymes. Les traductions d'applications vivent dans la couche qui installe
+# l'application (libreoffice-l10n-fr et thunderbird-l10n-fr sont dans
+# layer-bureautique.txt). Les garder ici les installait meme sur une
+# installation sans suite bureautique, et faisait de ce fichier une seconde
+# source de verite pour le contenu des couches.
 hunspell-fr
 hunspell-en-ca
 hyphen-fr
 hyphen-en-us
 mythes-fr
 mythes-en-us
-libreoffice-l10n-fr
-libreoffice-help-fr
-libreoffice-help-en-us
-thunderbird-l10n-fr
-thunderbird-l10n-en-ca

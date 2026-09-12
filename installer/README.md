@@ -2,10 +2,17 @@
 
 Installateur graphique et backend pour l'installation classique d'AuxiNuxOS.
 
-## Beta 0.1
+## 0.2.0 : Calamares, en attendant l'installateur maison
 
-La beta conventionnelle utilise Calamares comme base d'installation classique.
-Le live expose l'icone `Install AuxiNuxOS`.
+L'arbitrage du 2026-09-12 retient un **installateur maison** (contrôle matériel
+bloquant, choix de la langue, du clavier et du fuseau, disque, type
+d'installation). Il n'est **pas** dans la 0.2.0 : écrire un partitionneur et un
+poseur d'amorçage depuis zéro est un chantier de plusieurs semaines, et livrer
+une ISO avec un installateur à moitié écrit serait pire que livrer Calamares,
+qui fonctionne.
+
+La 0.2.0 conserve donc Calamares, reconfiguré pour Plasma. Le live expose
+l'icone `Install AuxiNuxOS`.
 
 L'installation finale ne doit pas conserver cette icone. Le script
 `post-install-cleanup.sh` supprime les artefacts live dans la cible installee.
