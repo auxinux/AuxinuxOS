@@ -249,6 +249,19 @@ need_setting /etc/xdg/baloofilerc '^Indexing-Enabled=false' \
 need_setting /etc/xdg/kscreenlockerrc '^Autolock=true' \
   "un poste non verrouille est le premier trou de confidentialite"
 
+echo "-- Fluidite"
+# Controle ajoute apres coup: `systemctl enable systemd-oomd.service` echouait
+# avec un simple avertissement parce que le PAQUET n'etait pas installe (dans
+# Debian 13, systemd-oomd est separe de systemd). L'image promettait donc une
+# protection contre le gel memoire qu'elle n'avait pas, et seul le journal de
+# construction le disait -- noye dans 20 000 lignes.
+need_package systemd-oomd "gel total garanti quand la memoire sature: l'unite n'existe meme pas"
+need_file /usr/lib/systemd/system/systemd-oomd.service "le paquet est la mais l'unite manque"
+need_file /etc/systemd/system/multi-user.target.wants/systemd-oomd.service \
+  "systemd-oomd installe mais NON ACTIVE: il ne protegera rien"
+need_package zram-tools "pas d'echange compresse en RAM"
+need_file /etc/systemd/system/multi-user.target.wants/zramswap.service "zram installe mais non active"
+
 echo "-- Demarrage observable"
 # `quiet` masque noyau ET systemd; sans plymouth (absent de l'image) `splash`
 # est inerte. Les deux reunis transforment n'importe quelle panne de session en

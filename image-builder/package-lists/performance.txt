@@ -5,8 +5,17 @@
 # pages inactives sont compressees en memoire (ratio ~3:1 en zstd).
 zram-tools
 
-# systemd-oomd fait partie du paquet systemd, deja present: aucun paquet a
-# ajouter. Il est configure et active par build-image.sh. Son role est
-# d'eviter le GEL TOTAL quand la memoire sature -- le systeme tue l'application
-# fautive au lieu de devenir inutilisable pendant plusieurs minutes. C'est le
-# defaut de fluidite le plus violent qu'un utilisateur puisse rencontrer.
+# systemd-oomd evite le GEL TOTAL quand la memoire sature: le systeme tue
+# l'application fautive au lieu de devenir inutilisable pendant plusieurs
+# minutes. C'est le defaut de fluidite le plus violent qu'un utilisateur
+# puisse rencontrer, et le plus invisible dans les mesures.
+#
+# CE FICHIER AFFIRMAIT LE CONTRAIRE: « systemd-oomd fait partie du paquet
+# systemd, deja present: aucun paquet a ajouter ». C'est faux dans Debian 13,
+# ou c'est un paquet BINAIRE SEPARE. Consequence, constatee sur la premiere
+# ISO 0.2.0: l'unite n'existait pas, `systemctl enable systemd-oomd.service`
+# echouait avec un simple AVERTISSEMENT dans le journal de construction, les
+# deux fichiers de configuration des overlays (/etc/systemd/oomd.conf.d et le
+# drop-in user@.service) reglaient un demon absent, et la documentation
+# promettait une protection que l'image n'avait pas.
+systemd-oomd
