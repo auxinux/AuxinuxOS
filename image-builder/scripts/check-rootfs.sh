@@ -31,7 +31,12 @@ ok() {
 
 need_file() {
   local path="$1" why="$2"
-  if [[ -e "${ROOTFS}${path}" ]]; then ok "${path}"; else fail "${path} — ${why}"; fi
+  # `-e` suit les liens symboliques: pour display-manager.service, qui pointe
+  # vers /usr/lib/systemd/system/sddm.service DANS LE ROOTFS, il resoudrait la
+  # cible sur l'HOTE de build -- ou sddm n'est pas installe. Le lien correct
+  # serait donc declare manquant. `-L` rattrape ce cas.
+  if [[ -e "${ROOTFS}${path}" || -L "${ROOTFS}${path}" ]]; then ok "${path}"
+  else fail "${path} — ${why}"; fi
 }
 
 need_exec() {
