@@ -125,6 +125,7 @@ pub enum Message {
 
     // Reglages
     ToggleAptPolicy(bool),
+    SetProfile(String),
     OpenSystemSettings,
     OpenUrl(String),
 
@@ -171,6 +172,7 @@ pub struct App {
 
     // Reglages
     apt_direct: bool,
+    profile: crate::profile::ProfileState,
 
     /// Derniere operation terminee, affichee en bandeau.
     toast: Option<ActionResult>,
@@ -314,6 +316,7 @@ impl Application for App {
             custom_body: String::new(),
             custom_key_url: String::new(),
             apt_direct: crate::sources::apt_wrapper_enabled(),
+            profile: crate::profile::state(),
             toast: None,
             busy: 0,
         };
@@ -560,6 +563,10 @@ impl Application for App {
                 self.start();
                 background(move || crate::sources::set_apt_wrapper(enabled), Message::Done)
             }
+            Message::SetProfile(name) => {
+                self.start();
+                background(move || crate::profile::set(&name), Message::Done)
+            }
             Message::OpenSystemSettings => {
                 crate::system::open_system_settings();
                 Task::none()
@@ -576,6 +583,10 @@ impl Application for App {
                 // l'utilisateur annule l'invite polkit, le bouton doit revenir
                 // en arriere au lieu de mentir.
                 self.apt_direct = crate::sources::apt_wrapper_enabled();
+                // Meme raison pour le profil d'usage: si l'invite polkit est
+                // annulee, la carte doit afficher le profil REEL, pas celui
+                // qu'on vient de cliquer.
+                self.profile = crate::profile::state();
                 self.toast = Some(result);
                 self.reload_current_page()
             }

@@ -13,6 +13,7 @@
 //!   auxinux-center --cli health
 //!   auxinux-center --cli snapshots
 //!   auxinux-center --cli sysinfo advanced
+//!   auxinux-center --cli profile
 
 use serde::Serialize;
 
@@ -52,11 +53,13 @@ pub fn run(args: &[String]) -> i32 {
         "sysinfo" => json(&crate::system::info(a(1) == "advanced")),
         "health" => json(&crate::health::report()),
         "snapshots" => json(&crate::recovery::state()),
+        "profile" => json(&crate::profile::state()),
+        "set-profile" => json(&crate::profile::set(a(1))),
         _ => {
             eprintln!(
                 "commandes: search|installed|featured|updates|install|remove|update|\n\
                  details|status|sources|toggle|presets|add-preset|remotes|\n\
-                 apt-status|sysinfo|health|snapshots"
+                 apt-status|sysinfo|health|snapshots|profile|set-profile"
             );
             return 64;
         }

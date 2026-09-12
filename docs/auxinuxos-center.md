@@ -21,7 +21,7 @@ Centre de contrôle d'AuxiNuxOS, en Rust + libcosmic, intégré à l'ISO d'AuxiN
 | Asynchrone | `tokio` + `spawn_blocking`, isolé dans `task.rs` |
 | Logique | Rust : `apps`, `sources`, `system`, `health`, `recovery`, `updates` |
 | Types partagés | `model.rs` — un identifiant **par source** |
-| Back-ends | `flatpak`, CLI `auxi`, `apt-cache`, `snapper` ; privilèges via `pkexec`/polkit |
+| Back-ends | `flatpak`, CLI `auxi`, `apt-cache`, `snapper`, `auxinux-profile` ; privilèges via `pkexec`/polkit |
 | Infos système | crate `sysinfo` + `lspci` |
 
 ### Note 0.2.0 : libcosmic sur un bureau Plasma
@@ -78,7 +78,7 @@ l'identifiant réellement visé sous chaque fiche.
 | Santé | disque, mémoire, services en échec, mises à jour, restauration, démarrage |
 | Restauration | instantanés BTRFS : lister, créer, revenir en arrière |
 | Sources | dépôts APT, dépôts connus, remotes Flatpak |
-| Réglages | politique APT et accès aux réglages du bureau |
+| Réglages | politique APT, **profil d'usage** (bureautique / multimédia / jeu) et accès aux réglages du bureau |
 
 La section Santé donne un **conseil en français courant** pour chaque anomalie.
 Afficher « swap : 94 % » sans dire quoi faire ne sert qu'à ceux qui savaient

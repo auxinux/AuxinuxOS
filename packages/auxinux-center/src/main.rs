@@ -11,6 +11,7 @@ mod apps;
 mod cli;
 mod health;
 mod model;
+mod profile;
 mod recovery;
 mod sources;
 mod system;

@@ -46,6 +46,49 @@ pub fn view(app: &App) -> Element<'_, Message> {
     .padding(14)
     .width(iced::Length::Fill);
 
+    // --- Profil d'usage -----------------------------------------------------
+    // Les trois usages annonces par AuxiNuxOS. Le Center n'ecrit rien lui-meme:
+    // il appelle `auxinux-profile`, seul proprietaire de ces reglages.
+    let mut profile_col = widget::Column::new()
+        .spacing(8)
+        .push(widget::text::heading("Profil d'usage"));
+
+    if app.profile.available {
+        let (label, effect) = crate::profile::describe(&app.profile.current);
+        profile_col = profile_col
+            .push(widget::text::caption(format!(
+                "Actuel: {label} — {effect}"
+            )))
+            .push(widget::text::caption(format!(
+                "Alimentation {}, quantum audio {} echantillons, rtprio {}.",
+                app.profile.power, app.profile.quantum, app.profile.rtprio
+            )));
+
+        let mut row = widget::Row::new().spacing(8);
+        for name in crate::profile::PROFILES {
+            let (label, _) = crate::profile::describe(name);
+            // Le profil courant reste affiche mais non cliquable: reappliquer
+            // le meme profil n'apporte rien et couterait une invite polkit.
+            let button = if name == app.profile.current.as_str() {
+                widget::button::suggested(label)
+            } else {
+                widget::button::standard(label).on_press(Message::SetProfile(name.to_string()))
+            };
+            row = row.push(button);
+        }
+        profile_col = profile_col.push(row);
+    } else {
+        profile_col = profile_col.push(widget::text::caption(
+            "« auxinux-profile » est introuvable sur ce systeme: les profils \
+             d'usage ne sont pas disponibles.",
+        ));
+    }
+
+    let profile = widget::container(profile_col)
+        .class(cosmic::theme::Container::Card)
+        .padding(14)
+        .width(iced::Length::Fill);
+
     let desktop = widget::container(
         widget::Column::new()
             .spacing(8)
@@ -89,6 +132,7 @@ pub fn view(app: &App) -> Element<'_, Message> {
                 widget::Column::new()
                     .spacing(12)
                     .push(apt)
+                    .push(profile)
                     .push(desktop)
                     .push(about),
             )

@@ -80,5 +80,8 @@ l'installateur maison, qui n'existe pas encore.
 - Couvert par `tests/test-profile.sh` (logique et nettoyage entre profils).
   **Aucune mesure de performance n'a été faite** : les valeurs sont choisies sur
   des mécanismes connus, pas sur un banc d'essai maison.
-- Le centre de contrôle ne propose pas encore de bouton pour changer de profil ;
-  `auxinux-profile status` est prévu pour lui.
+- Le centre de contrôle propose la bascule dans **Réglages → Profil d'usage**
+  (il appelle `auxinux-profile` via `pkexec`, sans réimplémenter les réglages).
+  Cette carte **n'a jamais été vue à l'écran** : elle compile, sa logique est
+  testée, mais l'interface du Center n'a encore jamais été lancée
+  graphiquement.
