@@ -20,10 +20,13 @@ if [ "${AUTO}" = "0" ] && [ -x /usr/lib/auxinux/auxinux-boot-sentinel ]; then
   _st=$(/usr/lib/auxinux/auxinux-boot-sentinel status 2>/dev/null)
   _f=$(printf '%s\n' "${_st}" | sed -n 's/^failures=//p')
   _a=$(printf '%s\n' "${_st}" | sed -n 's/^auto_threshold=//p')
-  case "${_f}${_a}" in
-    ''|*[!0-9]*) : ;;
-    *) [ "${_f}" -ge "${_a}" ] && AUTO=1 ;;
-  esac
+  # Les deux valeurs sont validees SEPAREMENT: concatenees, une valeur vide
+  # passait le test numerique grace a l'autre, et la comparaison suivante
+  # echouait ensuite sur « integer expression expected ».
+  _ok=1
+  case "${_f}" in ''|*[!0-9]*) _ok=0 ;; esac
+  case "${_a}" in ''|*[!0-9]*) _ok=0 ;; esac
+  if [ "${_ok}" = "1" ] && [ "${_f}" -ge "${_a}" ]; then AUTO=1; fi
 fi
 
 say() { printf '%s\n' "$1"; printf '%s\n' "$2"; }
