@@ -131,11 +131,32 @@ cmd_watch() {
     waited=$((waited + 3))
   done
 
+  # PAS DE SESSION N'EST PAS FORCEMENT UNE PANNE.
+  #
+  # Quelqu'un qui allume sa machine et s'en va laisse l'ecran de connexion
+  # ouvert sans jamais ouvrir de session. Deux demarrages comme celui-la
+  # auraient suffi a envoyer la machine en mode secours, puis a lui proposer
+  # une restauration dont elle n'avait aucun besoin -- et au troisieme, a la
+  # faire sans rien demander.
+  #
+  # Le signe qui distingue les deux cas est l'etat du gestionnaire d'affichage:
+  # dans la panne du 2026-09-09 il finissait en « failed (start-limit-hit) »,
+  # alors qu'un ecran de connexion simplement inutilise est « active ».
+  dm_state="$(systemctl is-active display-manager.service 2>/dev/null)"
+  if [ "${dm_state}" = "active" ]; then
+    write_count 0
+    rm -f "${RESCUE_FLAG}" 2>/dev/null || true
+    log "aucune session ouverte en ${WATCH_TIMEOUT} s, mais l'ecran de connexion"
+    log "fonctionne (display-manager actif): ce n'est pas une panne"
+    return 0
+  fi
+
   # Volontairement un code de RETOUR 0 malgre l'echec: une unite en echec
   # ferait passer le systeme en « degraded » a chaque demarrage console
   # legitime, et la page Sante du centre de controle crierait pour rien. Le
   # compteur, lui, a deja fait son travail: le prochain demarrage basculera.
   log "AUCUNE session graphique apres ${WATCH_TIMEOUT} s"
+  log "etat du gestionnaire d'affichage: ${dm_state:-inconnu}"
   log "le prochain demarrage proposera la console de secours (auxinux-rescue)"
   return 0
 }

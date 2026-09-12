@@ -26,5 +26,12 @@ Restart=no
 # L'utilisateur peut mettre des minutes a lire et decider.
 TimeoutStartSec=infinity
 
+# Quoi qu'il arrive ensuite, une console doit revenir. Sans ces deux lignes,
+# l'utilisateur qui choisit « interpreteur de commandes » puis quitte le shell
+# se retrouve sur un tty1 mort: ce service avait arrete getty@tty1 (Conflicts=)
+# et rien ne le relancait. C'est la meme mecanique que la panne d'origine.
+OnSuccess=getty@tty1.service
+OnFailure=getty@tty1.service
+
 [Install]
 WantedBy=graphical.target

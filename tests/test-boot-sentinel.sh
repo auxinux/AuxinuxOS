@@ -38,6 +38,7 @@ mkdir -p "${STUBS}"
 cat > "${STUBS}/systemctl" <<'STUB'
 #!/bin/sh
 [ "$1" = "get-default" ] && { cat "${STUB_DEFAULT_TARGET_FILE}"; exit 0; }
+[ "$1" = "is-active" ] && { cat "${STUB_DM_STATE_FILE}"; exit 0; }
 exit 0
 STUB
 cat > "${STUBS}/loginctl" <<'STUB'
@@ -61,6 +62,7 @@ export PATH="${STUBS}:${PATH}"
 export STUB_DEFAULT_TARGET_FILE="${WORK}/default-target"
 export STUB_SESSIONS_FILE="${WORK}/sessions"
 export STUB_SESSIONS_DETAIL="${WORK}/sessions-detail"
+export STUB_DM_STATE_FILE="${WORK}/dm-state"
 export AUXINUX_STATE_DIR="${WORK}/state"
 export AUXINUX_RUN_DIR="${WORK}/run"
 export AUXINUX_CMDLINE="${WORK}/cmdline"
@@ -70,6 +72,9 @@ reset_env() {
   rm -rf "${AUXINUX_STATE_DIR}" "${AUXINUX_RUN_DIR}" "${AUXINUX_LIVE_MARKER}"
   mkdir -p "${AUXINUX_STATE_DIR}" "${AUXINUX_RUN_DIR}"
   echo "graphical.target" > "${STUB_DEFAULT_TARGET_FILE}"
+  # Par defaut le gestionnaire d'affichage est en echec: c'est le cas qui doit
+  # declencher la protection.
+  echo "failed" > "${STUB_DM_STATE_FILE}"
   : > "${STUB_SESSIONS_FILE}"
   : > "${STUB_SESSIONS_DETAIL}"
   echo "root=UUID=x ro" > "${AUXINUX_CMDLINE}"
@@ -145,6 +150,25 @@ check "status: seuil secours" "$(echo "${out}" | sed -n 's/^rescue_threshold=//p
 check "status: etat" "$(echo "${out}" | sed -n 's/^state=//p')" "normal"
 "${SENTINEL}" reset >/dev/null
 check "reset remet a zero" "$(count)" "0"
+
+echo "== 8b. Ecran de connexion inutilise: ce N'EST PAS une panne =="
+# Quelqu'un allume sa machine et s'en va. Deux demarrages comme celui-la
+# auraient suffi a envoyer la machine en mode secours et a lui proposer une
+# restauration dont elle n'avait aucun besoin. Le signe qui distingue les deux
+# cas est l'etat du gestionnaire d'affichage.
+reset_env
+"${SENTINEL}" arm >/dev/null
+echo "active" > "${STUB_DM_STATE_FILE}"
+AUXINUX_WATCH_TIMEOUT=3 "${SENTINEL}" watch >/dev/null
+check "compteur remis a zero" "$(count)" "0"
+check "aucun mode secours" "$(rescue_flag)" "absent"
+
+echo "== 8c. Gestionnaire d'affichage en echec: la protection s'arme =="
+reset_env
+"${SENTINEL}" arm >/dev/null
+echo "failed" > "${STUB_DM_STATE_FILE}"
+AUXINUX_WATCH_TIMEOUT=3 "${SENTINEL}" watch >/dev/null
+check "compteur conserve" "$(count)" "1"
 
 echo "== 9. Choix de l'instantane a restaurer =="
 # La regle: le dernier « pre » (pose juste AVANT une transaction de paquets,

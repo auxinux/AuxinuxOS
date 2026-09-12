@@ -45,6 +45,24 @@ secours, et le compter comme un succès désarmerait la protection au pire momen
 La source est `logind`, pas un processus nommé : le mécanisme survit donc à un
 changement de bureau (Plasma vers GNOME) sans modification.
 
+### Mais l'absence de session n'est pas forcément une panne
+
+Quelqu'un qui allume sa machine et s'en va laisse l'écran de connexion ouvert
+sans jamais ouvrir de session. Deux démarrages comme celui-là auraient suffi à
+envoyer la machine en mode secours, puis à lui proposer une restauration dont
+elle n'avait aucun besoin.
+
+Le signe qui distingue les deux cas est l'état du gestionnaire d'affichage : dans
+la panne du 2026-09-09 il finissait en `failed (start-limit-hit)`, alors qu'un
+écran de connexion simplement inutilisé est `active`. À l'expiration du délai, la
+sentinelle remet donc le compteur à zéro **si `display-manager.service` est
+actif**, et ne l'incrémente qu'autrement.
+
+Conséquence assumée : un greeter qui tourne en affichant une fenêtre noire — donc
+`active` — n'est pas détecté. On préfère cette lacune à une restauration
+automatique déclenchée sur une machine qui marche. Dans ce cas, `tty1` reste
+accessible (SDDM occupe `tty7`) et `auxi rollback` est utilisable à la main.
+
 ## Quel instantané est restauré
 
 Le dernier instantané **`pre`**, c'est-à-dire celui posé juste avant une
