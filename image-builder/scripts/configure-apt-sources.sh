@@ -55,15 +55,6 @@ fetch_verified() {
 
 sudo install -d -m 0755 "${ROOTFS}/usr/local/lib/auxinux" "${ROOTFS}/usr/share/keyrings"
 
-fetch_verified \
-  https://dep.auxinux.ca/scripts/install-auxinux-sources-DEB.sh \
-  "${ROOTFS}/usr/local/lib/auxinux/install-auxinux-sources-DEB.sh" \
-  "${DEB_SOURCES_SHA256}"
-sudo chmod 0755 \
-  "${ROOTFS}/usr/local/lib/auxinux/install-auxinux-sources-DEB.sh"
-
-sudo chroot "${ROOTFS}" /usr/local/lib/auxinux/install-auxinux-sources-DEB.sh
-
 # ----------------------------------------------------------------------------
 # Neutralise le /etc/apt/sources.list laisse par mmdebstrap.
 #
@@ -84,6 +75,11 @@ sudo chroot "${ROOTFS}" /usr/local/lib/auxinux/install-auxinux-sources-DEB.sh
 # Le fichier deb822 pose par le script officiel decrit exactement le meme
 # miroir avec « Architectures: amd64 »: celui-ci est donc redondant. On le vide
 # au lieu de le supprimer, pour qu'un lecteur comprenne ce qui s'est passe.
+#
+# CE BLOC DOIT RESTER AVANT install-auxinux-sources-DEB.sh: ce script fait son
+# PROPRE `apt-get update` a la fin. Place apres lui, la neutralisation arrivait
+# trop tard et la construction mourait dans le script distant -- constate sur
+# la reprise du 2026-09-12.
 if [[ -f "${ROOTFS}/etc/apt/sources.list" ]] &&
    grep -q 'dep\.auxinux\.ca' "${ROOTFS}/etc/apt/sources.list"; then
   sudo tee "${ROOTFS}/etc/apt/sources.list" >/dev/null <<'EOF'
@@ -97,6 +93,16 @@ if [[ -f "${ROOTFS}/etc/apt/sources.list" ]] &&
 # miroir ne porte pas binary-i386).
 EOF
 fi
+
+
+fetch_verified \
+  https://dep.auxinux.ca/scripts/install-auxinux-sources-DEB.sh \
+  "${ROOTFS}/usr/local/lib/auxinux/install-auxinux-sources-DEB.sh" \
+  "${DEB_SOURCES_SHA256}"
+sudo chmod 0755 \
+  "${ROOTFS}/usr/local/lib/auxinux/install-auxinux-sources-DEB.sh"
+
+sudo chroot "${ROOTFS}" /usr/local/lib/auxinux/install-auxinux-sources-DEB.sh
 
 # AuxiNuxOS kernel repository. Keep this local and pinned so the build cannot
 # silently fall back to the retired /VIRTUA repository configuration.
@@ -130,6 +136,11 @@ EOF
 # de tout le systeme 64 bits.
 #
 # A SUPPRIMER le jour ou dep.auxinux.ca/DEBIAN miroitera i386.
+# install-auxinux-sources-DEB.sh desactive toute source contenant
+# « debian.org »: sur une construction reprise, il a donc renomme ce fichier
+# en .sources.disabled avant qu'on le reecrive. On retire le cadavre, sinon
+# l'image livree garde une source desactivee sans que personne sache pourquoi.
+sudo rm -f "${ROOTFS}/etc/apt/sources.list.d/debian-i386.sources.disabled"
 sudo tee "${ROOTFS}/etc/apt/sources.list.d/debian-i386.sources" >/dev/null <<'EOF'
 Types: deb
 URIs: https://deb.debian.org/debian

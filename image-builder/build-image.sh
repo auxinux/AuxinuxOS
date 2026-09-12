@@ -416,6 +416,10 @@ printf 'APT_ENABLED=0\n' | sudo tee "${ROOTFS_DIR}/etc/auxinux/apt.conf" >/dev/n
 
 echo "==> Cleaning rootfs"
 sudo rm -rf "${ROOTFS_DIR}/var/cache/apt/archives"/*.deb
+# install-auxinux-sources-DEB.sh sauvegarde les sources APT existantes a chaque
+# execution, dans un repertoire horodate. Sur une construction reprise, l'image
+# en accumule plusieurs -- livres a l'utilisateur, qui n'a rien a en faire.
+sudo rm -rf "${ROOTFS_DIR}"/etc/apt/auxinux-sources-backup-*
 sudo rm -rf "${ROOTFS_DIR}/tmp/"* "${ROOTFS_DIR}/var/tmp/"*
 
 # Defensive cleanup before squashing the rootfs. Some interrupted or nested
