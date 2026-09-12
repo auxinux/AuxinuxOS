@@ -21,6 +21,27 @@ for unit in auxinux-boot-arm.service auxinux-boot-sentinel.service auxinux-rescu
   sudo install -D -m 0644 "${PROJECT_DIR}/packages/boot-sentinel/${unit}" "${ROOTFS}/etc/systemd/system/${unit}"
 done
 
+# ACTIVATION des unites, par lien symbolique et non par `systemctl enable`.
+#
+# Deux raisons:
+#   1. ce script tourne sans /proc monte dans le chroot, et systemctl detecte
+#      le chroot en lisant /proc/1/root -- il echouerait;
+#   2. surtout, auxinux-rescue.service etait installe mais JAMAIS active: la
+#      console de secours n'aurait pas demarre, donc la protection au demarrage
+#      se serait arretee a « le bureau ne demarre pas » sans rien proposer. Le
+#      controle d'image ne verifiait que la presence du FICHIER d'unite.
+#
+# Pour des unites sans `Also=` ni `Alias=`, `systemctl enable` ne fait rien de
+# plus que ces liens. Installer et activer au meme endroit evite qu'une unite
+# ajoutee ici soit oubliee ailleurs.
+sudo install -d -m 0755 \
+  "${ROOTFS}/etc/systemd/system/graphical.target.wants" \
+  "${ROOTFS}/etc/systemd/system/multi-user.target.wants"
+for unit in auxinux-boot-arm.service auxinux-boot-sentinel.service auxinux-rescue.service; do
+  sudo ln -sf "/etc/systemd/system/${unit}" \
+    "${ROOTFS}/etc/systemd/system/graphical.target.wants/${unit}"
+done
+
 # Profil d'usage (bureautique / multimedia / jeu).
 sudo install -D -m 0755 "${PROJECT_DIR}/packages/auxinux-profile/auxinux-profile" "${ROOTFS}/usr/bin/auxinux-profile"
 sudo install -D -m 0644 "${PROJECT_DIR}/packages/auxinux-profile/auxinux-profile.service" "${ROOTFS}/etc/systemd/system/auxinux-profile.service"
@@ -28,6 +49,8 @@ sudo install -D -m 0644 "${PROJECT_DIR}/packages/auxinux-profile/auxinux-profile
 # (ConditionPathExists) et aucun reglage d'usage ne serait applique.
 sudo install -d -m 0755 "${ROOTFS}/etc/auxinux"
 printf 'bureautique\n' | sudo tee "${ROOTFS}/etc/auxinux/profile" >/dev/null
+sudo ln -sf /etc/systemd/system/auxinux-profile.service \
+  "${ROOTFS}/etc/systemd/system/multi-user.target.wants/auxinux-profile.service"
 
 # Hook d'instantane branche sur dpkg (voir etc/apt/apt.conf.d/80auxinux-snapshot).
 sudo install -D -m 0755 "${PROJECT_DIR}/packages/auxi-cli/apt-snapshot-hook" "${ROOTFS}/usr/lib/auxinux/apt-snapshot-hook"

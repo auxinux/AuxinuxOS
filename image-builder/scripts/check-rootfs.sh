@@ -223,7 +223,15 @@ need_exec /usr/lib/auxinux/auxinux-boot-sentinel "rien ne detecterait un demarra
 need_exec /usr/lib/auxinux/auxinux-rescue "aucune console de secours ni restauration automatique"
 for unit in auxinux-boot-arm.service auxinux-boot-sentinel.service auxinux-rescue.service; do
   need_file "/etc/systemd/system/${unit}" "unite de la protection au demarrage absente"
+  # La PRESENCE du fichier d'unite ne suffit pas: auxinux-rescue.service a ete
+  # livre une fois installe mais non active, donc la console de secours
+  # n'aurait jamais demarre -- la protection se serait arretee a « le bureau ne
+  # demarre pas », sans rien proposer.
+  need_file "/etc/systemd/system/graphical.target.wants/${unit}" \
+    "unite presente mais NON ACTIVEE: elle ne demarrera jamais"
 done
+need_file /etc/systemd/system/multi-user.target.wants/auxinux-profile.service \
+  "le profil d'usage ne serait pas reapplique au demarrage"
 
 echo "-- Profil d'usage"
 need_exec /usr/bin/auxinux-profile "aucun reglage par usage (bureautique / multimedia / jeu)"
