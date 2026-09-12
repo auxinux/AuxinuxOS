@@ -362,7 +362,11 @@ EOF
 sudo chroot "${ROOTFS_DIR}" ln -sf \
   /usr/lib/systemd/system/sddm.service \
   /etc/systemd/system/display-manager.service
-printf '/usr/bin/sddm\n' | sudo tee "${ROOTFS_DIR}/etc/X11/default-display-manager" >/dev/null
+# install -D: /etc/X11 vient de x11-common (dependance de sddm), mais on ne
+# fait pas dependre l'ecriture d'un fichier de la presence d'un repertoire
+# qu'un tiers doit avoir cree.
+printf '/usr/bin/sddm\n' | sudo install -D -m 0644 /dev/stdin \
+  "${ROOTFS_DIR}/etc/X11/default-display-manager"
 
 # Tor and OnionShare are available for privacy workflows, but Tor must be
 # user-started instead of running by default on every boot.

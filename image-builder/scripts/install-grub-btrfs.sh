@@ -72,7 +72,15 @@ sudo install -Dm644 "${SOURCE_DIR}/grub-btrfsd.service" \
 sudo install -Dm644 "${SOURCE_DIR}/LICENSE" \
   "${ROOTFS}/usr/share/licenses/grub-btrfs/LICENSE"
 
+# `install -D` et non `tee`: RIEN ne cree /usr/share/auxinuxos dans un rootfs
+# neuf, et `tee` echoue sur un repertoire absent. Le defaut ne s'est vu qu'a la
+# premiere construction depuis un rootfs propre (2026-09-12): les builds
+# precedents reutilisaient un rootfs ou le repertoire trainait depuis une
+# version plus ancienne du constructeur. Les cinq lignes au-dessus utilisent
+# toutes `install -D`, qui cree l'arborescence; celle-ci etait la seule
+# exception.
 printf '%s %s\n' "${GRUB_BTRFS_TAG}" "${GRUB_BTRFS_COMMIT}" \
-  | sudo tee "${ROOTFS}/usr/share/auxinuxos/grub-btrfs-version" >/dev/null
+  | sudo install -D -m 0644 /dev/stdin \
+    "${ROOTFS}/usr/share/auxinuxos/grub-btrfs-version"
 
 echo "==> grub-btrfs ${GRUB_BTRFS_TAG} (${GRUB_BTRFS_COMMIT}) installe"
