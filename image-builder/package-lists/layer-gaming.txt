@@ -33,10 +33,18 @@ libgl1-mesa-dri:i386
 vulkan-tools
 
 # gamemode ajuste gouverneur CPU et priorites pendant une partie; mangohud
-# affiche le compteur d'images. Les deux ont besoin de leur variante 32 bits
-# pour s'injecter dans un jeu 32 bits.
+# affiche le compteur d'images.
+#
+# PAS de `gamemode:i386`: le paquet est « Multi-Arch: allowed », donc les deux
+# architectures ne sont PAS co-installables et apt refuse net
+# (« gamemode:i386 Conflicts gamemode »). Ce dont un jeu 32 bits a besoin, ce
+# n'est pas le binaire ni le demon -- un seul demon suffit pour toute la
+# machine -- mais les BIBLIOTHEQUES qu'il precharge, et celles-la sont
+# « Multi-Arch: same ».
 gamemode
-gamemode:i386
+libgamemode0:i386
+libgamemodeauto0:i386
+# mangohud, lui, est « Multi-Arch: same »: sa variante i386 s'installe a cote.
 mangohud
 mangohud:i386
 goverlay
