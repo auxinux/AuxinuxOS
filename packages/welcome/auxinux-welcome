@@ -8,10 +8,11 @@ set -uo pipefail
 # proposait de REDEMARRER LA SESSION et executait
 # `loginctl terminate-user "${USER}"`.
 #
-# Or la session live est ouverte par le bloc [initial_session] de greetd, qui
-# ne s'applique qu'UNE SEULE FOIS, au demarrage. Une fois la session terminee,
-# greetd bascule sur [default_session], c.-a-d. l'ecran de connexion. Terminer
-# la session live revenait donc a se jeter hors du live sans retour: dans le
+# Or la session live est ouverte par l'autologin du gestionnaire de session
+# (aujourd'hui SDDM avec Relogin=false, greetd et son [initial_session] quand
+# la panne a ete constatee): il ne s'applique qu'UNE SEULE FOIS, au demarrage.
+# Une fois la session terminee, l'ecran de connexion revient. Terminer la
+# session live revenait donc a se jeter hors du live sans retour: dans le
 # meilleur cas un ecran de connexion pour un compte dont l'utilisateur ignore
 # le mot de passe, dans le pire un ecran noir. Et tout cela pour changer une
 # langue.
@@ -20,7 +21,7 @@ set -uo pipefail
 #   * a l'environnement du gestionnaire de session utilisateur et au bus de
 #     session, donc a TOUT ce qui est lance ensuite (installateur compris);
 #   * dans environment.d, pour les sessions suivantes et le systeme installe.
-# Ce qui est deja affiche a l'ecran (le panneau COSMIC) garde sa langue: c'est
+# Ce qui est deja affiche a l'ecran (le panneau de Plasma) garde sa langue: c'est
 # dit clairement a l'utilisateur plutot que paye par une deconnexion.
 
 STATE_DIR="${HOME}/.config/auxinux"
@@ -77,7 +78,7 @@ write_locale() {
 # `systemctl --user import-environment` fixe l'environnement du gestionnaire de
 # session, dont heritent les unites utilisateur; `dbus-update-activation-
 # environment` fait de meme pour les services actives par le bus, ce qui couvre
-# les applications lancees depuis le lanceur COSMIC -- l'installateur inclus.
+# les applications lancees depuis le menu du bureau -- l'installateur inclus.
 apply_to_running_session() {
   local line key value
   local -a keys=()
@@ -100,7 +101,7 @@ show_intro() {
   local lang="$1"
   if [[ "${lang}" == "en" ]]; then
     zenity --info --no-wrap --title "Welcome to AuxiNuxOS" --text \
-"AuxiNuxOS is a Canadian desktop Linux project based on Debian and the COSMIC desktop, with a privacy-first software selection.
+"AuxiNuxOS is a Canadian desktop Linux project based on Debian and the KDE Plasma desktop, with a privacy-first software selection.
 
 This live environment lets you try the system before installing it.
 
@@ -109,7 +110,7 @@ English is now applied to everything you open from here on, including the instal
 A familiar desktop, no AuxiNux telemetry, Flatpak first for applications, and DEB packages available when needed." 2>/dev/null
   else
     zenity --info --no-wrap --title "Bienvenue dans AuxiNuxOS" --text \
-"AuxiNuxOS est un projet Linux de bureau canadien base sur Debian et le bureau COSMIC, avec une selection logicielle orientee vie privee.
+"AuxiNuxOS est un projet Linux de bureau canadien base sur Debian et le bureau KDE Plasma, avec une selection logicielle orientee vie privee.
 
 Cet environnement live permet d'essayer le systeme avant de l'installer.
 

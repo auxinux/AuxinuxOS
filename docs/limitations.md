@@ -1,21 +1,39 @@
-# Limites connues de la bêta
+# Limites connues
+
+## État de la 0.2.0
+
+Ce qui a changé le 2026-09-12 et n'est **pas encore validé en machine
+virtuelle** :
+
+- le bureau est **KDE Plasma** (Debian 13, 6.3.6) et non plus COSMIC ;
+- l'écran de connexion est **SDDM** (greeter X11, session Wayland) ;
+- la **protection au démarrage** (compteur, console de secours, restauration
+  automatique) est neuve et couverte par des tests de logique seulement ;
+- les **profils d'usage** sont neufs, et aucune mesure de performance n'a été
+  faite ;
+- l'**installateur maison** n'existe pas : la 0.2.0 garde Calamares.
+
+Aucune installation graphique complète n'a jamais été menée sur ce projet, quelle
+que soit la version. C'est le jalon bloquant.
 
 ## Construction
 
 - `check-rootfs.sh` s’exécute avant la compression du squashfs et **arrête la
   construction** si une fonction annoncée est absente de l’image (modèle
   snapper, hook d’instantané, grub-btrfs, hook initramfs, zenity, wine/i386,
-  détournement APT, compte live). C’est le contrôle qui aurait intercepté
+  détournement APT, compte live, session Plasma, SDDM et **la session nommée
+  dans l’autologin du live**, protection au démarrage, profil d’usage, réglages
+  de vie privée). C’est le contrôle qui aurait intercepté
   l’absence de rollback sur tous les systèmes installés.
-- Le cache COSMIC conserve `packages-before.txt` entre les builds. Une
-  empreinte SHA-256 des listes de paquets est stockée à côté du cache :
-  `build-cosmic-source.sh` invalide ce fichier automatiquement dès que les
-  listes changent.
-- `rustup-init` est téléchargé puis **épinglé à la première construction**
-  (`rustup-init.sha256` dans le cache) et exigé identique ensuite. Une montée
-  de version amont légitime demande de supprimer ce fichier après vérification.
-  Aucune empreinte de confiance n’est codée en dur : la recopier depuis ce que
-  sert le site ne vérifierait rien.
+- Le rootfs est bootstrappé depuis le miroir Debian d'AuxiNux, qui **ne
+  miroite pas i386** (vérifié : `binary-i386/Packages.xz` répond 404). Les
+  paquets 32 bits viennent donc de `deb.debian.org`, par un dépôt épinglé à
+  `Architectures: i386`. Deux conséquences : une version amd64 et une version
+  i386 d'une même bibliothèque peuvent diverger si le miroir prend du retard
+  (apt refuse alors l'installation multiarch), et un utilisateur qui relance
+  `install-auxinux-sources-DEB.sh` désactive ce dépôt — le script désactive
+  toute source contenant `debian.org`. À supprimer le jour où le miroir portera
+  i386.
 - `--force` refuse d’effacer un répertoire de construction qui porte encore des
   montages, au lieu de traverser un `/dev` monté et d’effacer celui de l’hôte.
 - Le centre d’applications est recompilé seulement si son binaire est absent.
@@ -39,10 +57,18 @@
   fiche porte un identifiant par source, mais l’appariement lui-même peut
   encore rapprocher à tort deux logiciels homonymes.
 - `auxi update --flatpak` ignore le code d’échec de Flatpak.
-- Le fond d’écran AuxiNux est installé dans `/usr/share/backgrounds/auxinuxos`
-  et **sélectionnable**, mais il n’est pas appliqué par défaut : cela demande
-  un fichier de configuration `cosmic-bg` non encore vérifié sur une session
-  réelle.
+- Le Center est en **libcosmic sur un bureau Plasma** : il fonctionne (iced +
+  winit + wgpu, aucune dépendance à COSMIC) mais **ne suit pas le thème
+  Breeze**. Il aura l'air étranger jusqu'à une interface Kirigami/QML.
+- Le fond d'écran par défaut est écrit dans
+  `/etc/xdg/plasma-org.kde.plasma.desktop-appletsrc`, qui suppose que la vue
+  bureau porte le numéro de containment 1 dans la disposition par défaut de
+  Plasma. Si ce numéro change en amont, l'utilisateur voit le fond d'écran de
+  Breeze — pas un bureau cassé, mais le branding est perdu sans avertissement.
+- Le thème SDDM est surchargé par `theme.conf.user` dans le thème
+  `debian-breeze`. Si Debian renomme ce thème, l'écran de connexion revient à
+  son apparence d'origine, silencieusement (`configure-branding.sh` émet un
+  avertissement dans le journal de construction).
 
 ## Rollback système
 

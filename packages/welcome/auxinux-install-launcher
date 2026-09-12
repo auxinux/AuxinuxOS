@@ -1,22 +1,24 @@
 #!/bin/sh
-# Launches the Calamares installer from the AuxiNuxOS live COSMIC (Wayland)
-# session.
+# Lance l'installateur Calamares depuis la session live (Wayland).
 #
-# The Debian wrapper `calamares-install-debian` was written for X11: it runs
-# `pkexec calamares` and grants access with `xhost`. Under COSMIC/Wayland that
-# fails silently -- pkexec scrubs the environment, so Calamares starts as root
-# with no DISPLAY/WAYLAND_DISPLAY and never shows a window (the reported "the
-# icon does nothing when clicked"). We instead:
-#   * run Calamares through Xwayland (QT_QPA_PLATFORM=xcb), which COSMIC
-#     provides;
-#   * elevate with sudo -- the live user has passwordless sudo, so this needs
-#     no polkit agent (COSMIC ships none in the session);
-#   * forward DISPLAY and grant the root user access to the X server.
+# Le wrapper Debian `calamares-install-debian` a ete ecrit pour X11: il fait
+# `pkexec calamares` et ouvre l'acces avec `xhost`. Sous Wayland cela echoue EN
+# SILENCE -- pkexec nettoie l'environnement, donc Calamares demarre en root
+# sans DISPLAY ni WAYLAND_DISPLAY et n'affiche jamais de fenetre (« l'icone ne
+# fait rien quand on clique »). A la place:
+#   * Calamares passe par Xwayland (QT_QPA_PLATFORM=xcb), fourni par le
+#     compositeur (KWin depuis la 0.2.0). Xwayland plutot que Wayland natif
+#     parce qu'une application graphique en root sur Wayland demande de lui
+#     passer WAYLAND_DISPLAY et XDG_RUNTIME_DIR, ce qui est nettement plus
+#     fragile;
+#   * l'elevation passe par sudo -- le compte live a sudo sans mot de passe,
+#     donc aucun agent polkit n'est requis, y compris si le bureau change;
+#   * DISPLAY est transmis et l'acces au serveur X accorde au seul compte root.
 set -eu
 
 export QT_AUTO_SCREEN_SCALE_FACTOR=1
 
-# COSMIC starts Xwayland lazily; DISPLAY is normally :0 in the session.
+# KWin demarre Xwayland paresseusement; DISPLAY vaut normalement :0.
 DISPLAY="${DISPLAY:-:0}"
 export DISPLAY
 
