@@ -234,8 +234,13 @@ INSTALL_PACKAGES="$(package_csv "${ALL_PATHS[@]}" | tr ',' ' ')"
 # juste avant.
 if ! sudo chroot "${ROOTFS_DIR}" dpkg --print-foreign-architectures | grep -qx i386; then
   sudo chroot "${ROOTFS_DIR}" dpkg --add-architecture i386
-  sudo chroot "${ROOTFS_DIR}" apt-get update
 fi
+# Mise a jour des index TOUJOURS, et non seulement quand l'architecture vient
+# d'etre ajoutee. Sur un rootfs reutilise ou i386 etait deja declare -- par
+# exemple apres une construction interrompue -- l'ancienne condition sautait
+# cette etape, apt restait sans index i386, et `apt-get install` echouait sur
+# « Unable to locate package libvulkan1:i386 » sans expliquer pourquoi.
+sudo chroot "${ROOTFS_DIR}" apt-get update
 
 # Une SEULE installation, pilotee par les listes de paquets.
 #
