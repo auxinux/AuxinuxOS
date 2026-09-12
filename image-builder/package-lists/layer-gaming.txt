@@ -10,8 +10,15 @@
 
 wine
 winetricks
-lutris
 dxvk
+
+# Lutris N'EST PAS ici, volontairement. Les LANCEURS (Steam, Heroic, Lutris,
+# Bottles) s'installent en Flatpak a la demande via auxinux-windows-setup, qui
+# les presente avec une explication; la couche jeu fournit la PILE
+# d'execution (Wine, Vulkan 64/32 bits, mesure et bridage). Une seule regle,
+# donc: pile en DEB, lanceurs en Flatpak. Le Lutris de Debian 13 aurait en
+# plus retarde d'une version majeure sur celui que le projet Lutris
+# recommande.
 
 # Vulkan 64 bits ET 32 bits. Les jeux Windows passes par Proton/Wine sont
 # massivement 32 bits: sans les variantes i386, Vulkan retombe sur un rendu
