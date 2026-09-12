@@ -43,6 +43,14 @@ Les trois valeurs qui méritent une justification :
   certains jeux sous Proton, mais elle protège d'un déni de service local. Elle
   n'est levée que là, et jamais par défaut.
 
+### Pourquoi `@audio` et pas l'utilisateur
+
+La priorité temps réel est accordée au **groupe `audio`**, pas à un compte : le
+compte créé à l'installation y est ajouté par Calamares
+(`modules/users.conf`, `defaultGroups`). Accorder `rtprio` à un nom
+d'utilisateur aurait produit un réglage qui ne s'applique à personne sur la
+machine suivante.
+
 ## Un seul propriétaire pour le CPU
 
 `auxinux-profile` ne touche **pas** à `scaling_governor` ni à
