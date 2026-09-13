@@ -25,6 +25,18 @@
 #                                  comme sur une machine hors ligne.
 #   firmware-nvidia-tesla-* ...... branche proprietaire, sans rapport avec
 #                                  nouveau.
+#   firmware-ipw2x00, -ivtv ...... ces deux paquets DEMANDENT l'acceptation
+#                                  d'une licence par debconf, et leur preinst
+#                                  echoue dans un chroot non interactif:
+#                                    « agree question could not be asked »
+#                                    dpkg: error processing archive (--unpack)
+#                                  On pourrait pre-repondre par
+#                                  debconf-set-selections, mais ce serait
+#                                  accepter une licence a la place de
+#                                  l'utilisateur. Le materiel concerne --
+#                                  Centrino 2003-2006, cartes d'acquisition TV
+#                                  Hauppauge -- ne justifie pas de trancher
+#                                  cette question a sa place.
 
 # --- Metapaquets de base ----------------------------------------------------
 firmware-linux
@@ -41,8 +53,7 @@ firmware-brcm80211
 firmware-mediatek
 firmware-libertas
 firmware-ti-connectivity
-# Vieux portables Centrino, et cles USB WiFi.
-firmware-ipw2x00
+# Cles USB WiFi.
 firmware-ath9k-htc
 firmware-carl9170
 firmware-zd1211
@@ -71,9 +82,8 @@ firmware-bnx2
 firmware-bnx2x
 firmware-intel-misc
 firmware-samsung
-# Tuners TV et cartes d'acquisition.
+# Tuners TV.
 firmware-siano
-firmware-ivtv
 
 # --- Pile WiFi en espace utilisateur ---------------------------------------
 wpasupplicant
