@@ -2,6 +2,24 @@
 
 ## État de la 0.2.0
 
+### Validé en machine virtuelle le 2026-09-13
+
+L'ISO `auxinuxos-0.2.0-20260913-amd64.iso` a été démarrée en QEMU (TCG, sans
+KVM) et **photographiée toutes les minutes pendant 20 minutes** :
+
+- le bureau **KDE Plasma** s'ouvre en session live (autologin SDDM), en français,
+  avec le panneau, l'icône « Install AuxiNuxOS » et l'écran d'accueil ;
+- le noyau `7.2.5-auxinuxos-amd64` démarre, `virtio-gpu` s'initialise ;
+- le contrôle de configuration requise **bloque l'installation** quand la
+  machine n'a pas de disque — vérifié, c'était le cas de la VM ;
+- l'écran **ne noircit plus** après dix minutes (corrigé après l'avoir constaté
+  sur la première image du jour).
+
+C'est la première fois qu'une ISO de ce projet est prouvée par l'image jusqu'au
+bureau.
+
+### Ce qui reste non validé
+
 Ce qui a changé le 2026-09-12 et n'est **pas encore validé en machine
 virtuelle** :
 
@@ -14,7 +32,8 @@ virtuelle** :
 - l'**installateur maison** n'existe pas : la 0.2.0 garde Calamares.
 
 Aucune installation graphique complète n'a jamais été menée sur ce projet, quelle
-que soit la version. C'est le jalon bloquant.
+que soit la version. C'est le jalon bloquant : le live est prouvé, l'installation
+ne l'est pas.
 
 ## Construction
 
