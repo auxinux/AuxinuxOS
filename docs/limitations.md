@@ -44,15 +44,12 @@ ne l'est pas.
   dans l’autologin du live**, protection au démarrage, profil d’usage, réglages
   de vie privée). C’est le contrôle qui aurait intercepté
   l’absence de rollback sur tous les systèmes installés.
-- Le rootfs est bootstrappé depuis le miroir Debian d'AuxiNux, qui **ne
-  miroite pas i386** (vérifié : `binary-i386/Packages.xz` répond 404). Les
-  paquets 32 bits viennent donc de `deb.debian.org`, par un dépôt épinglé à
-  `Architectures: i386`. Deux conséquences : une version amd64 et une version
-  i386 d'une même bibliothèque peuvent diverger si le miroir prend du retard
-  (apt refuse alors l'installation multiarch), et un utilisateur qui relance
-  `install-auxinux-sources-DEB.sh` désactive ce dépôt — le script désactive
-  toute source contenant `debian.org`. À supprimer le jour où le miroir portera
-  i386.
+- Le rootfs est bootstrappé depuis le miroir Debian d'AuxiNux, **i386 compris
+  depuis le 2026-09-13** (67 026 paquets, index conforme au `Release` signé par
+  Debian). Le contournement `deb.debian.org` a été retiré. Attention : l'ISO
+  `auxinuxos-0.2.0-20260913-amd64.iso` **déjà publiée** a été construite AVANT
+  ce changement, donc avec le contournement ; la prochaine construction est la
+  première à valider le nouveau chemin.
 - `--force` refuse d’effacer un répertoire de construction qui porte encore des
   montages, au lieu de traverser un `/dev` monté et d’effacer celui de l’hôte.
 - Le centre d’applications est recompilé seulement si son binaire est absent.

@@ -16,7 +16,11 @@ ROOTFS="${1:?usage: configure-apt-sources.sh ROOTFS}"
 # kernel). Sans verification, une compromission de l'hote/CDN injecte du code
 # root dans chaque image.
 # ----------------------------------------------------------------------------
-DEB_SOURCES_SHA256="9e11094efadc01cd98079cdf53e11b2e767a82f44efc3cb96a86f841fdb64ca8"
+# Mis a jour le 2026-09-13: le script distant passe de « Architectures: amd64 »
+# a « Architectures: amd64 i386 ». La valeur n'est PAS recopiee aveuglement de
+# ce qui est servi: le changement a ete fait sur le serveur, et `diff` confirme
+# qu'une SEULE ligne differe de la version precedente (77c77).
+DEB_SOURCES_SHA256="fc27108b817e85df84f061f29e9a792af897cc828835d093d257212c96c927ac"
 AUXINUXOS_KEYRING_SHA256="963f569b4a74f9c76e0c56dd9fa288222b344ff6b102d26fc5eabf6e3ca3f410"
 BRAVE_KEYRING_SHA256="c85e85aa3d1783ffaa649ee8dbbc22af7f87192d304602d37e3018226b394788"
 BRAVE_SOURCES_SHA256="afb89575e544c6da0e2ba4f850931be800b442507a0ad9be3e12d0439566fb1f"
@@ -115,47 +119,25 @@ deb [signed-by=/usr/share/keyrings/auxinuxos-archive-keyring.gpg arch=amd64,arm6
 EOF
 
 # ----------------------------------------------------------------------------
-# Architecture i386, indispensable a la couche jeu.
+# Architecture i386 (couche jeu): elle vient desormais du miroir AuxiNux.
 #
-# LE MIROIR AUXINUX NE MIROITE PAS i386 (verifie le 2026-09-12:
-# dists/trixie/main/ ne contient que binary-all et binary-amd64, et
-# binary-i386/Packages.xz repond 404). Le script officiel
-# install-auxinux-sources-DEB.sh en tient compte en epinglant
-# « Architectures: amd64 » -- ce qui evite un 404 a chaque apt update, mais
-# rend AUCUN paquet 32 bits installable sur un systeme AuxiNuxOS.
+# Le 2026-09-13, i386 a ete ajoute au miroir (drop-in systemd
+# /etc/systemd/system/auxinux-depot-sync.service.d/10-arches.conf sur le
+# serveur de depot: ARCHES=amd64,i386) et le script officiel de sources autorise
+# maintenant « Architectures: amd64 i386 ». Verifie: l'index i386 servi par
+# dep.auxinux.ca correspond au sha256 annonce par le fichier Release SIGNE PAR
+# DEBIAN, et contient 67 026 paquets.
 #
-# Consequence concrete, passee inapercue jusqu'ici: wine32 n'arrivait dans la
-# 0.1 que parce que mmdebstrap bootstrappait depuis deb.debian.org. Sur la
-# machine INSTALLEE, ni Steam, ni un jeu 32 bits, ni une bibliotheque
-# Vulkan 32 bits ne pouvaient etre installes -- et le message d'apt ne dit pas
-# pourquoi.
+# Le depot deb.debian.org epingle a i386 qui se trouvait ici a donc ete retire.
+# Il avait deux defauts que le miroir supprime: une divergence de version
+# possible entre l'amd64 du miroir et l'i386 de Debian (apt refuse alors
+# l'installation multiarch), et sa desactivation silencieuse par
+# install-auxinux-sources-DEB.sh, qui desactive toute source contenant
+# « debian.org ».
 #
-# Tant que le miroir ne porte pas i386, cette architecture vient de Debian
-# directement. Le depot est epingle a « Architectures: i386 »: il ne peut donc
-# pas servir un seul paquet amd64, et le miroir AuxiNux reste la source unique
-# de tout le systeme 64 bits.
-#
-# A SUPPRIMER le jour ou dep.auxinux.ca/DEBIAN miroitera i386.
-# install-auxinux-sources-DEB.sh desactive toute source contenant
-# « debian.org »: sur une construction reprise, il a donc renomme ce fichier
-# en .sources.disabled avant qu'on le reecrive. On retire le cadavre, sinon
-# l'image livree garde une source desactivee sans que personne sache pourquoi.
-sudo rm -f "${ROOTFS}/etc/apt/sources.list.d/debian-i386.sources.disabled"
-sudo tee "${ROOTFS}/etc/apt/sources.list.d/debian-i386.sources" >/dev/null <<'EOF'
-Types: deb
-URIs: https://deb.debian.org/debian
-Suites: trixie trixie-updates
-Components: main contrib non-free non-free-firmware
-Architectures: i386
-Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
-
-Types: deb
-URIs: https://security.debian.org/debian-security
-Suites: trixie-security
-Components: main contrib non-free non-free-firmware
-Architectures: i386
-Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
-EOF
+# Un reliquat peut trainer sur un rootfs reutilise: on le retire.
+sudo rm -f "${ROOTFS}/etc/apt/sources.list.d/debian-i386.sources" \
+  "${ROOTFS}/etc/apt/sources.list.d/debian-i386.sources.disabled"
 
 # Brave: methode officielle (brave.com/linux), avec verification d'empreinte.
 fetch_verified \
