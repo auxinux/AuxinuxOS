@@ -1,39 +1,81 @@
-# Firmware materiel (composant non-free-firmware, deja active dans les
-# sources APT). Sans ces paquets, de nombreuses cartes WiFi/Bluetooth et
-# GPU ne sont pas detectees dans le live ni sur le systeme installe.
+# Micrologiciels materiels (composant non-free-firmware, active dans les
+# sources APT).
+#
+# REGLE, posee le 2026-09-13: l'ISO doit s'installer sur N'IMPORTE QUELLE
+# machine grand public x86. On embarque donc TOUT ce qui peut se trouver dans
+# un portable ou un ordinateur de bureau -- et rien d'autre.
+#
+# L'absence d'un micrologiciel ne produit aucun message comprehensible: la
+# machine n'a pas de son, ou pas de WiFi. Et sans WiFi, l'utilisateur n'a meme
+# pas le moyen de telecharger ce qui lui manque. C'est le genre de detail qui
+# fait desinstaller un systeme.
+#
+# ECARTES VOLONTAIREMENT, avec la raison:
+#   firmware-qcom-soc ............ 305 Mo de blobs Snapdragon (ARM). Le WiFi
+#                                  Qualcomm des portables x86 (ath11k, ath12k,
+#                                  QCA6390, QCA6698) est dans firmware-atheros,
+#                                  verifie paquet en main.
+#   firmware-netronome ........... cartes reseau de centre de donnees
+#   firmware-marvell-prestera ....   "
+#   firmware-cavium, -qlogic .....   "
+#   firmware-myricom, -netxen ....   "
+#   firmware-b43*-installer ...... ces paquets TELECHARGENT le micrologiciel
+#                                  depuis Internet a l'installation: ils
+#                                  echoueraient dans le chroot de construction
+#                                  comme sur une machine hors ligne.
+#   firmware-nvidia-tesla-* ...... branche proprietaire, sans rapport avec
+#                                  nouveau.
+
+# --- Metapaquets de base ----------------------------------------------------
 firmware-linux
 firmware-linux-nonfree
 firmware-misc-nonfree
+
+# --- Reseau sans fil --------------------------------------------------------
 firmware-iwlwifi
 firmware-realtek
+# Contient aussi ath11k/ath12k, donc le WiFi Qualcomm des portables recents.
 firmware-atheros
 firmware-brcm80211
+# MT7921/MT7922: tres repandus sur les portables AMD recents.
+firmware-mediatek
 firmware-libertas
-# Pile WiFi userspace requise par NetworkManager
+firmware-ti-connectivity
+# Vieux portables Centrino, et cles USB WiFi.
+firmware-ipw2x00
+firmware-ath9k-htc
+firmware-carl9170
+firmware-zd1211
+
+# --- Audio ------------------------------------------------------------------
+# LE manque le plus grave sur un portable recent: sans SOF, aucun son sur la
+# quasi-totalite des machines Intel et AMD depuis 2019.
+firmware-sof-signed
+firmware-intel-sound
+# Amplificateurs de haut-parleurs, courants sur Dell/HP/Lenovo depuis 2021.
+firmware-cirrus
+
+# --- Graphique --------------------------------------------------------------
+firmware-amd-graphics
+firmware-intel-graphics
+# nouveau: sans ces blobs, rien ne s'affiche sur une NVIDIA recente.
+firmware-nvidia-graphics
+# GSP, introduit avec Turing: nouveau en depend sur les cartes recentes.
+firmware-nvidia-gsp
+# Puces graphiques ASpeed des cartes meres de station de travail (42 Ko).
+firmware-ast
+
+# --- Reseau filaire et divers ----------------------------------------------
+# Broadcom NetXtreme: presentes sur beaucoup de stations de travail Dell/HP.
+firmware-bnx2
+firmware-bnx2x
+firmware-intel-misc
+firmware-samsung
+# Tuners TV et cartes d'acquisition.
+firmware-siano
+firmware-ivtv
+
+# --- Pile WiFi en espace utilisateur ---------------------------------------
 wpasupplicant
 iw
 wireless-regdb
-
-# --- Ajouts du 2026-09-13, vises PORTABLE -----------------------------------
-#
-# Ces quatre paquets decident si la machine est utilisable au quotidien, et
-# leur absence ne produit aucun message comprehensible.
-#
-# firmware-sof-signed: audio SOF. C'est LE manque le plus grave sur un portable
-# recent -- sans lui, AUCUN son sur la quasi-totalite des machines Intel et AMD
-# depuis 2019. L'utilisateur ne voit pas une erreur, il voit une carte son
-# absente.
-firmware-sof-signed
-# Amplificateurs Cirrus, courants sur les Dell/HP/Lenovo depuis 2021: sans eux
-# les haut-parleurs restent muets alors que la carte son est detectee.
-firmware-cirrus
-# WiFi/Bluetooth MediaTek MT7921/MT7922, tres repandus sur les portables AMD
-# recents. Sans ce paquet: pas de reseau du tout sur ces machines, donc pas
-# meme la possibilite de telecharger le micrologiciel manquant.
-firmware-mediatek
-# Qualcomm/Atheros integres a certains portables.
-firmware-qcom-soc
-# Micrologiciel GSP des GPU NVIDIA recents: sans lui, nouveau ne peut pas
-# initialiser la carte. Ce n'est PAS le pilote proprietaire, seulement le blob
-# que le noyau charge.
-firmware-nvidia-graphics
