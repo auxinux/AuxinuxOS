@@ -143,8 +143,12 @@ if [[ "${STAGE}" == "all" || "${STAGE}" == "cleanup" ]]; then
     echo "-- live-boot restant:"; dpkg -l 2>/dev/null | grep -E "^ii +live-(boot|config)" || echo "   aucun (ok)"
     echo "-- calamares restant:"; dpkg -l 2>/dev/null | grep -E "^ii +calamares" || echo "   aucun (ok)"
     echo "-- compte auxinux:"; id auxinux 2>&1 || echo "   supprime (ok)"
-    echo "-- greetd conf:"; cat /etc/greetd/cosmic-greeter.toml
+    echo "-- autologin live restant:"; ls -l /etc/sddm.conf.d/ 2>/dev/null || echo "   aucun (ok)"
+    echo "-- reliquat greetd:"; ls -d /etc/greetd 2>/dev/null || echo "   supprime (ok)"
     echo "-- display-manager:"; ls -l /etc/systemd/system/display-manager.service
+    echo "-- session Plasma:"; ls -l /usr/share/wayland-sessions/plasma.desktop
+    echo "-- protection au demarrage:"; ls -l /etc/systemd/system/graphical.target.wants/ 2>/dev/null | grep auxinux || echo "   ABSENTE"
+    echo "-- compteur de demarrages:"; ls -l /var/lib/auxinux/boot-failures 2>/dev/null || echo "   absent (ok)"
     echo "-- initrd:"; ls -l /boot/initrd.img-*
     echo "-- live-boot dans initrd:"; lsinitramfs /boot/initrd.img-* 2>/dev/null | grep -c live || echo 0'
   umount_all

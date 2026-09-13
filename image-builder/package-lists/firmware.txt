@@ -13,3 +13,27 @@ firmware-libertas
 wpasupplicant
 iw
 wireless-regdb
+
+# --- Ajouts du 2026-09-13, vises PORTABLE -----------------------------------
+#
+# Ces quatre paquets decident si la machine est utilisable au quotidien, et
+# leur absence ne produit aucun message comprehensible.
+#
+# firmware-sof-signed: audio SOF. C'est LE manque le plus grave sur un portable
+# recent -- sans lui, AUCUN son sur la quasi-totalite des machines Intel et AMD
+# depuis 2019. L'utilisateur ne voit pas une erreur, il voit une carte son
+# absente.
+firmware-sof-signed
+# Amplificateurs Cirrus, courants sur les Dell/HP/Lenovo depuis 2021: sans eux
+# les haut-parleurs restent muets alors que la carte son est detectee.
+firmware-cirrus
+# WiFi/Bluetooth MediaTek MT7921/MT7922, tres repandus sur les portables AMD
+# recents. Sans ce paquet: pas de reseau du tout sur ces machines, donc pas
+# meme la possibilite de telecharger le micrologiciel manquant.
+firmware-mediatek
+# Qualcomm/Atheros integres a certains portables.
+firmware-qcom-soc
+# Micrologiciel GSP des GPU NVIDIA recents: sans lui, nouveau ne peut pas
+# initialiser la carte. Ce n'est PAS le pilote proprietaire, seulement le blob
+# que le noyau charge.
+firmware-nvidia-graphics

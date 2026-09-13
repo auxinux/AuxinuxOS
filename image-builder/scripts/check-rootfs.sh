@@ -256,6 +256,16 @@ need_setting /etc/xdg/baloofilerc '^Indexing-Enabled=false' \
 need_setting /etc/xdg/kscreenlockerrc '^Autolock=true' \
   "un poste non verrouille est le premier trou de confidentialite"
 
+echo "-- Materiel portable"
+# Ces micrologiciels ne produisent AUCUN message quand ils manquent: la machine
+# n'a simplement pas de son, ou pas de WiFi. Sur un portable, c'est la
+# difference entre un systeme utilisable et un systeme qu'on desinstalle.
+need_package firmware-sof-signed "AUCUN son sur la plupart des portables Intel/AMD depuis 2019"
+need_package firmware-cirrus "haut-parleurs muets sur beaucoup de Dell/HP/Lenovo recents"
+need_package firmware-mediatek "pas de WiFi du tout sur les portables AMD a MT7921/MT7922"
+need_package firmware-iwlwifi "pas de WiFi sur les portables Intel"
+need_file /lib/firmware/intel/sof "le paquet est la mais les blobs SOF manquent"
+
 echo "-- Fluidite"
 # Controle ajoute apres coup: `systemctl enable systemd-oomd.service` echouait
 # avec un simple avertissement parce que le PAQUET n'etait pas installe (dans
