@@ -29,26 +29,33 @@ ok() {
   echo "  ok      $*"
 }
 
+# TOUS les tests de fichiers passent par sudo.
+#
+# Le dossier personnel du compte live est en 0700 et appartient a l'UID 60000:
+# un test lance par l'utilisateur de construction ne peut meme pas le
+# TRAVERSER, et declarait donc « manquants » des fichiers parfaitement
+# presents. Constate a la deuxieme construction de la 0.2.0, sur les reglages
+# de verrouillage du live.
 need_file() {
   local path="$1" why="$2"
   # `-e` suit les liens symboliques: pour display-manager.service, qui pointe
   # vers /usr/lib/systemd/system/sddm.service DANS LE ROOTFS, il resoudrait la
   # cible sur l'HOTE de build -- ou sddm n'est pas installe. Le lien correct
   # serait donc declare manquant. `-L` rattrape ce cas.
-  if [[ -e "${ROOTFS}${path}" || -L "${ROOTFS}${path}" ]]; then ok "${path}"
+  if sudo test -e "${ROOTFS}${path}" || sudo test -L "${ROOTFS}${path}"; then ok "${path}"
   else fail "${path} — ${why}"; fi
 }
 
 need_exec() {
   local path="$1" why="$2"
-  if [[ -x "${ROOTFS}${path}" ]]; then ok "${path}"; else fail "${path} (executable) — ${why}"; fi
+  if sudo test -x "${ROOTFS}${path}"; then ok "${path}"; else fail "${path} (executable) — ${why}"; fi
 }
 
 need_any() {
   local why="$1"; shift
   local path
   for path in "$@"; do
-    if [[ -e "${ROOTFS}${path}" ]]; then ok "${path}"; return; fi
+    if sudo test -e "${ROOTFS}${path}"; then ok "${path}"; return; fi
   done
   fail "aucun de: $* — ${why}"
 }
@@ -75,7 +82,7 @@ refuse_package() {
 
 refuse_file() {
   local path="$1" why="$2"
-  if [[ -e "${ROOTFS}${path}" ]]; then
+  if sudo test -e "${ROOTFS}${path}"; then
     fail "${path} present alors qu'il doit etre absent — ${why}"
   else
     ok "${path} absent"
@@ -84,9 +91,9 @@ refuse_file() {
 
 need_setting() {
   local path="$1" pattern="$2" why="$3"
-  if [[ ! -f "${ROOTFS}${path}" ]]; then
+  if ! sudo test -f "${ROOTFS}${path}"; then
     fail "${path} — ${why}"
-  elif grep -qE "${pattern}" "${ROOTFS}${path}"; then
+  elif sudo grep -qE "${pattern}" "${ROOTFS}${path}"; then
     ok "${path}: ${pattern}"
   else
     fail "${path}: '${pattern}' absent — ${why}"
