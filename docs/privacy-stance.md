@@ -23,7 +23,12 @@ de changer pour lui-meme -- c'est ce que « consentement » veut dire):
 | `PlasmaUserFeedback` | `FeedbackLevel=0` — aucune statistique d'usage |
 | `kdeglobals` | `StatisticsCollectionMode=NoTelemetry` pour les applications KDE |
 | `baloofilerc` | indexation du contenu des fichiers desactivee |
-| `kscreenlockerrc` | verrouillage automatique apres 10 min, et au reveil |
+| `kscreenlockerrc` | verrouillage automatique apres 10 min, et au reveil — **systeme installe uniquement** |
+
+La session LIVE fait exception: elle ne se verrouille pas et n'eteint pas
+l'ecran (surcharge dans le dossier personnel du compte live, supprime a
+l'installation). Un visiteur qui laisse la machine deux minutes revenait sinon
+devant un ecran noir, puis un mot de passe qu'il n'a jamais choisi.
 
 Baloo n'envoie rien a personne: il est desactive pour la performance ET parce
 que son index contient le TEXTE de tous les documents, dans une base non

@@ -313,6 +313,21 @@ refuse_file /etc/greetd/cosmic-greeter.toml "reste de l'ancien gestionnaire de s
 refuse_package plasma-discover "double du centre de controle et ramene PackageKit"
 refuse_package plasma-welcome "recupere du contenu en ligne au premier demarrage"
 
+echo "-- Session live: rien qui ressemble a un ecran noir"
+# Le live ne doit NI se verrouiller NI eteindre l'ecran: un visiteur qui laisse
+# la machine deux minutes revenait devant un ecran noir, puis un mot de passe
+# qu'il n'a jamais choisi. Constate sur le premier essai VM de la 0.2.0.
+need_setting /home/auxinux/.config/kscreenlockerrc '^Autolock=false' \
+  "le live se verrouillerait apres dix minutes"
+need_setting /home/auxinux/.config/powermanagementprofilesrc 'idleTime=86400' \
+  "l'ecran du live s'eteindrait apres dix minutes"
+# Et le systeme INSTALLE, lui, doit garder le verrouillage: la surcharge doit
+# rester locale au compte live, jamais dans /etc/xdg.
+need_setting /etc/xdg/kscreenlockerrc '^Autolock=true' \
+  "le systeme installe ne se verrouillerait plus"
+refuse_file /etc/xdg/autostart/auxinux-install.desktop \
+  "l'installateur s'ouvrirait par-dessus l'ecran d'accueil, deux fenetres empilees"
+
 echo "-- Compte live"
 live_uid="$(sudo chroot "${ROOTFS}" id -u auxinux 2>/dev/null || true)"
 if [[ "${live_uid}" == "60000" ]]; then

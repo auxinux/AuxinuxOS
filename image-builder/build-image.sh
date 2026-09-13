@@ -306,13 +306,69 @@ echo 'auxinux ALL=(ALL) NOPASSWD:ALL' | sudo tee "${ROOTFS_DIR}/etc/sudoers.d/90
 sudo chmod 0440 "${ROOTFS_DIR}/etc/sudoers.d/90-auxinux-live"
 sudo install -m 0755 "${ROOTFS_DIR}/usr/share/applications/auxinux-install.desktop" "${ROOTFS_DIR}/home/auxinux/Desktop/Install AuxiNuxOS.desktop"
 sudo chroot "${ROOTFS_DIR}" chown -R auxinux:auxinux /home/auxinux/Desktop
-# Plasma affiche bien les icones du bureau (vue dossier), mais on garde AUSSI
-# l'autodemarrage: l'installateur doit s'ouvrir seul sur une session live, sans
-# que l'utilisateur ait a comprendre quoi cliquer. Il reste dans le menu pour
-# etre relance.
+
+# --- Pas de verrouillage ni d'extinction d'ecran DANS LE LIVE ----------------
+#
+# PANNE CONSTATEE SUR LE PREMIER ESSAI VM DE LA 0.2.0: le bureau apparaissait,
+# puis l'ecran devenait NOIR au bout de dix minutes d'inactivite -- verrouillage
+# automatique (notre propre /etc/xdg/kscreenlockerrc) et extinction de l'ecran
+# par powerdevil. Sur un medium live, c'est le pire des comportements: le
+# visiteur laisse la machine deux minutes, revient devant un ecran noir puis un
+# mot de passe qu'il n'a jamais choisi (celui du compte live, ecrit dans un
+# README qu'il n'a pas lu). C'est le symptome « ecran noir » que tout ce projet
+# cherche a supprimer, reintroduit par un reglage de securite.
+#
+# On ne touche PAS a /etc/xdg: le systeme INSTALLE doit se verrouiller. On
+# ecrit la surcharge dans le dossier personnel du compte live, qui est supprime
+# a l'installation -- l'utilisateur cree herite donc du defaut securise, sans
+# aucune etape de nettoyage a prevoir.
+sudo install -d -m 0755 "${ROOTFS_DIR}/home/auxinux/.config"
+sudo tee "${ROOTFS_DIR}/home/auxinux/.config/kscreenlockerrc" >/dev/null <<'EOF'
+# Session LIVE uniquement (voir build-image.sh). Le systeme installe utilise
+# /etc/xdg/kscreenlockerrc, qui verrouille apres dix minutes.
+[Daemon]
+Autolock=false
+LockOnResume=false
+EOF
+# Valeurs tres grandes plutot que « desactive »: powerdevil considere qu'une
+# action est active des que sa section existe, et l'interpretation d'un
+# idleTime=0 varie d'une version a l'autre. 86400 s = une journee.
+sudo tee "${ROOTFS_DIR}/home/auxinux/.config/powermanagementprofilesrc" >/dev/null <<'EOF'
+# Session LIVE uniquement (voir build-image.sh).
+[AC][DPMSControl]
+idleTime=86400
+lockBeforeTurnOff=0
+
+[AC][DimDisplay]
+idleTime=86400
+
+[AC][SuspendSession]
+idleTime=86400
+suspendType=0
+
+[Battery][DPMSControl]
+idleTime=86400
+lockBeforeTurnOff=0
+
+[Battery][DimDisplay]
+idleTime=86400
+
+[Battery][SuspendSession]
+idleTime=86400
+suspendType=0
+EOF
+sudo chroot "${ROOTFS_DIR}" chown -R auxinux:auxinux /home/auxinux/.config
+# L'installateur ne s'autodemarre PAS. Il l'a fait tant que le bureau etait
+# COSMIC, qui n'affiche aucune icone de bureau; Plasma en affiche (vue
+# dossier), donc l'icone « Install AuxiNuxOS » suffit.
+#
+# Constate sur le premier essai VM de la 0.2.0: les deux fenetres s'ouvraient
+# EN MEME TEMPS et se recouvraient -- l'ecran d'accueil (choix de la langue)
+# par-dessus le controle de configuration requise. L'utilisateur voyait deux
+# boites empilees des la premiere seconde. L'accueil s'ouvre desormais seul, et
+# l'installateur quand on le demande.
 sudo install -d -m 0755 "${ROOTFS_DIR}/etc/xdg/autostart"
-sudo install -m 0644 "${ROOTFS_DIR}/usr/share/applications/auxinux-install.desktop" \
-  "${ROOTFS_DIR}/etc/xdg/autostart/auxinux-install.desktop"
+sudo rm -f "${ROOTFS_DIR}/etc/xdg/autostart/auxinux-install.desktop"
 
 # Assistants de premier demarrage a museler dans la session live (assistant de
 # creation de cle de KGpg, notificateur de disques). Ils restent lancables
