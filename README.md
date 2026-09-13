@@ -11,6 +11,13 @@ installateur maison est le chantier suivant. Le
 [contrôle de configuration requise](docs/configuration-requise.md), lui, est
 déjà là et bloque une installation sous le minimum.
 
+> **Secure Boot doit être désactivé** dans le micrologiciel de la machine avant
+> de démarrer sur AuxiNuxOS. Le noyau `kernel-auxinuxos` est compilé par le
+> projet et n'est signé par aucune autorité reconnue par les firmwares du
+> commerce : GRUB refuse alors de le charger (`bad shim signature`). Ce choix
+> est assumé pour l'instant — voir
+> [les limites connues](docs/limitations.md#secure-boot).
+
 Dépôt : https://git.auxinux.ca/Auxinux/AuxinuxOS.git
 
 ## État

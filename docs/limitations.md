@@ -18,6 +18,37 @@ KVM) et **photographiée toutes les minutes pendant 20 minutes** :
 C'est la première fois qu'une ISO de ce projet est prouvée par l'image jusqu'au
 bureau.
 
+### Secure Boot
+
+**Non supporté. Il faut le désactiver dans le micrologiciel** (arbitrage du
+2026-09-13).
+
+Ce que les essais en VM ont établi, avec un OVMF portant les clés Microsoft
+— c'est-à-dire la configuration d'usine de la plupart des portables :
+
+| Étape | État |
+|---|---|
+| micrologiciel → `shimx64.efi.signed` | ✅ accepté (signé Microsoft) |
+| shim → `gcdx64.efi.signed` | ✅ accepté (signé Debian) |
+| GRUB → menu AuxiNuxOS | ✅ affiché, compte à rebours compris |
+| GRUB → noyau `7.2.5-auxinuxos-amd64` | ❌ `error: bad shim signature` |
+
+Le noyau est compilé par le projet et signé par personne. L'ISO embarque tout de
+même la chaîne signée : sans elle, la machine répondait `No bootable option or
+device was found` — l'utilisateur voyait sa clé USB purement ignorée, sans
+aucune indication. Avec elle, il obtient un menu et un message qui nomme le
+problème, et le chemin d'enrôlement d'une clé (MokManager, `mmx64.efi`) est déjà
+en place si le projet décide un jour de signer son noyau.
+
+Les trois sorties possibles, si la question est reprise :
+
+1. **clé AuxiNux + enrôlement MOK** — un écran bleu au premier démarrage, une
+   fois par machine ; suppose une clé privée gardée en lieu sûr et **chaque
+   noyau publié signé** ;
+2. **noyau Debian signé en second choix** — tout démarre sans rien faire, mais
+   le noyau optimisé du projet n'est alors pas celui qui tourne ;
+3. **statu quo** — désactiver Secure Boot.
+
 ### Ce qui reste non validé
 
 Ce qui a changé le 2026-09-12 et n'est **pas encore validé en machine
