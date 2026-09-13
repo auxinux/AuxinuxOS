@@ -567,10 +567,14 @@ Live password: auxinux
 EOF
 
 echo "==> Creating ISO"
-# mbr_force_bootable marks the protective-MBR partition active (0x80).
-# grub-mkrescue leaves it at 0x00, and several legacy BIOSes refuse to boot a
-# USB stick without an active MBR partition -- the classic "boots in QEMU but
-# not on the real machine" failure. Harmless for UEFI.
-grub-mkrescue -o "${OUTPUT_ISO}" "${ISO_ROOT}" -- \
-  -boot_image any mbr_force_bootable=on
+# grub-mkrescue a ete ABANDONNE ici le 2026-09-13. Il fabrique lui-meme l'image
+# EFI avec un GRUB qu'il compile sur place, donc NON SIGNE: sur une machine a
+# Secure Boot actif -- la configuration d'usine de la quasi-totalite des
+# portables --, le micrologiciel refuse de l'amorcer et l'utilisateur voit une
+# machine qui ignore purement et simplement la cle USB.
+#
+# make-iso.sh assemble l'ISO avec la chaine signee de Debian (shim + GRUB
+# signe) et garde l'amorce BIOS. Voir le script pour le detail et les pieges.
+"${PROJECT_DIR}/image-builder/scripts/make-iso.sh" \
+  "${ISO_ROOT}" "${ROOTFS_DIR}" "${OUTPUT_ISO}"
 ls -lh "${OUTPUT_ISO}"
