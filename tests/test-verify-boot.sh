@@ -20,6 +20,20 @@ VERIFY="${ROOT}/installer/verify-installed-boot.sh"
 WORK="$(mktemp -d)"
 trap 'rm -rf "${WORK}"' EXIT
 
+# `sync` est remplace par un stub.
+#
+# verify-installed-boot.sh commence par `sync`, ce qui est JUSTE sur une vraie
+# cible d'installation: il faut forcer l'ecriture avant de relire. Mais dans un
+# conteneur LXC, sync() porte sur tous les systemes de fichiers visibles et
+# reste bloque en etat D -- observe le 2026-09-14 sur l'hote de build ET sur la
+# machine de developpement, alors que /proc/meminfo annoncait « Dirty: 0 kB ».
+# Un banc d'essai ne doit pas dependre de l'etat du systeme qui l'execute.
+STUBS="${WORK}/bin"
+mkdir -p "${STUBS}"
+printf '#!/bin/sh\nexit 0\n' > "${STUBS}/sync"
+chmod 755 "${STUBS}/sync"
+export PATH="${STUBS}:${PATH}"
+
 fail=0
 check() {
   if [[ "$2" == "$3" ]]; then echo "  OK   $1"; else echo "  ECHEC $1: attendu [$3] obtenu [$2]"; fail=1; fi
@@ -73,6 +87,29 @@ T="${WORK}/sansgrub"; make_target "${T}" 12288 34816; rm -f "${T}/boot/grub/grub
 out="$(bash "${VERIFY}" "${T}" 2>&1)"; rc=$?
 check "sort en 1" "${rc}" "1"
 check "signale l'absence de menu" "$(grep -c 'aucun menu de demarrage' <<<"${out}")" "1"
+
+echo "== 7. Noyau stocke COMPRESSE -> echoue =="
+# LA panne du 2026-09-13 sur materiel reel: installation declaree saine, puis
+#   erreur : fin prematuree du fichier /@/boot/vmlinuz-7.2.5-auxinuxos-amd64
+# Le fichier se relit parfaitement avec dd (pilote BTRFS du noyau Linux), mais
+# GRUB a son propre pilote, dont le decompresseur zstd echoue. Verifier la
+# relecture ne suffit donc pas: il faut verifier le STOCKAGE.
+T="${WORK}/compresse"
+make_target "${T}" 12288 34816
+cat > "${STUBS}/filefrag" <<'STUB'
+#!/bin/sh
+# Imite la sortie de filefrag pour un fichier a extents compresses.
+case "$*" in
+  *vmlinuz*) echo "   0:        0..    4095:      12345..     16440:   4096:             encoded" ;;
+  *)         echo "   0:        0..    4095:      12345..     16440:   4096:" ;;
+esac
+STUB
+chmod 755 "${STUBS}/filefrag"
+out="$(bash "${VERIFY}" "${T}" 2>&1)"; rc=$?
+check "sort en 1" "${rc}" "1"
+check "nomme la compression" "$(echo "${out}" | grep -c 'stocke COMPRESSE')" "1"
+check "donne la commande de correction" "$(echo "${out}" | grep -c 'compression none')" "1"
+rm -f "${STUBS}/filefrag"
 
 echo
 if [[ "${fail}" == "0" ]]; then echo "TOUS LES TESTS PASSENT"; else echo "DES TESTS ECHOUENT"; exit 1; fi

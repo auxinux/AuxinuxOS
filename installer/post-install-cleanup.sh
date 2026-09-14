@@ -18,6 +18,47 @@ LIVE_USER="auxinux"
 # Normalise: "/" => prefixe vide pour des chemins absolus propres.
 prefix="${TARGET_ROOT%/}"
 
+# 0. /boot NE DOIT JAMAIS ETRE COMPRESSE.
+#
+#    PANNE RENCONTREE SUR MATERIEL REEL (2026-09-13), apres une installation
+#    annoncee reussie:
+#
+#      Loading Linux 7.2.5-auxinuxos-amd64 ...
+#      erreur : fin prematuree du fichier /@/boot/vmlinuz-7.2.5-auxinuxos-amd64.
+#      erreur : le noyau doit d'abord etre charge.
+#
+#    Le fstab monte la racine avec `compress=zstd:1`, donc unpackfs ecrit un
+#    noyau COMPRESSE. Le pilote BTRFS du noyau Linux le relit parfaitement --
+#    c'est pourquoi la verification finale ne voyait rien, elle relit avec
+#    `dd`. Mais celui qui lit ce fichier au demarrage, c'est GRUB, dont le
+#    decompresseur zstd pour BTRFS echoue sur les fichiers de cette taille.
+#
+#    La propriete est posee sur le REPERTOIRE: elle est heritee par tout
+#    fichier cree ensuite, donc par l'initramfs regenere plus bas ET par les
+#    futurs noyaux installes par apt. Elle prime sur l'option de montage.
+#
+#    Puis on reecrit noyau et initrd pour qu'ils soient stockes en clair.
+#    `--reflink=never` est INDISPENSABLE: sans lui, cp partage les extents
+#    existants et le fichier reste compresse sans que rien ne le signale.
+if [ -d "${prefix}/boot" ] && command -v btrfs >/dev/null 2>&1; then
+  if btrfs property set "${prefix}/boot" compression none 2>/dev/null; then
+    for kf in "${prefix}"/boot/vmlinuz-* "${prefix}"/boot/initrd.img-*; do
+      [ -f "${kf}" ] || continue
+      if cp -a --reflink=never "${kf}" "${kf}.aux-tmp" 2>/dev/null; then
+        mv -f "${kf}.aux-tmp" "${kf}"
+      else
+        rm -f "${kf}.aux-tmp"
+        echo "post-install-cleanup: AVERTISSEMENT: ${kf##*/} non reecrit;" >&2
+        echo "  GRUB peut echouer sur « fin prematuree du fichier »." >&2
+      fi
+    done
+    sync
+  else
+    echo "post-install-cleanup: AVERTISSEMENT: compression de /boot non desactivee." >&2
+    echo "  Si la racine est en BTRFS compresse, GRUB peut refuser le noyau." >&2
+  fi
+fi
+
 # 1. Artefacts de l'installateur (live uniquement).
 #
 #    Le fichier d'AUTODEMARRAGE etait oublie: l'installateur se relancait donc

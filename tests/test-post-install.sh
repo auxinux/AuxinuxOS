@@ -24,6 +24,17 @@ ROLLBACK="${ROOT}/installer/setup-btrfs-rollback.sh"
 
 WORK="$(mktemp -d)"
 trap 'rm -rf "${WORK}"' EXIT
+
+# `sync` neutralise: post-install-cleanup.sh l'appelle apres avoir reecrit le
+# noyau sans compression -- ce qui est juste sur une vraie cible. Dans un
+# conteneur LXC, sync() porte sur tous les systemes de fichiers visibles et
+# reste bloque en etat D (observe le 2026-09-14, « Dirty: 0 kB » a l'appui).
+# Un banc d'essai ne doit pas dependre de l'etat du systeme qui l'execute.
+STUB_BIN="${WORK}/stub-bin"
+mkdir -p "${STUB_BIN}"
+printf '#!/bin/sh\nexit 0\n' > "${STUB_BIN}/sync"
+chmod 755 "${STUB_BIN}/sync"
+export PATH="${STUB_BIN}:${PATH}"
 STUBS="${WORK}/bin"
 mkdir -p "${STUBS}"
 

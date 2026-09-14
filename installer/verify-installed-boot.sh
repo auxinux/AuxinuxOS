@@ -51,8 +51,32 @@ else
   echo "verify-installed-boot: drop_caches indisponible, lecture possiblement servie par le cache." >&2
 fi
 
-# 2. Le noyau et l'initrd doivent exister, avoir une taille credible, et se
-#    relire INTEGRALEMENT.
+# Un fichier de /boot stocke COMPRESSE est illisible par GRUB.
+#
+# CE CONTROLE EXISTE PARCE QUE LE PRECEDENT NE SUFFISAIT PAS. Sur du materiel
+# reel (2026-09-13), une installation a ete declaree saine par ce script puis a
+# refuse de demarrer:
+#
+#   erreur : fin prematuree du fichier /@/boot/vmlinuz-7.2.5-auxinuxos-amd64.
+#
+# La relecture par `dd` passe par le pilote BTRFS du NOYAU LINUX, qui
+# decompresse parfaitement. GRUB a son propre pilote BTRFS, dont le
+# decompresseur zstd echoue sur des fichiers de cette taille. Verifier la
+# relecture ne dit donc RIEN de ce que GRUB saura faire: il faut verifier que
+# le fichier est stocke EN CLAIR.
+#
+# `filefrag -v` marque « encoded » chaque extent compresse.
+storage_is_plain() {
+  f="$1"
+  command -v filefrag >/dev/null 2>&1 || return 0   # sans outil, on ne juge pas
+  if filefrag -v "${f}" 2>/dev/null | grep -q "encoded"; then
+    return 1
+  fi
+  return 0
+}
+
+# 2. Le noyau et l'initrd doivent exister, avoir une taille credible, se relire
+#    INTEGRALEMENT, et etre stockes SANS COMPRESSION.
 found_kernel=0
 for kernel in "${prefix}"/boot/vmlinuz-*; do
   [ -f "${kernel}" ] || continue
@@ -74,6 +98,12 @@ for kernel in "${prefix}"/boot/vmlinuz-*; do
   else
     ok "${kernel#"${prefix}"} relu en entier (${size} octets)"
   fi
+
+  if storage_is_plain "${kernel}"; then
+    ok "${kernel#"${prefix}"} stocke sans compression"
+  else
+    fail "${kernel#"${prefix}"}: stocke COMPRESSE — GRUB echouera sur « fin prematuree du fichier ». Corriger avec: btrfs property set ${prefix}/boot compression none, puis reecrire le fichier avec cp --reflink=never."
+  fi
 done
 
 if [ "${found_kernel}" -eq 0 ]; then
@@ -94,6 +124,12 @@ for initrd in "${prefix}"/boot/initrd.img-*; do
     fail "${initrd#"${prefix}"}: ${read_bytes} octets relus sur ${size} annonces."
   else
     ok "${initrd#"${prefix}"} relu en entier (${size} octets)"
+  fi
+
+  if storage_is_plain "${initrd}"; then
+    ok "${initrd#"${prefix}"} stocke sans compression"
+  else
+    fail "${initrd#"${prefix}"}: stocke COMPRESSE — GRUB echouera sur « fin prematuree du fichier »."
   fi
 done
 
