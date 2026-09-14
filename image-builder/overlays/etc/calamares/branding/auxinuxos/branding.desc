@@ -15,9 +15,9 @@ strings:
     productName:         AuxiNux OS
     shortProductName:    AuxiNux OS
     version:             0.2.0
-    shortVersion:        0.1
+    shortVersion:        0.2.0
     versionedName:       AuxiNux OS 0.2.0
-    shortVersionedName:  AuxiNux OS 0.1
+    shortVersionedName:  AuxiNux OS 0.2.0
     bootloaderEntryName: AuxiNuxOS
     productUrl:          https://auxinux.ca/
     supportUrl:          https://auxinux.ca/

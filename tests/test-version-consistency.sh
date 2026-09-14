@@ -59,6 +59,23 @@ contains "branding versionedName" \
 contains "branding version" \
   "${ROOT}/image-builder/overlays/etc/calamares/branding/auxinuxos/branding.desc" "version:             ${VERSION}"
 
+# Controle EXHAUSTIF du branding, et non champ par champ.
+#
+# `shortVersionedName: AuxiNux OS 0.1` a survecu au passage en 0.2.0: il ne
+# contenait pas « 0.1-BETA », donc le renommage ne l'a pas vu, et ce test ne
+# regardait que deux champs sur trois. Resultat: Calamares demandait a
+# l'utilisateur de confirmer l'installation d'« AuxiNux OS 0.1 » -- signale par
+# aporler pendant une vraie installation.
+#
+# On refuse desormais TOUTE version qui n'est pas la version courante,
+# n'importe ou dans le fichier.
+BRANDING="${ROOT}/image-builder/overlays/etc/calamares/branding/auxinuxos/branding.desc"
+if [[ -f "${BRANDING}" ]]; then
+  strays="$(grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?(-[A-Za-z]+)?' "${BRANDING}" \
+            | grep -vFx "${VERSION}" | sort -u | paste -sd' ')"
+  check "branding: aucune autre version que ${VERSION}" "${strays:-aucune}" "aucune"
+fi
+
 echo "== plus aucune « edition » =="
 hits="$(cd "${ROOT}" && git ls-files \
   | grep -vE '^(LICENSE|tests/test-version-consistency\.sh|README\.md|image-builder/(assets|keys)/)' \
