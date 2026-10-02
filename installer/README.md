@@ -48,8 +48,9 @@ toute ISO publique.
 L'installation cible **BTRFS** avec des sous-volumes plats, ce qui rend le
 rollback possible. La configuration est versionnée dans les overlays :
 
-- `modules/partition.conf` — BTRFS par défaut et les sept sous-volumes ;
-- `modules/mount.conf` — options de montage **pendant** l'installation ;
+- `modules/partition.conf` — BTRFS par défaut ;
+- `modules/mount.conf` — **les sept sous-volumes** (`btrfsSubvolumes`) et les
+  options de montage **pendant** l'installation ;
 - `modules/fstab.conf` — options écrites dans le `/etc/fstab` **installé** ;
 - `modules/shellprocess-snapshots.conf` — branche `setup-btrfs-rollback.sh`.
 
@@ -74,5 +75,44 @@ Le script est non bloquant par conception : une racine ext4 choisie en
 partitionnement manuel le fait sortir en code 0 sans configurer le rollback.
 Contrairement à `post-install-cleanup.sh`, il ne masque aucune erreur : chaque
 échec est tracé sur stderr et résumé en fin d'exécution.
+
+Les sous-volumes se déclarent dans `mount.conf` et **nulle part ailleurs** :
+c'est le module `mount` qui les crée. Jusqu'au 2026-09-29, la liste vivait dans
+`partition.conf`, que Calamares ne lit pas pour cela ; elle était ignorée en
+silence (seul le journal de Calamares le disait : « No configuration for
+btrfsSubvolumes »), et **aucun système installé n'avait `@snapshots`** — donc
+aucun instantané possible. `check-rootfs.sh` refuse désormais une image où la
+liste manque à `mount.conf`, ou traîne dans `partition.conf`. Ne pas y ajouter
+`/swap` : Calamares crée lui-même `@swap` quand l'utilisateur choisit un
+fichier d'échange, et le déclarer deux fois ferait échouer l'installation.
+
+## Clavier, langue et fuseau
+
+`modules/locale.conf` place le fuseau par défaut sur `America/Toronto`. Sans
+lui, Calamares partait de New York, proposait `fr_FR` et en déduisait le
+clavier **AZERTY de France**, appliqué aussitôt à la saisie du nom et du mot de
+passe. Avec une zone canadienne, il propose `fr_CA` (ou `en_CA`) et le clavier
+« French (Canada) », QWERTY.
+
+La disposition choisie doit être la même **partout** où l'on tape le mot de
+passe : Calamares l'écrit dans `/etc/default/keyboard` (console, écran de
+connexion X11), et `post-install-cleanup.sh` la recopie dans `/etc/xdg/kxkbrc`
+pour la session Plasma, que KWin ne configure pas autrement. Sans cette copie,
+un mot de passe tapé dans une disposition autre que « us » ouvrait la session
+mais ne déverrouillait plus l'écran, et sudo le refusait.
+
+## Partition EFI
+
+`post-install-cleanup.sh` reproduit `EFI/AuxiNuxOS` (shim, GRUB, MokManager et
+`grub.cfg`) dans le chemin de secours `EFI/BOOT`, le seul que tout
+micrologiciel sait amorcer quand il a perdu son entrée NVRAM. Calamares n'y
+copiait que le GRUB signé, sans le `grub.cfg` dont cette image monolithique a
+besoin : la machine s'arrêtait sur une invite `grub>`. La question debconf
+`grub2/force_efi_extra_removable` est posée pour que les mises à jour de GRUB
+maintiennent ce chemin.
+
+`verify-installed-boot.sh` contrôle la partition EFI avant la fin de
+l'installation : répertoire `EFI/AuxiNuxOS` complet et `grub.cfg` désignant
+bien l'UUID de la racine installée.
 
 Voir [docs/rollback.md](../docs/rollback.md).

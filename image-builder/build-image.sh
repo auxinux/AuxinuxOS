@@ -330,33 +330,42 @@ sudo tee "${ROOTFS_DIR}/home/auxinux/.config/kscreenlockerrc" >/dev/null <<'EOF'
 Autolock=false
 LockOnResume=false
 EOF
-# Valeurs tres grandes plutot que « desactive »: powerdevil considere qu'une
-# action est active des que sa section existe, et l'interpretation d'un
-# idleTime=0 varie d'une version a l'autre. 86400 s = une journee.
-sudo tee "${ROOTFS_DIR}/home/auxinux/.config/powermanagementprofilesrc" >/dev/null <<'EOF'
+# Format de Plasma 6 (powerdevilrc), et non plus powermanagementprofilesrc.
+#
+# L'ancien fichier etait au format de Plasma 5. Plasma 6 le MIGRE a la
+# premiere ouverture de session -- en gardant les nombres, alors que l'unite a
+# change: `[DimDisplay] idleTime` etait en MILLISECONDES. 86400 est donc devenu
+# 86 secondes, et l'ecran du live s'assombrissait au bout d'une minute et demie
+# d'inactivite, pendant toute l'installation (constate en VM le 2026-09-29).
+# Ici, les actions sont simplement desactivees, dans les trois profils.
+sudo tee "${ROOTFS_DIR}/home/auxinux/.config/powerdevilrc" >/dev/null <<'EOF'
 # Session LIVE uniquement (voir build-image.sh).
-[AC][DPMSControl]
-idleTime=86400
-lockBeforeTurnOff=0
+[AC][Display]
+DimDisplayWhenIdle=false
+TurnOffDisplayWhenIdle=false
+LockBeforeTurnOffDisplay=false
 
-[AC][DimDisplay]
-idleTime=86400
+[AC][SuspendAndShutdown]
+AutoSuspendAction=0
 
-[AC][SuspendSession]
-idleTime=86400
-suspendType=0
+[Battery][Display]
+DimDisplayWhenIdle=false
+TurnOffDisplayWhenIdle=false
+LockBeforeTurnOffDisplay=false
 
-[Battery][DPMSControl]
-idleTime=86400
-lockBeforeTurnOff=0
+[Battery][SuspendAndShutdown]
+AutoSuspendAction=0
 
-[Battery][DimDisplay]
-idleTime=86400
+[LowBattery][Display]
+DimDisplayWhenIdle=false
+TurnOffDisplayWhenIdle=false
+LockBeforeTurnOffDisplay=false
 
-[Battery][SuspendSession]
-idleTime=86400
-suspendType=0
+[LowBattery][SuspendAndShutdown]
+AutoSuspendAction=0
 EOF
+# Un rootfs reutilise garde l'ancien fichier: Plasma le migrerait par-dessus.
+sudo rm -f "${ROOTFS_DIR}/home/auxinux/.config/powermanagementprofilesrc"
 sudo chroot "${ROOTFS_DIR}" chown -R auxinux:auxinux /home/auxinux/.config
 # L'installateur ne s'autodemarre PAS. Il l'a fait tant que le bureau etait
 # COSMIC, qui n'affiche aucune icone de bureau; Plasma en affiche (vue

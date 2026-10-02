@@ -16,9 +16,11 @@ set -uo pipefail
 # lancees, jamais que le RESULTAT tenait debout.
 #
 # CE QUE FAIT CE SCRIPT: il relit le noyau et l'initrd DEPUIS LE DISQUE, cache
-# vide, exactement comme GRUB le fera au prochain demarrage. C'est le seul
-# moment ou l'on peut encore prevenir l'utilisateur pendant qu'il est devant
-# l'installateur, plutot que de le laisser decouvrir une machine morte.
+# vide -- puis, surtout, AVEC LE PILOTE DE GRUB LUI-MEME (grub-fstest, point
+# 3a). La relecture par Linux ne suffit pas: les deux pilotes ne voient pas le
+# meme fichier (voir 3a). C'est le seul moment ou l'on peut encore prevenir
+# l'utilisateur pendant qu'il est devant l'installateur, plutot que de le
+# laisser decouvrir une machine morte.
 #
 # Usage: verify-installed-boot.sh TARGET_ROOT
 #   TARGET_ROOT = racine du systeme installe ("/" car dontChroot: false).
@@ -137,6 +139,24 @@ if [ "${found_initrd}" -eq 0 ]; then
   fail "aucun initramfs dans ${prefix}/boot — le systeme ne peut pas demarrer."
 fi
 
+# Chemin GRUB -> chemin sur le disque monte.
+#
+# grub.cfg designe les fichiers par rapport au systeme de fichiers qui porte
+# /boot: « /@/boot/vmlinuz-... » quand /boot est dans le sous-volume @ (notre
+# disposition), « /vmlinuz-... » quand /boot est une partition separee
+# (partitionnement manuel). Ne connaitre que le premier cas faisait ECHOUER une
+# installation saine a /boot separe.
+grub_local_path() {
+  local p="$1"
+  if [ -f "${prefix}${p#/@}" ]; then
+    printf '%s' "${prefix}${p#/@}"
+  elif [ -f "${prefix}/boot${p}" ]; then
+    printf '%s' "${prefix}/boot${p}"
+  else
+    printf '%s' "${prefix}${p#/@}"
+  fi
+}
+
 # 3. Le menu de demarrage doit exister et designer un noyau qui existe
 #    VRAIMENT. Un grub.cfg qui pointe sur un fichier absent produit exactement
 #    l'ecran d'erreur rapporte.
@@ -145,19 +165,96 @@ if [ ! -s "${GRUB_CFG}" ]; then
   fail "/boot/grub/grub.cfg absent ou vide — aucun menu de demarrage."
 else
   ok "/boot/grub/grub.cfg present"
-  # Les chemins y sont relatifs a la racine du systeme de fichiers BTRFS
-  # (« /@/boot/... »), pas au systeme monte: on retire le prefixe de
-  # sous-volume avant de verifier l'existence du fichier.
   missing=0
   while read -r kpath; do
     [ -n "${kpath}" ] || continue
-    real="${prefix}${kpath#/@}"
+    real="$(grub_local_path "${kpath}")"
     if [ ! -f "${real}" ]; then
       fail "grub.cfg designe ${kpath}, introuvable sur le disque."
       missing=$((missing + 1))
     fi
   done < <(awk '$1 == "linux" { print $2 }' "${GRUB_CFG}" | sort -u)
   [ "${missing}" -eq 0 ] && ok "chaque entree de grub.cfg designe un noyau existant"
+fi
+
+# 3a. Relecture PAR LE PILOTE DE GRUB LUI-MEME.
+#
+#     C'est le controle qui aurait intercepte la panne du 2026-09-13. Tous
+#     ceux qui precedent relisent les fichiers avec le noyau Linux; or c'est
+#     GRUB qui les lira au demarrage, avec son propre pilote BTRFS, et les
+#     deux ne voient pas le meme fichier. Le noyau livre se termine par 512
+#     octets de zeros; `rsync -S` (Calamares) en faisait un trou, que Linux lit
+#     comme des zeros et devant lequel GRUB 2.12 s'arrete: « fin prematuree du
+#     fichier ». Aucune relecture depuis Linux ne pouvait le voir.
+#
+#     grub-fstest (paquet grub-common) execute le code de GRUB en espace
+#     utilisateur, sur le peripherique reel: chaque noyau et initrd designe par
+#     grub.cfg doit en ressortir identique, octet pour octet.
+BOOT_DEV="$(findmnt -no SOURCE -T "${prefix}/boot" 2>/dev/null | head -n1)"
+BOOT_DEV="${BOOT_DEV%%\[*}"
+GRUB_FSTEST="${AUXINUX_GRUB_FSTEST:-grub-fstest}"
+if [ -s "${GRUB_CFG}" ] && command -v "${GRUB_FSTEST}" >/dev/null 2>&1 &&
+   [ -n "${BOOT_DEV}" ] && [ -e "${BOOT_DEV}" ]; then
+  grub_read="$(mktemp)"
+  while read -r gpath; do
+    [ -n "${gpath}" ] || continue
+    real="$(grub_local_path "${gpath}")"
+    [ -f "${real}" ] || continue   # absence deja signalee au point 3
+    rm -f "${grub_read}"
+    "${GRUB_FSTEST}" "${BOOT_DEV}" cp "(loop0)${gpath}" "${grub_read}" >/dev/null 2>&1
+    if cmp -s "${grub_read}" "${real}"; then
+      ok "${gpath} relu en entier par le pilote de GRUB"
+    else
+      got="$(stat -c %s "${grub_read}" 2>/dev/null || echo 0)"
+      fail "GRUB ne relit que ${got} octets de ${gpath} sur $(stat -c %s "${real}") — il s'arretera sur « fin prematuree du fichier ». Reecrire le fichier sans trou: cp --sparse=never --reflink=never."
+    fi
+  done < <(awk '$1 == "linux" { print $2 } $1 == "initrd" { for (i = 2; i <= NF; i++) print $i }' \
+             "${GRUB_CFG}" | sort -u)
+  rm -f "${grub_read}"
+else
+  echo "verify-installed-boot: grub-fstest indisponible: relecture par GRUB non verifiee." >&2
+fi
+
+# 3b. Partition EFI (installation UEFI seulement).
+#
+#     Le micrologiciel ne lit QUE la partition EFI. Le GRUB signe de Debian qui
+#     s'y trouve est une image monolithique: il ne connait pas notre disque et
+#     suit le grub.cfg pose a cote de lui, qui designe le systeme de fichiers
+#     racine par son UUID. Un UUID perime ou un fichier absent, et la machine
+#     s'arrete sur une invite « grub> » avant meme de lire /boot.
+ESP="${prefix}/boot/efi"
+# Surchargeable UNIQUEMENT pour les tests (tests/test-verify-boot.sh): ils
+# doivent pouvoir simuler une machine UEFI comme une machine BIOS, quel que
+# soit le micrologiciel de l'hote qui les execute.
+EFI_SYSFS="${AUXINUX_EFI_SYSFS:-/sys/firmware/efi}"
+if [ -d "${EFI_SYSFS}" ]; then
+  root_uuid="$(findmnt -no UUID "${TARGET_ROOT}" 2>/dev/null | head -n1)"
+  vendor=""
+  fallback=""
+  for d in "${ESP}"/EFI/*; do
+    [ -d "${d}" ] || continue
+    case "$(basename "${d}" | tr '[:lower:]' '[:upper:]')" in
+      AUXINUXOS) vendor="${d}" ;;
+      BOOT) fallback="${d}" ;;
+    esac
+  done
+  if [ -z "${vendor}" ] || [ ! -s "${vendor}/grubx64.efi" ]; then
+    fail "EFI/AuxiNuxOS/grubx64.efi absent de la partition EFI — le micrologiciel n'a rien a demarrer."
+  elif [ ! -s "${vendor}/grub.cfg" ]; then
+    fail "EFI/AuxiNuxOS/grub.cfg absent — GRUB s'arreterait sur une invite « grub> »."
+  elif [ -n "${root_uuid}" ] && ! grep -q "${root_uuid}" "${vendor}/grub.cfg"; then
+    fail "EFI/AuxiNuxOS/grub.cfg ne designe pas la racine installee (UUID ${root_uuid})."
+  else
+    ok "partition EFI: EFI/AuxiNuxOS complet, grub.cfg designe la racine installee"
+  fi
+  # Le chemin de secours n'est pas bloquant: l'entree NVRAM suffit a la
+  # plupart des machines. Mais son absence se dit.
+  if [ -n "${fallback}" ] && [ -s "${fallback}/grub.cfg" ] &&
+     ls "${fallback}" 2>/dev/null | grep -qi '^bootx64\.efi$'; then
+    ok "partition EFI: chemin de secours EFI/BOOT/BOOTX64.EFI complet"
+  else
+    echo "verify-installed-boot: AVERTISSEMENT: chemin de secours EFI/BOOT incomplet; une machine qui oublie l'entree NVRAM ne demarrera pas." >&2
+  fi
 fi
 
 # 4. Espace disque. Une cible saturee explique a elle seule des ecritures

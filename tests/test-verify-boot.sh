@@ -34,6 +34,13 @@ printf '#!/bin/sh\nexit 0\n' > "${STUBS}/sync"
 chmod 755 "${STUBS}/sync"
 export PATH="${STUBS}:${PATH}"
 
+# Machine BIOS par defaut: les cas 1 a 7 ne regardent pas la partition EFI,
+# quel que soit le micrologiciel de l'hote qui execute ce banc.
+export AUXINUX_EFI_SYSFS="${WORK}/pas-d-efi"
+# Et sans grub-fstest: les cas 1 a 12 ne dependent pas de l'outil de l'hote,
+# qui lirait sinon le VRAI disque de la machine qui execute ce banc.
+export AUXINUX_GRUB_FSTEST="${WORK}/grub-fstest-absent"
+
 fail=0
 check() {
   if [[ "$2" == "$3" ]]; then echo "  OK   $1"; else echo "  ECHEC $1: attendu [$3] obtenu [$2]"; fail=1; fi
@@ -82,6 +89,15 @@ out="$(bash "${VERIFY}" "${T}" 2>&1)"; rc=$?
 check "sort en 1" "${rc}" "1"
 check "signale l'entree menteuse" "$(grep -c 'introuvable sur le disque' <<<"${out}")" "1"
 
+echo "== 5b. /boot sur une partition separee -> laisse passer =="
+# Partitionnement manuel: grub.cfg designe alors « /vmlinuz-... », relatif a la
+# partition /boot. La verification le prenait pour un noyau absent et faisait
+# echouer une installation saine.
+T="${WORK}/bootsepare"; make_target "${T}" 12288 34816 "/vmlinuz-${KVER}"
+sed -i "s|initrd\t/@/boot/|initrd\t/|" "${T}/boot/grub/grub.cfg"
+bash "${VERIFY}" "${T}" >/dev/null 2>&1
+check "sort en 0" "$?" "0"
+
 echo "== 6. grub.cfg absent -> echoue =="
 T="${WORK}/sansgrub"; make_target "${T}" 12288 34816; rm -f "${T}/boot/grub/grub.cfg"
 out="$(bash "${VERIFY}" "${T}" 2>&1)"; rc=$?
@@ -110,6 +126,101 @@ check "sort en 1" "${rc}" "1"
 check "nomme la compression" "$(echo "${out}" | grep -c 'stocke COMPRESSE')" "1"
 check "donne la commande de correction" "$(echo "${out}" | grep -c 'compression none')" "1"
 rm -f "${STUBS}/filefrag"
+
+# --- Partition EFI -----------------------------------------------------------
+#
+# Le micrologiciel ne lit que la partition EFI. Le GRUB signe de Debian y suit
+# le grub.cfg pose a cote de lui, qui designe la racine par son UUID: s'il
+# manque ou vise un autre disque, la machine s'arrete sur « grub> ».
+mkdir -p "${WORK}/efi-sysfs"
+cat > "${STUBS}/findmnt" <<'STUB'
+#!/bin/sh
+echo "${FINDMNT_UUID:-}"
+STUB
+chmod 755 "${STUBS}/findmnt"
+export FINDMNT_UUID="0d2c1e9a-7b36-4c55-9a5f-1e2d3c4b5a69"
+
+make_esp() {
+  local t="$1"
+  mkdir -p "${t}/boot/efi/EFI/AuxiNuxOS" "${t}/boot/efi/EFI/BOOT"
+  printf 'x' > "${t}/boot/efi/EFI/AuxiNuxOS/grubx64.efi"
+  printf 'x' > "${t}/boot/efi/EFI/AuxiNuxOS/shimx64.efi"
+  printf "search.fs_uuid %s root\nconfigfile (\$root)/@/boot/grub/grub.cfg\n" "${FINDMNT_UUID}" \
+    > "${t}/boot/efi/EFI/AuxiNuxOS/grub.cfg"
+  printf 'x' > "${t}/boot/efi/EFI/BOOT/BOOTX64.EFI"
+  cp "${t}/boot/efi/EFI/AuxiNuxOS/grub.cfg" "${t}/boot/efi/EFI/BOOT/grub.cfg"
+}
+
+echo "== 8. UEFI: partition EFI complete -> laisse passer =="
+T="${WORK}/uefi-sain"; make_target "${T}" 12288 34816; make_esp "${T}"
+out="$(AUXINUX_EFI_SYSFS="${WORK}/efi-sysfs" bash "${VERIFY}" "${T}" 2>&1)"; rc=$?
+check "sort en 0" "${rc}" "0"
+check "partition EFI jugee complete" "$(grep -c 'EFI/AuxiNuxOS complet' <<<"${out}")" "1"
+check "chemin de secours juge complet" "$(grep -c 'chemin de secours EFI/BOOT/BOOTX64.EFI complet' <<<"${out}")" "1"
+
+echo "== 9. UEFI: grub.cfg absent de EFI/AuxiNuxOS -> echoue =="
+T="${WORK}/uefi-sanscfg"; make_target "${T}" 12288 34816; make_esp "${T}"
+rm -f "${T}/boot/efi/EFI/AuxiNuxOS/grub.cfg"
+out="$(AUXINUX_EFI_SYSFS="${WORK}/efi-sysfs" bash "${VERIFY}" "${T}" 2>&1)"; rc=$?
+check "sort en 1" "${rc}" "1"
+check "annonce l'invite grub>" "$(grep -c 'invite « grub> »' <<<"${out}")" "1"
+
+echo "== 10. UEFI: grub.cfg vise un autre disque -> echoue =="
+T="${WORK}/uefi-uuid"; make_target "${T}" 12288 34816; make_esp "${T}"
+sed -i 's/0d2c1e9a/ffffffff/' "${T}/boot/efi/EFI/AuxiNuxOS/grub.cfg"
+out="$(AUXINUX_EFI_SYSFS="${WORK}/efi-sysfs" bash "${VERIFY}" "${T}" 2>&1)"; rc=$?
+check "sort en 1" "${rc}" "1"
+check "nomme l'UUID attendu" "$(grep -c "UUID ${FINDMNT_UUID}" <<<"${out}")" "1"
+
+echo "== 11. UEFI: chemin de secours incomplet -> avertit sans bloquer =="
+T="${WORK}/uefi-secours"; make_target "${T}" 12288 34816; make_esp "${T}"
+rm -f "${T}/boot/efi/EFI/BOOT/grub.cfg"
+out="$(AUXINUX_EFI_SYSFS="${WORK}/efi-sysfs" bash "${VERIFY}" "${T}" 2>&1)"; rc=$?
+check "sort en 0" "${rc}" "0"
+check "avertit" "$(grep -c 'chemin de secours EFI/BOOT incomplet' <<<"${out}")" "1"
+
+echo "== 12. UEFI: aucun GRUB sur la partition EFI -> echoue =="
+T="${WORK}/uefi-vide"; make_target "${T}" 12288 34816; mkdir -p "${T}/boot/efi/EFI"
+out="$(AUXINUX_EFI_SYSFS="${WORK}/efi-sysfs" bash "${VERIFY}" "${T}" 2>&1)"; rc=$?
+check "sort en 1" "${rc}" "1"
+rm -f "${STUBS}/findmnt"
+
+# --- Relecture par le pilote de GRUB (grub-fstest) --------------------------
+#
+# LA panne du 2026-09-13, enfin comprise le 2026-09-29: le noyau finit par un
+# trou (rsync -S), Linux le lit comme des zeros, GRUB s'arrete avant. Seule
+# une relecture par le code de GRUB le voit. Le stub imite grub-fstest: il
+# copie le fichier de la cible, ou n'en rend que le debut (lecture courte).
+cat > "${STUBS}/grub-fstest" <<'STUB'
+#!/bin/sh
+# grub-fstest PERIPHERIQUE cp (loop0)CHEMIN SORTIE
+src="${3#(loop0)}"; src="${src#/@}"
+if [ "${FSTEST_COURT:-0}" = 1 ] && [ "${src#*vmlinuz}" != "${src}" ]; then
+  head -c 4096 "${FSTEST_ROOT}${src}" > "$4"
+else
+  cp "${FSTEST_ROOT}${src}" "$4"
+fi
+STUB
+chmod 755 "${STUBS}/grub-fstest"
+cat > "${STUBS}/findmnt" <<'STUB'
+#!/bin/sh
+echo "/dev/null[/@]"
+STUB
+chmod 755 "${STUBS}/findmnt"
+
+echo "== 13. GRUB relit noyau et initrd en entier -> laisse passer =="
+T="${WORK}/grub-lit"; make_target "${T}" 12288 34816
+out="$(AUXINUX_GRUB_FSTEST="${STUBS}/grub-fstest" FSTEST_ROOT="${T}" bash "${VERIFY}" "${T}" 2>&1)"; rc=$?
+check "sort en 0" "${rc}" "0"
+check "noyau et initrd relus par GRUB" "$(grep -c 'relu en entier par le pilote de GRUB' <<<"${out}")" "2"
+
+echo "== 14. GRUB s'arrete avant la fin du noyau -> echoue =="
+T="${WORK}/grub-court"; make_target "${T}" 12288 34816
+out="$(AUXINUX_GRUB_FSTEST="${STUBS}/grub-fstest" FSTEST_ROOT="${T}" FSTEST_COURT=1 bash "${VERIFY}" "${T}" 2>&1)"; rc=$?
+check "sort en 1" "${rc}" "1"
+check "annonce la fin prematuree" "$(grep -c 'GRUB ne relit que 4096 octets' <<<"${out}")" "1"
+check "donne la commande de correction" "$(grep -c 'sparse=never' <<<"${out}")" "1"
+rm -f "${STUBS}/grub-fstest" "${STUBS}/findmnt"
 
 echo
 if [[ "${fail}" == "0" ]]; then echo "TOUS LES TESTS PASSENT"; else echo "DES TESTS ECHOUENT"; exit 1; fi

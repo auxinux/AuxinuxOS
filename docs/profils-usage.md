@@ -72,6 +72,13 @@ auxinux-profile status          # sortie machine, pour le centre de contrôle
 `sysctl` et `limits` survivent seuls, mais le profil de
 `power-profiles-daemon` revient à `balanced` à chaque redémarrage.
 
+L'unité est voulue par `graphical.target`, pas par `multi-user.target` : dans
+Debian 13, `power-profiles-daemon` s'ordonne **après** `multi-user.target`, et
+l'ancienne attache formait un cycle que systemd brisait en supprimant
+l'unité — « Ordering cycle found, skipping auxinux-profile.service » à chaque
+démarrage. Jusqu'au 2026-09-29, **le profil n'était donc jamais appliqué** sur
+un système installé.
+
 ## Type d'installation et profil d'usage sont deux choses
 
 Le **type d'installation** décide de ce qui est *installé*

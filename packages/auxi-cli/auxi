@@ -275,7 +275,7 @@ run_rollback() {
   fi
   trap auxi_rollback_cleanup EXIT
 
-  # @snapshots est un sous-volume de premier niveau (voir partition.conf); on
+  # @snapshots est un sous-volume de premier niveau (voir mount.conf); on
   # accepte quand meme la disposition imbriquee des installations anciennes.
   local snapshot_src=""
   local candidate

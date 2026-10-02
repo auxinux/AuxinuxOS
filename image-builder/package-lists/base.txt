@@ -13,6 +13,16 @@ sudo
 login
 locales
 locales-all
+# console-setup applique /etc/default/keyboard aux consoles texte (tty1 de la
+# console de secours comprise) et fournit `ckbcomp`. Sans lui, la console reste
+# en QWERTY americain quelle que soit la disposition choisie, et l'apercu du
+# clavier de Calamares est vide (« ckbcomp not found, keyboard preview
+# disabled »): l'utilisateur ne voit pas quelle disposition il valide.
+console-setup
+# gio/gsettings. Liste ici pour etre marque « installe manuellement »: le
+# module `packages` de Calamares fait un `apt-get autoremove`, qui le purgeait
+# du systeme installe (verifie par simulation le 2026-09-29).
+libglib2.0-bin
 ca-certificates
 curl
 wget

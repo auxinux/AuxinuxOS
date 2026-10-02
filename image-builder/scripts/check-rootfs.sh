@@ -82,7 +82,9 @@ refuse_package() {
 
 refuse_file() {
   local path="$1" why="$2"
-  if sudo test -e "${ROOTFS}${path}"; then
+  # -L aussi: un lien vers un chemin absolu du rootfs se resoudrait sur l'HOTE,
+  # et un lien bien present serait declare absent.
+  if sudo test -e "${ROOTFS}${path}" || sudo test -L "${ROOTFS}${path}"; then
     fail "${path} present alors qu'il doit etre absent — ${why}"
   else
     ok "${path} absent"
@@ -157,6 +159,52 @@ else
   else
     ok "mount.conf: pas de cle extraMountsEfi"
   fi
+
+  # Les sous-volumes BTRFS sont crees par le module `mount`, a partir de SA
+  # configuration. Ecrite ailleurs, la liste est ignoree et Calamares retombe
+  # sur @ et @home: pas de @snapshots, donc aucun instantane possible sur le
+  # systeme installe. C'est ce qu'ont livre toutes les ISO jusqu'au 2026-09-29.
+  subvols="$(awk '
+    /^btrfsSubvolumes:/ { inblk = 1; next }
+    inblk && /^[^[:space:]#]/ { inblk = 0 }
+    inblk && /mountPoint:/ { mp = $NF }
+    inblk && /subvolume:/ { print mp " " $NF }
+  ' "${CAL_MOUNT}")"
+  for pair in "/ /@" "/home /@home" "/.snapshots /@snapshots" "/var/log /@var_log" \
+              "/var/cache /@var_cache" "/var/tmp /@var_tmp" \
+              "/var/lib/flatpak /@var_lib_flatpak"; do
+    if grep -qxF "${pair}" <<<"${subvols}"; then
+      ok "mount.conf: sous-volume ${pair#* } sur ${pair% *}"
+    else
+      fail "mount.conf: sous-volume '${pair#* }' sur '${pair% *}' absent de btrfsSubvolumes — ce qui n'est pas cree ici n'existe pas sur le systeme installe"
+    fi
+  done
+  # /swap est AJOUTE par le module quand l'utilisateur choisit un fichier
+  # d'echange. Liste ici aussi, @swap serait cree deux fois et le second
+  # `btrfs subvolume create` ferait echouer l'installation.
+  if grep -qE '^/swap ' <<<"${subvols}"; then
+    fail "mount.conf: /swap dans btrfsSubvolumes — Calamares l'ajoute deja lui-meme, l'installation echouerait"
+  else
+    ok "mount.conf: /swap laisse a Calamares"
+  fi
+fi
+
+# Zone par defaut: sans elle, Calamares part de New York, en deduit fr_FR et
+# propose l'AZERTY de France -- applique aussitot a la saisie du mot de passe.
+need_setting /etc/calamares/modules/locale.conf '^zone:[[:space:]]*"?Toronto"?' \
+  "Calamares proposerait fr_FR, des nombres americains et un clavier AZERTY"
+# Sans ckbcomp, l'apercu du clavier est vide: l'utilisateur ne voit pas quelle
+# disposition il valide. console-setup le fournit, et regle la console texte.
+need_exec /usr/bin/ckbcomp "apercu du clavier vide dans l'installateur (paquet console-setup)"
+
+# Des cles de sous-volumes dans partition.conf n'ont AUCUN effet: ce module ne
+# les lit pas. Les y laisser, c'est faire croire a une disposition que le
+# systeme installe n'aura pas.
+CAL_PART="${ROOTFS}/etc/calamares/modules/partition.conf"
+if [[ -f "${CAL_PART}" ]] && grep -qE '^[[:space:]]*btrfs(Subvolumes|SwapSubvol):' "${CAL_PART}"; then
+  fail "partition.conf: btrfsSubvolumes/btrfsSwapSubvol ignores par ce module — les declarer dans mount.conf"
+else
+  ok "partition.conf: aucune cle de sous-volume trompeuse"
 fi
 
 echo "-- Instantane avant transaction DEB"
@@ -225,6 +273,14 @@ else
   fi
 fi
 
+echo "-- Mode urgence"
+# Le compte root est verrouille: sans SYSTEMD_SULOGIN_FORCE, le mode urgence
+# repond « the root account is locked » et la machine s'arrete la.
+need_setting /etc/systemd/system/emergency.service.d/50-auxinux-sulogin.conf \
+  '^Environment=SYSTEMD_SULOGIN_FORCE=1' "mode urgence sans issue: compte root verrouille"
+need_setting /etc/systemd/system/rescue.service.d/50-auxinux-sulogin.conf \
+  '^Environment=SYSTEMD_SULOGIN_FORCE=1' "mode de secours sans issue: compte root verrouille"
+
 echo "-- Protection au demarrage"
 need_exec /usr/lib/auxinux/auxinux-boot-sentinel "rien ne detecterait un demarrage qui n'aboutit pas au bureau"
 need_exec /usr/lib/auxinux/auxinux-rescue "aucune console de secours ni restauration automatique"
@@ -237,7 +293,12 @@ for unit in auxinux-boot-arm.service auxinux-boot-sentinel.service auxinux-rescu
   need_file "/etc/systemd/system/graphical.target.wants/${unit}" \
     "unite presente mais NON ACTIVEE: elle ne demarrera jamais"
 done
-need_file /etc/systemd/system/multi-user.target.wants/auxinux-profile.service \
+# graphical.target et non multi-user.target: power-profiles-daemon s'ordonne
+# APRES multi-user.target, et le cycle faisait sauter l'unite a chaque
+# demarrage (« Ordering cycle found, skipping auxinux-profile.service »).
+refuse_file /etc/systemd/system/multi-user.target.wants/auxinux-profile.service \
+  "cycle avec power-profiles-daemon: le profil ne serait jamais applique"
+need_file /etc/systemd/system/graphical.target.wants/auxinux-profile.service \
   "le profil d'usage ne serait pas reapplique au demarrage"
 
 echo "-- Profil d'usage"
@@ -292,6 +353,17 @@ for grub_file in /etc/default/grub /etc/calamares/modules/grubcfg.conf; do
   fi
 done
 
+# Le module Calamares `grubcfg` ajoute « quiet » de lui-meme (kernel_params,
+# defaut ["quiet"]) par-dessus une GRUB_CMDLINE_LINUX_DEFAULT vide: le controle
+# ci-dessus passait, et le systeme installe demarrait quand meme en silence.
+if [[ -f "${ROOTFS}/etc/calamares/modules/grubcfg.conf" ]] &&
+   grep -qE '^[[:space:]]*kernel_params:[[:space:]]*\[[[:space:]]*\]' \
+     "${ROOTFS}/etc/calamares/modules/grubcfg.conf"; then
+  ok "grubcfg.conf: kernel_params vide, Calamares n'ajoute pas « quiet »"
+else
+  fail "grubcfg.conf: kernel_params absent — Calamares ajouterait « quiet » au systeme installe"
+fi
+
 echo "-- Couche Windows"
 if sudo chroot "${ROOTFS}" dpkg --print-foreign-architectures 2>/dev/null | grep -qx i386; then
   ok "architecture i386"
@@ -336,8 +408,14 @@ echo "-- Session live: rien qui ressemble a un ecran noir"
 # qu'il n'a jamais choisi. Constate sur le premier essai VM de la 0.2.0.
 need_setting /home/auxinux/.config/kscreenlockerrc '^Autolock=false' \
   "le live se verrouillerait apres dix minutes"
-need_setting /home/auxinux/.config/powermanagementprofilesrc 'idleTime=86400' \
+need_setting /home/auxinux/.config/powerdevilrc '^TurnOffDisplayWhenIdle=false' \
   "l'ecran du live s'eteindrait apres dix minutes"
+need_setting /home/auxinux/.config/powerdevilrc '^DimDisplayWhenIdle=false' \
+  "l'ecran du live s'assombrirait pendant l'installation"
+# L'ancien format (Plasma 5) est MIGRE par Plasma 6 avec des unites fausses:
+# 86400 ms d'assombrissement devenaient 86 secondes.
+refuse_file /home/auxinux/.config/powermanagementprofilesrc \
+  "fichier Plasma 5 que Plasma 6 migrerait en assombrissant l'ecran au bout de 86 s"
 # Et le systeme INSTALLE, lui, doit garder le verrouillage: la surcharge doit
 # rester locale au compte live, jamais dans /etc/xdg.
 need_setting /etc/xdg/kscreenlockerrc '^Autolock=true' \

@@ -2,6 +2,43 @@
 
 ## État de la 0.2.0
 
+### Installation complète validée en machine virtuelle le 2026-09-29
+
+Pour la première fois, une installation **Calamares graphique complète** a été
+menée puis démarrée, en QEMU (UEFI, disque NVMe, TCG sans KVM), pilotée par
+`tests/vm-driver.py` et prouvée par captures d'écran :
+
+- parcours de l'installateur en français, fuseau **America/Toronto**, locale
+  **fr_CA**, clavier **French (Canada)** proposés par défaut, aperçu du clavier
+  affiché ;
+- disque effacé, **les huit sous-volumes créés et montés** (`@`, `@home`,
+  `@snapshots`, `@var_log`, `@var_cache`, `@var_tmp`, `@var_lib_flatpak`,
+  `@swap`), instantané « Installation initiale » posé ;
+- installation terminée sans erreur ;
+- **la panne rapportée sur matériel réel a été reproduite à l'identique** avec
+  l'ISO publiée le 2026-09-14 : `erreur : fin prématurée du fichier
+  /@/boot/vmlinuz-7.2.5-auxinuxos-amd64`. Cause : un trou en fin de noyau (voir
+  « Rollback système » plus bas). Corrigée, puis :
+- menu GRUB du système installé, démarrage, **écran de connexion SDDM**,
+  ouverture de la session **Plasma (Wayland)** avec le mot de passe choisi,
+  `sudo`, **verrouillage et déverrouillage de l'écran** avec ce même mot de
+  passe — tapé avec une touche dont le caractère diffère entre QWERTY US et
+  « French (Canada) », pour prouver que les trois dispositions concordent ;
+- second démarrage, `systemctl is-system-running` = `running`, protection au
+  démarrage à zéro échec, snapper actif (instantanés au démarrage et horaires).
+
+**Confirmé le même jour avec l'ISO reconstruite, publiée sous
+`auxinuxos-0.2.0-20260929-amd64.iso`** : installation complète sans aucune
+intervention, redémarrage par « Terminé » (média encore inséré), GRUB,
+connexion, bureau, verrouillage/déverrouillage, second démarrage après coupure
+brutale. L'ISO du 2026-09-14 a été retirée.
+
+Reste à valider : le démarrage par le chemin UEFI de secours (`EFI/BOOT`, le
+micrologiciel l'a bien choisi après suppression de l'entrée NVRAM, mais l'écran
+obtenu n'a pas pu être capturé), le démarrage sur un instantané depuis le
+sous-menu GRUB, une installation BIOS, une installation chiffrée (LUKS), et du
+matériel réel.
+
 ### Validé en machine virtuelle le 2026-09-13
 
 L'ISO `auxinuxos-0.2.0-20260913-amd64.iso` a été démarrée en QEMU (TCG, sans
@@ -62,9 +99,8 @@ virtuelle** :
   faite ;
 - l'**installateur maison** n'existe pas : la 0.2.0 garde Calamares.
 
-Aucune installation graphique complète n'a jamais été menée sur ce projet, quelle
-que soit la version. C'est le jalon bloquant : le live est prouvé, l'installation
-ne l'est pas.
+(Le paragraphe qui disait « aucune installation graphique complète n'a jamais
+été menée » est caduc depuis le 2026-09-29 : voir plus haut.)
 
 ## Construction
 
@@ -130,8 +166,9 @@ ne l'est pas.
   part ; avec un déclenchement erroné, il modifierait un démarrage normal.
 - **BTRFS + LUKS + grub-btrfs** n’est pas testé. GRUB doit déverrouiller le
   volume avant de lire `/.snapshots`.
-- Le fichier d’échange sur `@swap` repose sur `btrfsSwapSubvol` de Calamares.
-  Ni la création ni la mise en veille prolongée ne sont vérifiées.
+- Le fichier d’échange sur `@swap` repose sur `btrfsSwapSubvol` (dans
+  `mount.conf`) : Calamares ajoute lui-même ce sous-volume quand l’utilisateur
+  choisit un fichier d’échange. La mise en veille prolongée n’est pas vérifiée.
 - Les limites d’espace (`SPACE_LIMIT`, `FREE_LIMIT`) exigent les quotas BTRFS.
   `snapper setup-quota` est appelé à l’installation ; **son effet réel n’a pas
   été mesuré**, et un échec n’est qu’un avertissement.
@@ -243,7 +280,25 @@ ne l'est pas.
   sans la moindre erreur affichee, produit au redemarrage
   `error: premature end of file /@/boot/vmlinuz-7.1.12-auxinuxos-amd64`.
   GRUB trouve le noyau (le chemin et le sous-volume `@` sont corrects) mais ne
-  peut pas en lire tout le contenu. **Cause premiere non encore identifiee.**
+  peut pas en lire tout le contenu.
+- **CAUSE IDENTIFIEE ET CORRIGEE le 2026-09-29** (reproduite en VM avec l'ISO
+  publiee le 2026-09-14, qui devait la corriger). Les 512 derniers octets du
+  noyau sont des zeros de remplissage. Le module `unpackfs` de Calamares copie
+  le systeme avec `rsync -S`, qui transforme ces zeros en **trou** ; avec la
+  fonction BTRFS `no-holes`, un trou final n'a aucun extent, et le pilote BTRFS
+  de GRUB 2.12 s'arrete au dernier extent : `grub-fstest`, qui execute ce
+  pilote, ne relit que 16 752 640 octets sur 16 753 152. Linux lit le trou comme
+  des zeros : aucune relecture faite depuis Linux ne pouvait le voir.
+  Correctif : `post-install-cleanup.sh` reecrit tout `/boot` avec
+  `cp --sparse=never --reflink=never`, et `verify-installed-boot.sh` relit
+  noyau et initrd **avec `grub-fstest`** avant d'annoncer la fin de
+  l'installation. Le correctif du 2026-09-14 (« /boot non compresse ») visait
+  une cause deja eliminee plus bas, et `cp` y recreait le trou.
+- **Les systemes installes avec une ISO anterieure au 2026-09-29 ne demarrent
+  pas.** Reparation depuis un live : monter `@`, puis
+  `cp --sparse=never --reflink=never /boot/vmlinuz-X /boot/vmlinuz-X.tmp &&
+  mv /boot/vmlinuz-X.tmp /boot/vmlinuz-X`. Leurs instantanes, s'ils en ont,
+  portent le meme noyau troue.
 - Hypotheses **eliminees par test en VM**, pas par raisonnement :
   1. *Compression zstd* — un noyau recompresse en zstd (4 extents `encoded`)
      demarre sans probleme ; `btrfs.mod` declare `zstd` en dependance, le
@@ -257,14 +312,13 @@ ne l'est pas.
      coherent.
   4. *GRUB signe Debian sans zstd* — `grubx64.efi.signed` embarque bien
      `btrfs`, `zstd`, `lzopio` et `gzio`.
-- Pistes restantes, a departager avec les donnees de la machine touchee :
-  cible saturee en fin d'installation (ecritures differees perdues),
-  demarrage **BIOS legacy** (chemin `i386-pc`, jamais teste ici), ou
-  specificite de l'hyperviseur.
+- (Pistes envisagees avant le 2026-09-29 — cible saturee, BIOS legacy,
+  hyperviseur — sans objet : la cause est le trou final ci-dessus.)
 - **Garde-fou ajoute** (`shellprocess@verifyboot`, dernier job avant `umount`) :
   `installer/verify-installed-boot.sh` fait `sync` puis vide le cache
-  (`drop_caches`) et **relit le noyau et l'initrd depuis le disque**, comme le
-  fera GRUB. Il verifie aussi que chaque entree de `grub.cfg` designe un
+  (`drop_caches`) et relit le noyau et l'initrd depuis le disque, **puis les
+  relit avec le pilote de GRUB lui-meme** (`grub-fstest`) : seule cette
+  seconde relecture voit ce que GRUB verra. Il verifie aussi que chaque entree de `grub.cfg` designe un
   fichier existant et qu'il reste de la place. C'est le seul job de la sequence
   autorise a **faire echouer l'installation** : mieux vaut une erreur affichee
   pendant que l'utilisateur est devant l'ecran qu'une machine morte au
@@ -289,10 +343,15 @@ ne l'est pas.
   rien faire — vérifié dans son `main.py` —, mais **l’option « connexion
   automatique » de l’installateur reste donc sans effet**. Le lien
   `display-manager.service` est rétabli par le nettoyage post-installation.
-- Le sous-volume `/@swap` manquait dans `btrfsSubvolumes` : `btrfsSwapSubvol`
-  dit seulement où créer le sous-volume, c’est `btrfsSubvolumes` qui produit
-  les lignes de `/etc/fstab`. Résultat, `@swap` n’était jamais monté et
-  `swapon` échouait à chaque démarrage. Corrigé.
+- **Les sous-volumes n’étaient pas créés** (constaté en VM le 2026-09-29).
+  `btrfsSubvolumes` et `btrfsSwapSubvol` étaient écrits dans `partition.conf`,
+  que Calamares ne lit pas pour cela : seuls `@`, `@home` et `@swap` (ce
+  dernier ajouté d’office par le module `mount` quand l’utilisateur choisit un
+  fichier d’échange) existaient sur les systèmes installés. Pas de
+  `@snapshots`, donc aucun instantané : le rollback n’a fonctionné sur aucune
+  installation antérieure. La liste est désormais dans `mount.conf`, et
+  `check-rootfs.sh` le vérifie. L’ancien paragraphe qui annonçait `@swap`
+  « corrigé » par un ajout à cette liste se trompait de fichier.
 - Le nettoyage masque encore les erreurs de suppression du compte live, de
   purge des paquets live et de régénération de l’initramfs.
 - Le compte live utilise l’UID 60000 pour que le compte créé par Calamares

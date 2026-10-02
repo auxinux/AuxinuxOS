@@ -1,5 +1,6 @@
 AuxiNux OS 0.2.0 \n \l
 
 Cette console texte s'affiche quand le bureau n'a pas demarre.
-Connectez-vous avec votre compte, puis:   journalctl -b -u cosmic-greeter
+Connectez-vous avec votre compte, puis:   journalctl -b -u sddm
+Pour revenir a l'ecran de connexion:     sudo systemctl restart sddm
 

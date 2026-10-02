@@ -4,6 +4,15 @@
 # profil de power-profiles-daemon, qui revient a « balanced » a chaque
 # demarrage. Sans cette unite, le profil jeu se perdait au premier redemarrage
 # et rien ne le signalait.
+#
+# graphical.target et NON multi-user.target. Dans Debian 13,
+# power-profiles-daemon.service est ordonne APRES multi-user.target; une unite
+# voulue par multi-user.target (donc ordonnee AVANT elle) et placee apres
+# power-profiles-daemon forme un cycle. systemd le brise en supprimant CE job
+# -- « Ordering cycle found, skipping auxinux-profile.service » a chaque
+# demarrage, constate en VM le 2026-09-29: le profil n'etait JAMAIS applique
+# sur un systeme installe. graphical.target est aussi la cible qui veut
+# power-profiles-daemon: les deux demarrent ensemble, dans le bon ordre.
 [Unit]
 Description=AuxiNuxOS - application du profil d'usage
 After=power-profiles-daemon.service
@@ -16,4 +25,4 @@ RemainAfterExit=yes
 ExecStart=/usr/bin/auxinux-profile apply
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=graphical.target

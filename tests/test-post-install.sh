@@ -56,9 +56,17 @@ cat > "${STUBS}/snapper" <<'STUB'
 #!/usr/bin/env bash
 exit 0
 STUB
+
+# btrfs: journalise les proprietes posees, sans rien toucher.
+cat > "${STUBS}/btrfs" <<'STUB'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "${BTRFS_LOG}"
+exit 0
+STUB
 chmod +x "${STUBS}"/*
 
 export CHROOT_LOG="${WORK}/chroot.log"
+export BTRFS_LOG="${WORK}/btrfs.log"
 
 fail=0
 check() {
@@ -128,6 +136,41 @@ GREETD
   printf 'APT_ENABLED=1\n' > "${t}/etc/auxinux/apt.conf"
   printf 'deb file:/cdrom trixie main\n' > "${t}/etc/apt/sources.list.d/media.list"
 
+  # /boot tel que grub-install et l'installation du noyau le laissent.
+  mkdir -p "${t}/boot/grub/i386-pc" "${t}/boot/grub/fonts"
+  # Noyau avec un TROU FINAL, comme apres `rsync -S` dans Calamares: les
+  # 512 derniers octets du vrai noyau sont des zeros de remplissage, et le
+  # pilote BTRFS de GRUB 2.12 s'arrete au dernier extent (« fin prematuree du
+  # fichier »). 8 Kio de donnees, puis 512 octets de trou.
+  printf 'NOYAU' > "${t}/boot/vmlinuz-7.2.5-auxinuxos-amd64"
+  head -c 8187 /dev/zero | tr '\0' 'k' >> "${t}/boot/vmlinuz-7.2.5-auxinuxos-amd64"
+  truncate -s 8704 "${t}/boot/vmlinuz-7.2.5-auxinuxos-amd64"
+  printf 'INITRD' > "${t}/boot/initrd.img-7.2.5-auxinuxos-amd64"
+  printf 'MENU' > "${t}/boot/grub/grub.cfg"
+  printf 'MODULE' > "${t}/boot/grub/i386-pc/normal.mod"
+  printf 'POLICE' > "${t}/boot/grub/fonts/unicode.pf2"
+
+  # Disposition choisie dans l'installateur (ici l'AZERTY de France), telle que
+  # le module Calamares `keyboard` l'ecrit.
+  cat > "${t}/etc/default/keyboard" <<'KBD'
+XKBMODEL="pc105"
+XKBLAYOUT="fr"
+XKBVARIANT=""
+XKBOPTIONS=""
+BACKSPACE="guess"
+KBD
+
+  # Partition EFI apres grub-install (images signees de Debian) et apres la
+  # copie de secours de Calamares: grubx64.efi SEUL dans EFI/boot, sans son
+  # grub.cfg -- ce qui mene a une invite « grub> ».
+  mkdir -p "${t}/boot/efi/EFI/AuxiNuxOS" "${t}/boot/efi/EFI/boot"
+  printf 'SHIM' > "${t}/boot/efi/EFI/AuxiNuxOS/shimx64.efi"
+  printf 'GRUB' > "${t}/boot/efi/EFI/AuxiNuxOS/grubx64.efi"
+  printf 'MOK'  > "${t}/boot/efi/EFI/AuxiNuxOS/mmx64.efi"
+  printf "search.fs_uuid aaaa root\nset prefix=(\$root)'/@/boot/grub'\nconfigfile \$prefix/grub.cfg\n" \
+    > "${t}/boot/efi/EFI/AuxiNuxOS/grub.cfg"
+  printf 'GRUB' > "${t}/boot/efi/EFI/boot/bootx64.efi"
+
   touch "${t}/etc/default/grub-btrfs/config"
   printf 'y\n' > "${t}/usr/bin/snapper"; chmod +x "${t}/usr/bin/snapper"
 
@@ -142,6 +185,7 @@ echo "== 1. Nettoyage: l'installateur ne survit pas a l'installation =="
 TARGET="${WORK}/cible1"
 make_target "${TARGET}" ""
 : > "${CHROOT_LOG}"
+: > "${BTRFS_LOG}"
 PATH="${STUBS}:${PATH}" bash "${CLEANUP}" "${TARGET}" >/dev/null 2>&1
 check "sort en 0" "$?" "0"
 check "autodemarrage de l'installateur retire" \
@@ -196,7 +240,7 @@ check "compteur de demarrages remis a zero" \
 # urgence -- et comme le compte root n'a pas de mot de passe (users.conf:
 # setRootPassword: false), sulogin refuse la console et le demarrage s'arrete
 # la, definitivement.
-for mp in /.snapshots /var/lib/flatpak /var/log; do
+for mp in /.snapshots /var/lib/flatpak /var/log /boot/efi; do
   check "nofail sur ${mp}" \
     "$(awk -v m="${mp}" '$2 == m { print ($4 ~ /(^|,)nofail(,|$)/) ? "oui" : "non" }' "${TARGET}/etc/fstab")" "oui"
 done
@@ -209,10 +253,91 @@ check "racine intacte (pas de nofail)" \
 check "/home intact (pas de nofail)" \
   "$(awk '$2 == "/home" { print ($4 ~ /(^|,)nofail(,|$)/) ? "oui" : "non" }' "${TARGET}/etc/fstab")" "non"
 
+# GRUB lit /boot avec son propre pilote BTRFS, dont le decompresseur zstd a
+# deja refuse un noyau compresse (« fin prematuree du fichier »). Tout /boot
+# doit donc etre en clair -- y compris /boot/grub, cree par grub-install
+# AVANT le nettoyage et qui n'herite de rien: sur une installation BIOS, GRUB y
+# charge normal.mod.
+for d in /boot /boot/grub /boot/grub/i386-pc /boot/grub/fonts; do
+  check "compression desactivee sur ${d}" \
+    "$(grep -cxF "property set ${TARGET}${d} compression none" "${BTRFS_LOG}")" "1"
+done
+check "partition EFI (FAT) laissee hors de BTRFS" \
+  "$(grep -c "${TARGET}/boot/efi" "${BTRFS_LOG}")" "0"
+check "noyau reecrit a l'identique" \
+  "$(head -c 5 "${TARGET}/boot/vmlinuz-7.2.5-auxinuxos-amd64")$(stat -c %s "${TARGET}/boot/vmlinuz-7.2.5-auxinuxos-amd64")" "NOYAU8704"
+# LE controle de la panne du 2026-09-13: plus aucun trou dans le noyau. Un
+# fichier sans trou occupe au moins sa taille sur le disque.
+check "trou final du noyau comble (GRUB lit jusqu'au dernier octet)" \
+  "$(stat -c '%b %B %s' "${TARGET}/boot/vmlinuz-7.2.5-auxinuxos-amd64" | awk '{ print ($1 * $2 >= $3) ? "plein" : "troue" }')" "plein"
+check "module GRUB reecrit a l'identique" \
+  "$(cat "${TARGET}/boot/grub/i386-pc/normal.mod")" "MODULE"
+check "aucun fichier temporaire oublie" \
+  "$(find "${TARGET}/boot" -name '*.aux-tmp' | wc -l)" "0"
+
+# La session Plasma (KWin) ne lit pas /etc/default/keyboard: sans kxkbrc elle
+# est en « us ». Le mot de passe, tape en AZERTY dans l'installateur, ouvrait
+# alors la session a l'ecran de connexion mais ne deverrouillait plus l'ecran.
+check "disposition de la session = celle de l'installateur" \
+  "$(sed -n 's/^LayoutList=//p' "${TARGET}/etc/xdg/kxkbrc" 2>/dev/null)" "fr"
+check "modele de clavier repris" \
+  "$(sed -n 's/^Model=//p' "${TARGET}/etc/xdg/kxkbrc" 2>/dev/null)" "pc105"
+check "aucune option xkb inventee" \
+  "$(grep -c '^Options=' "${TARGET}/etc/xdg/kxkbrc" 2>/dev/null)" "0"
+
+# Chemin UEFI de secours: EFI/BOOT doit reproduire EFI/AuxiNuxOS, grub.cfg
+# compris, sinon une machine qui a perdu l'entree NVRAM s'arrete sur « grub> ».
+check "EFI/BOOT: shim en BOOTX64.EFI" \
+  "$(cat "${TARGET}"/boot/efi/EFI/boot/BOOTX64.EFI 2>/dev/null)" "SHIM"
+check "EFI/BOOT: GRUB a cote de shim" \
+  "$(cat "${TARGET}"/boot/efi/EFI/boot/grubx64.efi 2>/dev/null)" "GRUB"
+check "EFI/BOOT: grub.cfg present" \
+  "$(cmp -s "${TARGET}/boot/efi/EFI/boot/grub.cfg" "${TARGET}/boot/efi/EFI/AuxiNuxOS/grub.cfg" && echo identique)" "identique"
+# FAT ignore la casse: l'ancien bootx64.efi et le nouveau BOOTX64.EFI seraient
+# le MEME fichier sur la vraie partition. Il ne doit en rester qu'un.
+check "EFI/BOOT: une seule image de demarrage" \
+  "$(ls "${TARGET}/boot/efi/EFI/boot" | grep -ci '^bootx64\.efi$')" "1"
+check "mises a jour de GRUB: chemin de secours maintenu" \
+  "$(grep -c 'debconf-set-selections' "${CHROOT_LOG}")" "1"
+
 # Nos fichiers de configuration Calamares decrivent comment partitionner et
 # formater un disque: ils n'ont rien a faire sur un systeme en service.
 check "configuration Calamares retiree" \
   "$([[ -e "${TARGET}/etc/calamares" ]] && echo present || echo absent)" "absent"
+
+echo "== 1b. Clavier a plusieurs dispositions, et installation sans shim =="
+TARGET="${WORK}/cible1b"
+make_target "${TARGET}" ""
+cat > "${TARGET}/etc/default/keyboard" <<'KBD'
+XKBMODEL="pc105"
+XKBLAYOUT="ca,us"
+XKBVARIANT="multix,"
+XKBOPTIONS="grp:alt_shift_toggle"
+KBD
+rm -f "${TARGET}/boot/efi/EFI/AuxiNuxOS/shimx64.efi" "${TARGET}/boot/efi/EFI/AuxiNuxOS/mmx64.efi"
+PATH="${STUBS}:${PATH}" bash "${CLEANUP}" "${TARGET}" >/dev/null 2>&1
+check "sort en 0" "$?" "0"
+check "les deux dispositions reprises" \
+  "$(sed -n 's/^LayoutList=//p' "${TARGET}/etc/xdg/kxkbrc")" "ca,us"
+check "variantes reprises" \
+  "$(sed -n 's/^VariantList=//p' "${TARGET}/etc/xdg/kxkbrc")" "multix,"
+check "raccourci de bascule repris" \
+  "$(sed -n 's/^Options=//p' "${TARGET}/etc/xdg/kxkbrc")" "grp:alt_shift_toggle"
+check "options appliquees (ResetOldOptions)" \
+  "$(grep -c '^ResetOldOptions=true$' "${TARGET}/etc/xdg/kxkbrc")" "1"
+check "sans shim, GRUB lui-meme en BOOTX64.EFI" \
+  "$(cat "${TARGET}"/boot/efi/EFI/boot/BOOTX64.EFI 2>/dev/null)" "GRUB"
+check "sans shim, grub.cfg quand meme present" \
+  "$([[ -s "${TARGET}/boot/efi/EFI/boot/grub.cfg" ]] && echo oui)" "oui"
+
+echo "== 1c. Installation BIOS: aucune partition EFI, rien n'est invente =="
+TARGET="${WORK}/cible1c"
+make_target "${TARGET}" ""
+rm -rf "${TARGET}/boot/efi"
+PATH="${STUBS}:${PATH}" bash "${CLEANUP}" "${TARGET}" >/dev/null 2>&1
+check "sort en 0" "$?" "0"
+check "aucune partition EFI creee" \
+  "$([[ -e "${TARGET}/boot/efi" ]] && echo present || echo absent)" "absent"
 
 echo "== 2. Rollback: modele snapper sous /usr/share (Debian 13) =="
 TARGET="${WORK}/cible2"

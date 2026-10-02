@@ -204,3 +204,50 @@ qemu-system-x86_64 -machine q35 -m 4096 -smp 4 \
 C’est ce banc qui a permis, le 2026-09-09, de reproduire et de comprendre
 l’écran noir du système installé. Il ne couvre **pas** les modules Calamares
 eux-mêmes : il part du rootfs, pas du squashfs, et pose GRUB à la main.
+
+## Banc d’essai de bout en bout : la VRAIE installation Calamares
+
+Les deux bancs précédents ne passent pas par Calamares : le premier s’arrête au
+bureau live, le second pose GRUB à la main. Or c’est **la séquence Calamares
+elle-même** qui a produit les pannes vues sur matériel réel. Ce banc rejoue
+l’installation graphique complète dans QEMU (UEFI, disque NVMe), puis démarre
+le système installé.
+
+`tests/vm-driver.py` pilote la VM par QMP (clavier, souris absolue, captures
+d’écran) et par une console série journalisée :
+
+```bash
+# sur l'hôte de build (TCG, sans KVM)
+tests/vm-boot-live-serial.sh e2e /dev/shm/auxinuxos.iso /mnt/build/e2e/disk.raw
+tests/vm-driver.py shot e2e /tmp/ecran.png        # ce que voit l'utilisateur
+tests/vm-driver.py click e2e 1000 643             # « Suivant »
+tests/vm-driver.py type e2e "Quebec2026/"         # frappe physique (clavier US)
+tests/vm-driver.py sh e2e "findmnt -t btrfs"      # shell root sur la console série
+tests/vm-wait-install.sh e2e                      # attend la fin de Calamares
+```
+
+Pièges de l’émulation, tous rencontrés le 2026-09-29 :
+
+- Le conteneur de construction est **plafonné à 4 processeurs**
+  (`/sys/fs/cgroup/cpu.max`) alors que `nproc` en affiche 8 : au-delà de
+  `-smp 4`, les processeurs virtuels sont étranglés et l’invité se bloque.
+- Le disque de l’hôte est partagé et souvent saturé. QEMU écrit le journal de
+  la console série et les captures depuis sa boucle principale : sur ce disque,
+  **un octet écrit pouvait figer toute la VM**. Le répertoire de travail est
+  donc en RAM (`/dev/shm/e2e`, défaut du pilote), l’ISO aussi ; seul le disque
+  virtuel reste sur le disque de l’hôte.
+- **KWin consomme 300 % du processeur** de la VM en rendu logiciel (llvmpipe)
+  pendant le diaporama de Calamares : la copie tombe à 30 Mo/min, et le montage
+  de la cible dépasse le délai de Calamares, qui l’interrompt — l’installation
+  échoue. Basculer sur une console texte (`key e2e ctrl-alt-f3`) **dès le clic
+  « Installer maintenant »** ; Calamares continue en arrière-plan.
+- Le **chien de garde TCO** émulé redémarrait la VM en pleine installation
+  quand le noyau invité, saturé, ne le relançait pas : `vm-driver.py` démarre
+  QEMU avec `ICH9-LPC.noreboot=true`.
+- Les délais d’E/S de l’invité (NVMe, lecteur optique) sont dépassés sur un
+  hôte chargé : `nvme_core.io_timeout=600` sur la ligne de commande du live, et
+  `/sys/block/sr0/device/timeout` relevé dès l’ouverture du shell.
+- Une seule conversation à la fois sur la console série : deux clients y
+  entrelacent leurs caractères et le shell root exécute un mélange des deux
+  commandes. `vm-driver.py` prend un verrou.
+- `pgrep -f motif` lancé par ssh se trouve lui-même.

@@ -53,8 +53,12 @@ sudo install -D -m 0644 "${PROJECT_DIR}/packages/auxinux-profile/auxinux-profile
 # (ConditionPathExists) et aucun reglage d'usage ne serait applique.
 sudo install -d -m 0755 "${ROOTFS}/etc/auxinux"
 printf 'bureautique\n' | sudo tee "${ROOTFS}/etc/auxinux/profile" >/dev/null
+# graphical.target: voir le commentaire de l'unite (cycle avec
+# power-profiles-daemon, qui s'ordonne apres multi-user.target). L'ancien lien
+# est retire d'un rootfs reutilise, sinon le cycle survivrait.
+sudo rm -f "${ROOTFS}/etc/systemd/system/multi-user.target.wants/auxinux-profile.service"
 sudo ln -sf /etc/systemd/system/auxinux-profile.service \
-  "${ROOTFS}/etc/systemd/system/multi-user.target.wants/auxinux-profile.service"
+  "${ROOTFS}/etc/systemd/system/graphical.target.wants/auxinux-profile.service"
 
 # Hook d'instantane branche sur dpkg (voir etc/apt/apt.conf.d/80auxinux-snapshot).
 sudo install -D -m 0755 "${PROJECT_DIR}/packages/auxi-cli/apt-snapshot-hook" "${ROOTFS}/usr/lib/auxinux/apt-snapshot-hook"

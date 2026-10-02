@@ -37,6 +37,15 @@ rollback.
 `@`. Imbriqué, il serait déplacé avec `@` pendant la restauration et
 l'utilisateur perdrait tout son historique au moment précis où il en a besoin.
 
+Cette liste est déclarée dans `image-builder/overlays/etc/calamares/modules/mount.conf`
+(`btrfsSubvolumes`) : c'est le module `mount` de Calamares qui crée les
+sous-volumes. **Les installations faites avant le 2026-09-29 n'ont que `@`,
+`@home` et `@swap`** : la liste était alors écrite dans `partition.conf`, que
+Calamares ignore pour cela. Sur ces machines, `/.snapshots` n'est pas un
+sous-volume, snapper ne peut créer aucun instantané et `auxi rollback` ne
+trouve rien à restaurer. Elles doivent être réinstallées pour bénéficier du
+rollback.
+
 Options de montage : `noatime,compress=zstd:1,space_cache=v2`, plus
 `discard=async` sur SSD. La compression zstd niveau 1 **réduit le volume d'E/S
 disque** : c'est un gain de réactivité, pas seulement d'espace.
