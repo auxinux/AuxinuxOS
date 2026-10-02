@@ -280,16 +280,21 @@ impl Application for App {
     fn init(core: Core, _flags: Self::Flags) -> (Self, Task<Self::Message>) {
         let mut nav = nav_bar::Model::default();
         for (title, icon, page) in [
-            ("Applications", "system-software-install-symbolic", Page::Apps),
-            ("Mises a jour", "software-update-available-symbolic", Page::Updates),
-            ("Sante du systeme", "utilities-system-monitor-symbolic", Page::Health),
-            ("Restauration", "document-revert-symbolic", Page::Recovery),
-            ("Sources", "application-x-addon-symbolic", Page::Sources),
-            ("Reglages", "preferences-system-symbolic", Page::Settings),
+            // Le second nom de chaque ligne est celui que porte Breeze, qui
+            // n'a pas toutes les variantes « -symbolic » d'Adwaita. Il doit
+            // s'agir d'une icone MONOCHROME: une icone en couleur est teintee
+            // d'un bloc et s'affiche en carre plein (« applications-all »,
+            // constate en VM).
+            ("Applications", ["system-software-install-symbolic", "view-app-grid-symbolic"], Page::Apps),
+            ("Mises a jour", ["software-update-available-symbolic", "update-none"], Page::Updates),
+            ("Sante du systeme", ["utilities-system-monitor-symbolic", "speedometer"], Page::Health),
+            ("Restauration", ["document-revert-symbolic", "edit-undo"], Page::Recovery),
+            ("Sources", ["application-x-addon-symbolic", "repository"], Page::Sources),
+            ("Reglages", ["preferences-system-symbolic", "configure"], Page::Settings),
         ] {
             nav.insert()
                 .text(title)
-                .icon(cosmic::widget::icon::from_name(icon))
+                .icon(self::icon(icon[0], &icon[1..]))
                 .data::<Page>(page);
         }
         nav.activate_position(0);
@@ -647,15 +652,15 @@ pub mod widgets {
     /// l'utilisateur copiera pour demander de l'aide.
     pub fn toast(result: &ActionResult) -> Element<'_, Message> {
         let icon = if result.ok {
-            "emblem-ok-symbolic"
+            super::icon("emblem-ok-symbolic", &["object-select-symbolic"])
         } else {
-            "dialog-error-symbolic"
+            super::icon("dialog-error-symbolic", &["dialog-error", "data-error"])
         };
         widget::container(
             widget::Row::new()
                 .spacing(10)
                 .align_y(iced::Alignment::Center)
-                .push(widget::icon::from_name(icon).size(16))
+                .push(icon.size(16))
                 .push(widget::text::body(result.message.clone()).width(iced::Length::Fill))
                 .push(
                     widget::button::text("Fermer")
@@ -700,7 +705,7 @@ pub mod widgets {
             widget::Row::new()
                 .spacing(10)
                 .align_y(iced::Alignment::Center)
-                .push(widget::icon::from_name("content-loading-symbolic").size(16))
+                .push(super::icon("content-loading-symbolic", &["process-working-symbolic"]).size(16))
                 .push(widget::text::caption(if count > 1 {
                     format!("{count} operations en cours…")
                 } else {
@@ -753,9 +758,29 @@ pub mod widgets {
     }
 }
 
+/// Icone du theme, avec des noms de repli si le theme ne porte pas le premier.
+///
+/// Sans repli explicite, libcosmic retire les suffixes un a un
+/// (« software-update-available-symbolic » → « software-update » →
+/// « software »), ce qui ne tombe sur rien dans Breeze.
+pub fn icon(name: &'static str, fallbacks: &[&'static str]) -> cosmic::widget::icon::Named {
+    let named = cosmic::widget::icon::from_name(name);
+    if fallbacks.is_empty() {
+        return named;
+    }
+    named.fallback(Some(cosmic::widget::icon::IconFallback::Names(
+        fallbacks.iter().map(|&f| f.into()).collect(),
+    )))
+}
+
 pub fn run() -> Result<(), Box<dyn std::error::Error>> {
-    // `Settings` n'expose pas de constructeur de taille dans cette version de
-    // libcosmic (ses champs sont pub(crate)): on garde les valeurs par defaut.
-    cosmic::app::run::<App>(Settings::default(), ())?;
+    let mut settings = Settings::default();
+    // Voir system::icon_theme(): sans cela, le theme « Cosmic », absent sous
+    // Plasma, et une fenetre sans aucune icone -- boutons reduire, agrandir et
+    // fermer compris.
+    if let Some(theme) = crate::system::icon_theme() {
+        settings = settings.default_icon_theme(theme);
+    }
+    cosmic::app::run::<App>(settings, ())?;
     Ok(())
 }

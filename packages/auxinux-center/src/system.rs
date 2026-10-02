@@ -115,3 +115,104 @@ pub fn open_system_settings() {
         }
     }
 }
+
+/// Theme d'icones a donner a l'interface.
+///
+/// libcosmic cherche ses icones dans le theme « Cosmic », qui n'existe pas
+/// sous Plasma: AUCUNE icone ne s'affichait. Ni celles de la barre laterale,
+/// ni les boutons reduire, agrandir et fermer de la fenetre -- l'en-tete est
+/// dessine par l'application et ces boutons sont, eux aussi, des icones du
+/// theme. On prend le theme choisi dans Plasma, puis Breeze, puis Adwaita: le
+/// premier qui est reellement installe.
+pub fn icon_theme() -> Option<String> {
+    let installed = icon_dirs();
+    kde_icon_theme()
+        .into_iter()
+        .chain(["breeze".to_string(), "Adwaita".to_string()])
+        .find(|name| {
+            installed
+                .iter()
+                .any(|dir| dir.join(name).join("index.theme").is_file())
+        })
+}
+
+/// Theme d'icones de Plasma: `[Icons] Theme=` de kdeglobals, le fichier de
+/// l'utilisateur d'abord, puis les defauts du systeme (/etc/xdg).
+fn kde_icon_theme() -> Option<String> {
+    xdg_dirs("XDG_CONFIG_HOME", ".config", "XDG_CONFIG_DIRS", "/etc/xdg")
+        .into_iter()
+        .find_map(|dir| {
+            let text = std::fs::read_to_string(dir.join("kdeglobals")).ok()?;
+            ini_value(&text, "Icons", "Theme")
+        })
+}
+
+fn icon_dirs() -> Vec<std::path::PathBuf> {
+    let mut dirs: Vec<std::path::PathBuf> =
+        xdg_dirs("XDG_DATA_HOME", ".local/share", "XDG_DATA_DIRS", "/usr/local/share:/usr/share")
+            .into_iter()
+            .map(|d| d.join("icons"))
+            .collect();
+    if let Some(home) = std::env::var_os("HOME") {
+        dirs.push(std::path::PathBuf::from(home).join(".icons"));
+    }
+    dirs
+}
+
+/// Repertoire personnel XDG puis repertoires systeme, dans l'ordre de priorite.
+fn xdg_dirs(home_var: &str, home_default: &str, sys_var: &str, sys_default: &str) -> Vec<std::path::PathBuf> {
+    let mut dirs = Vec::new();
+    match std::env::var_os(home_var).filter(|v| !v.is_empty()) {
+        Some(dir) => dirs.push(std::path::PathBuf::from(dir)),
+        None => {
+            if let Some(home) = std::env::var_os("HOME") {
+                dirs.push(std::path::PathBuf::from(home).join(home_default));
+            }
+        }
+    }
+    let system = std::env::var(sys_var)
+        .ok()
+        .filter(|v| !v.is_empty())
+        .unwrap_or_else(|| sys_default.to_string());
+    dirs.extend(system.split(':').filter(|d| !d.is_empty()).map(std::path::PathBuf::from));
+    dirs
+}
+
+/// Valeur d'une cle dans un fichier au format INI de KDE.
+fn ini_value(text: &str, section: &str, key: &str) -> Option<String> {
+    let header = format!("[{section}]");
+    let mut inside = false;
+    for line in text.lines() {
+        let line = line.trim();
+        if line.starts_with('[') {
+            inside = line == header;
+            continue;
+        }
+        if !inside {
+            continue;
+        }
+        if let Some((k, v)) = line.split_once('=') {
+            if k.trim() == key && !v.trim().is_empty() {
+                return Some(v.trim().to_string());
+            }
+        }
+    }
+    None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ini_value;
+
+    #[test]
+    fn reads_the_icon_theme_of_its_own_section_only() {
+        let kdeglobals = "[General]\nTheme=pas-ceci\n\n[Icons]\nTheme=breeze-dark\n\n[KDE]\nSingleClick=false\n";
+        assert_eq!(ini_value(kdeglobals, "Icons", "Theme").as_deref(), Some("breeze-dark"));
+    }
+
+    #[test]
+    fn missing_or_empty_key_gives_nothing() {
+        assert_eq!(ini_value("[Icons]\nTheme=\n", "Icons", "Theme"), None);
+        assert_eq!(ini_value("[KDE]\nSingleClick=false\n", "Icons", "Theme"), None);
+    }
+}
