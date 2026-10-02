@@ -38,7 +38,10 @@
 # applications, finalisation, demontage -- l'installateur les traduit dans la
 # langue choisie), « auxinux-progression:POURCENT » pendant la copie, et
 # « auxinux-erreur:MESSAGE » en cas d'echec.
-set -euo pipefail
+# -E: le piege ERR s'applique aussi DANS les fonctions (dans_cible, run).
+# Sans lui, un echec de verify-installed-boot.sh arretait le moteur sans
+# ligne « auxinux-erreur », et l'installateur n'affichait qu'un code.
+set -Eeuo pipefail
 
 CONFIG="${1:?usage: auxinux-install-engine CONFIG [--simuler]}"
 SIMULER=0
@@ -171,8 +174,15 @@ exec > >(tee -a "${LOG}") 2>&1
 # --- 1. Disque -----------------------------------------------------------------
 
 etape "disque"
-# Rien de ce disque ne doit rester monte ou active (installation precedente
-# interrompue, partition d'echange detectee par le live).
+# Rien de ce disque ne doit rester monte ou active: installation precedente
+# interrompue (relancee depuis l'installateur, touche R), partition d'echange
+# detectee par le live. D'abord la cible et la source d'une tentative
+# precedente, puis le volume chiffre, puis les partitions.
+if [[ "${SIMULER}" -eq 0 ]]; then
+  mountpoint -q "${TARGET}" 2>/dev/null && umount -R "${TARGET}"
+  mountpoint -q /run/auxinux-source 2>/dev/null && umount /run/auxinux-source
+  swapoff -a 2>/dev/null || true
+fi
 for p in $(lsblk -nrpo NAME "${DISQUE}" 2>/dev/null | tail -n +2); do
   run swapoff "${p}" 2>/dev/null || true
   run umount -R "${p}" 2>/dev/null || true
@@ -405,11 +415,16 @@ lots=("${plateforme}")
 [[ "${CHIFFREMENT}" -eq 1 ]] && lots+=(luks)
 for lot in "${lots[@]}"; do
   if [[ "${SIMULER}" -eq 1 ]]; then
-    echo "SIMULATION: dpkg -i ${PAQUETS}/${lot}/*.deb"
+    echo "SIMULATION: dpkg -i --force-confdef --force-confold ${PAQUETS}/${lot}/*.deb"
   else
     debs=("${TARGET}${PAQUETS}/${lot}"/*.deb)
     [[ -e "${debs[0]}" ]] || erreur "paquets ${lot} absents de l'image (${PAQUETS}/${lot})"
-    chroot "${TARGET}" env DEBIAN_FRONTEND=noninteractive dpkg -i "${debs[@]#"${TARGET}"}"
+    # confold: /etc/cryptsetup-initramfs/conf-hook est ecrit AVANT
+    # l'installation de cryptsetup-initramfs, qui en livre une version. Sans
+    # terminal, dpkg echouait sur sa question (« fin de fichier sur l'entree
+    # standard », constate en VM le 2026-10-02).
+    chroot "${TARGET}" env DEBIAN_FRONTEND=noninteractive \
+      dpkg -i --force-confdef --force-confold "${debs[@]#"${TARGET}"}"
   fi
 done
 

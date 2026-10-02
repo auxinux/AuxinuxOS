@@ -742,7 +742,10 @@ impl App {
             let fin = if sortie.ok {
                 Ok(())
             } else if erreur.is_empty() {
-                Err(format!("code {:?}", sortie.code))
+                Err(format!(
+                    "code {}",
+                    sortie.code.map(|c| c.to_string()).unwrap_or_else(|| "?".into())
+                ))
             } else {
                 Err(erreur)
             };
@@ -1083,7 +1086,7 @@ impl App {
             let style = if i == actif { Style::new().fg(Color::Black).bg(Color::Cyan) } else { Style::new() };
             lignes.push(Line::from(vec![
                 Span::raw(format!("{:<22}", nom)),
-                Span::styled(format!(" {v}{} ", if i == actif { "▏" } else { "" }), style),
+                Span::styled(format!(" {v}{} ", if i == actif { "_" } else { "" }), style),
             ]));
             lignes.push(Line::raw(""));
         }

@@ -238,8 +238,23 @@ if [ -d "${EFI_SYSFS}" ]; then
       BOOT) fallback="${d}" ;;
     esac
   done
+  # Deux dispositions legitimes. Le GRUB SIGNE de Debian (avec shim) suit le
+  # grub.cfg pose a cote de lui. Le GRUB AUTONOME, construit par
+  # l'installateur maison pour un disque chiffre (grub-install
+  # --no-uefi-secure-boot: le GRUB signe ne sait pas ouvrir LUKS avant de
+  # lire son menu), embarque sa configuration -- deverrouillage et chemin
+  # du menu: il n'a pas de grub.cfg, et c'est normal.
+  autonome=0
+  if [ -n "${vendor}" ] && [ ! -e "${vendor}/shimx64.efi" ] && [ ! -e "${vendor}/grub.cfg" ] &&
+     [ -s "${vendor}/grubx64.efi" ] &&
+     { grep -aq cryptomount "${vendor}/grubx64.efi" ||
+       { [ -n "${root_uuid}" ] && grep -aq "${root_uuid}" "${vendor}/grubx64.efi"; }; }; then
+    autonome=1
+  fi
   if [ -z "${vendor}" ] || [ ! -s "${vendor}/grubx64.efi" ]; then
     fail "EFI/AuxiNuxOS/grubx64.efi absent de la partition EFI — le micrologiciel n'a rien a demarrer."
+  elif [ "${autonome}" -eq 1 ]; then
+    ok "partition EFI: GRUB autonome (configuration embarquee: disque chiffre)"
   elif [ ! -s "${vendor}/grub.cfg" ]; then
     fail "EFI/AuxiNuxOS/grub.cfg absent — GRUB s'arreterait sur une invite « grub> »."
   elif [ -n "${root_uuid}" ] && ! grep -q "${root_uuid}" "${vendor}/grub.cfg"; then
@@ -249,8 +264,8 @@ if [ -d "${EFI_SYSFS}" ]; then
   fi
   # Le chemin de secours n'est pas bloquant: l'entree NVRAM suffit a la
   # plupart des machines. Mais son absence se dit.
-  if [ -n "${fallback}" ] && [ -s "${fallback}/grub.cfg" ] &&
-     ls "${fallback}" 2>/dev/null | grep -qi '^bootx64\.efi$'; then
+  if [ -n "${fallback}" ] && ls "${fallback}" 2>/dev/null | grep -qi '^bootx64\.efi$' &&
+     { [ -s "${fallback}/grub.cfg" ] || [ "${autonome}" -eq 1 ]; }; then
     ok "partition EFI: chemin de secours EFI/BOOT/BOOTX64.EFI complet"
   else
     echo "verify-installed-boot: AVERTISSEMENT: chemin de secours EFI/BOOT incomplet; une machine qui oublie l'entree NVRAM ne demarrera pas." >&2
