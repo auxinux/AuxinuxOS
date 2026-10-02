@@ -42,6 +42,13 @@ n'a pas été rejouée avec cette ISO** : ses changements ne touchent ni
 Calamares ni l'amorçage, mais le parcours ci-dessus reste celui de l'ISO du
 2026-09-29.
 
+**Remplacée le même jour par `auxinuxos-0.2.0-20261002-2-amd64.iso`**
+(commit `0f68113`) : le **socle minimal** — plus aucune application imposée —
+et l'assistant de premier démarrage. Validé en VM par une **installation
+complète** (Calamares, redémarrage, connexion) : l'assistant s'ouvre seul à la
+première session, et les 12 étapes de la sélection par défaut réussissent avec
+une seule autorisation. L'ISO précédente du 2026-10-02 a été retirée.
+
 Reste à valider : le démarrage par le chemin UEFI de secours (`EFI/BOOT`, le
 micrologiciel l'a bien choisi après suppression de l'entrée NVRAM, mais l'écran
 obtenu n'a pas pu être capturé), le démarrage sur un instantané depuis le
