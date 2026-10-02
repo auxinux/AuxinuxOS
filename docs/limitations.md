@@ -33,6 +33,15 @@ intervention, redémarrage par « Terminé » (média encore inséré), GRUB,
 connexion, bureau, verrouillage/déverrouillage, second démarrage après coupure
 brutale. L'ISO du 2026-09-14 a été retirée.
 
+**Remplacée le 2026-10-02 par `auxinuxos-0.2.0-20261002-amd64.iso`**
+(commit `9e23aa5`), et l'ISO du 2026-09-29 retirée. Validé en VM sur la
+session live de cette ISO : fond d'écran AuxiNux, Discover absent de la barre
+des tâches, raccourci du centre sur le bureau, boutons et icônes du centre,
+« Actualiser les listes », système livré à jour. **L'installation complète
+n'a pas été rejouée avec cette ISO** : ses changements ne touchent ni
+Calamares ni l'amorçage, mais le parcours ci-dessus reste celui de l'ISO du
+2026-09-29.
+
 Reste à valider : le démarrage par le chemin UEFI de secours (`EFI/BOOT`, le
 micrologiciel l'a bien choisi après suppression de l'entrée NVRAM, mais l'écran
 obtenu n'a pas pu être capturé), le démarrage sur un instantané depuis le
