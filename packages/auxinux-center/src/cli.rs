@@ -14,6 +14,7 @@
 //!   auxinux-center --cli snapshots
 //!   auxinux-center --cli sysinfo advanced
 //!   auxinux-center --cli profile
+//!   auxinux-center --cli upgrade      # pkexec auxi --yes --progress upgrade
 
 use serde::Serialize;
 
@@ -37,9 +38,13 @@ pub fn run(args: &[String]) -> i32 {
         "installed" => json(&crate::apps::list_installed()),
         "featured" => json(&crate::apps::featured()),
         "updates" => json(&crate::apps::list_updates()),
-        "install" => json(&crate::apps::install(a(1), src(2))),
-        "remove" => json(&crate::apps::remove(a(1), src(2))),
-        "update" => json(&crate::apps::update_app(a(1), src(2))),
+        // La sortie des operations part sur stderr, au fil de l'eau: stdout
+        // reste reserve au JSON du resultat.
+        "install" => json(&crate::apps::install(a(1), src(2), &mut |l| eprintln!("{l}"))),
+        "remove" => json(&crate::apps::remove(a(1), src(2), &mut |l| eprintln!("{l}"))),
+        "update" => json(&crate::apps::update_app(a(1), src(2), &mut |l| eprintln!("{l}"))),
+        "refresh" => json(&crate::updates::refresh_indexes(&mut |l| eprintln!("{l}"))),
+        "upgrade" => json(&crate::updates::upgrade_all(&mut |l| eprintln!("{l}"))),
         "details" => json(&crate::apps::app_details(a(1), src(2))),
         "status" => json(&crate::apps::app_status(a(1), src(2))),
         "sources" => json(&crate::sources::list_apt_sources()),
@@ -58,6 +63,7 @@ pub fn run(args: &[String]) -> i32 {
         _ => {
             eprintln!(
                 "commandes: search|installed|featured|updates|install|remove|update|\n\
+                 refresh|upgrade|\n\
                  details|status|sources|toggle|presets|add-preset|remotes|\n\
                  apt-status|sysinfo|health|snapshots|profile|set-profile"
             );

@@ -6,6 +6,7 @@ Aucune suite automatisée complète n’est actuellement fournie.
 
 ```bash
 bash tests/test-rollback.sh
+bash tests/test-auxi-noninteractive.sh
 bash tests/test-windows-wizard.sh
 bash tests/test-apt-snapshot-hook.sh
 bash tests/test-post-install.sh
@@ -23,6 +24,14 @@ bash tests/test-version-consistency.sh
 instantané inexistant, refus de confirmation, restauration nominale et — le cas
 critique — reprise après échec de `btrfs subvolume snapshot`, quand la machine
 se retrouverait sinon sans racine amorçable.
+
+`test-auxi-noninteractive.sh` couvre `auxi --yes --progress`, le chemin du
+centre de contrôle. Le cas critique est la panne qui l’a fait naître : lancé
+sans terminal, `apt-get upgrade` répondait « Abandon. » à sa propre question et
+la mise à jour du système échouait sans message visible. Le faux `apt-get` du
+test reproduit ce comportement ; le test vérifie aussi qu’un échec Flatpak
+n’empêche plus les correctifs DEB, et que l’option `--yes` d’`auxi rollback`
+n’est pas confondue avec l’option globale.
 
 `test-windows-wizard.sh` couvre l’assistant `.exe` : arguments invalides, sortie
 en erreur explicite quand `zenity` manque, annulation, et — le cas critique —

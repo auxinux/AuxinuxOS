@@ -126,14 +126,16 @@ virtuelle** :
 
 ## Applications et centre de contrôle
 
-- Le centre a été reconstruit en libcosmic (0.2). Sa logique et **la couche
-  d’interface passent `cargo check`**, mais l’application **n’a encore jamais
-  été lancée graphiquement**.
+- Le centre a été reconstruit en libcosmic (0.2). Validé en VM sous Plasma le
+  2026-10-02 : fenêtre et icônes, page Mises à jour, mise à jour complète du
+  système (18 paquets) avec progression et journal. Les pages Applications
+  (installation), Sources et Restauration n’ont pas été rejouées en VM.
 - `Cargo.lock` épingle `tinyvec` en 1.8.1 : la version 1.13.0, tirée
   transitivement par la pile de rendu de texte, ne compile pas.
-- La sortie des opérations longues n’est pas diffusée en direct : seul le
-  résultat final s’affiche. Un gros téléchargement paraît donc immobile, même
-  si l’interface reste réactive.
+- La progression des opérations longues est **mesurée pour la partie DEB**
+  (téléchargement puis installation, lignes `Status-Fd` d’apt). Pour Flatpak,
+  la barre reste indéterminée : seule la dernière ligne écrite indique où en
+  est l’opération. Le détail complet est disponible à la demande.
 - La fiche détaillée AppStream (icônes haute définition, captures d’écran,
   description) existe dans le backend mais n’est pas branchée sur l’interface.
 - La correspondance Flatpak/DEB reste **heuristique** (nom et app-id). Chaque

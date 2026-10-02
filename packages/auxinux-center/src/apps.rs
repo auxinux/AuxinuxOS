@@ -15,7 +15,8 @@ use serde_json::Value;
 use crate::model::{
     ActionResult, AppDetails, AppEntry, AppStatus, SOURCE_DEB, SOURCE_FLATHUB,
 };
-use crate::util::{run, run_pkexec};
+use crate::progress;
+use crate::util::run;
 
 const MAX_DEB_RESULTS: usize = 60;
 
@@ -611,49 +612,57 @@ fn line_value(text: &str, key: &str) -> String {
 // Operations
 // ---------------------------------------------------------------------------
 
-pub fn install(id: &str, source: &str) -> ActionResult {
+// Les trois operations transmettent chaque ligne de sortie a `on_line`, pour
+// la barre de progression et le detail de l'interface (voir progress.rs).
+// `--noninteractive` retire de la sortie de flatpak le tableau qu'il redessine
+// en place, illisible ligne a ligne.
+
+pub fn install(id: &str, source: &str, on_line: &mut dyn FnMut(&str)) -> ActionResult {
     if !is_safe_app_id(id) {
         return ActionResult::err("identifiant d'application invalide");
     }
-    let out = match source {
-        SOURCE_FLATHUB | "flatpak" => run("flatpak", &["install", "-y", "flathub", id]),
-        _ => run_pkexec(&["auxi", "install", "--deb", id]),
-    };
-    if out.ok {
-        ActionResult::ok(format!("Installe: {id}"))
-    } else {
-        ActionResult::err(tail(&out.stderr))
+    let done = format!("Installe: {id}");
+    match source {
+        SOURCE_FLATHUB | "flatpak" => progress::user(
+            "flatpak",
+            &["install", "-y", "--noninteractive", "flathub", id],
+            on_line,
+            &done,
+        ),
+        _ => progress::auxi(&["install", "--deb", id], on_line, &done),
     }
 }
 
-pub fn remove(id: &str, source: &str) -> ActionResult {
+pub fn remove(id: &str, source: &str, on_line: &mut dyn FnMut(&str)) -> ActionResult {
     if !is_safe_app_id(id) {
         return ActionResult::err("identifiant d'application invalide");
     }
-    let out = match source {
-        SOURCE_FLATHUB | "flatpak" => run("flatpak", &["uninstall", "-y", id]),
-        _ => run_pkexec(&["auxi", "uninstall", "--deb", id]),
-    };
-    if out.ok {
-        ActionResult::ok(format!("Desinstalle: {id}"))
-    } else {
-        ActionResult::err(tail(&out.stderr))
+    let done = format!("Desinstalle: {id}");
+    match source {
+        SOURCE_FLATHUB | "flatpak" => progress::user(
+            "flatpak",
+            &["uninstall", "-y", "--noninteractive", id],
+            on_line,
+            &done,
+        ),
+        _ => progress::auxi(&["uninstall", "--deb", id], on_line, &done),
     }
 }
 
-pub fn update_app(id: &str, source: &str) -> ActionResult {
+pub fn update_app(id: &str, source: &str, on_line: &mut dyn FnMut(&str)) -> ActionResult {
     if !is_safe_app_id(id) {
         return ActionResult::err("identifiant d'application invalide");
     }
-    let out = match source {
-        SOURCE_FLATHUB | "flatpak" => run("flatpak", &["update", "-y", id]),
+    let done = "Mise a jour terminee";
+    match source {
+        SOURCE_FLATHUB | "flatpak" => progress::user(
+            "flatpak",
+            &["update", "-y", "--noninteractive", id],
+            on_line,
+            done,
+        ),
         // update only the requested package, not the whole system.
-        _ => run_pkexec(&["auxi", "install", "--deb", id]),
-    };
-    if out.ok {
-        ActionResult::ok("Mise a jour terminee")
-    } else {
-        ActionResult::err(tail(&out.stderr))
+        _ => progress::auxi(&["install", "--deb", id], on_line, done),
     }
 }
 
@@ -741,9 +750,3 @@ fn apt_get_bin() -> &'static str {
     }
 }
 
-fn tail(s: &str) -> String {
-    let lines: Vec<&str> = s.lines().filter(|l| !l.trim().is_empty()).collect();
-    let start = lines.len().saturating_sub(6);
-    let msg = lines[start..].join("\n");
-    if msg.is_empty() { "Echec de l'operation".into() } else { msg }
-}

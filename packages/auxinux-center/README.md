@@ -82,6 +82,19 @@ dans le rootfs. L'application reste sur le système installé.
 ## Limites connues
 
 Voir [docs/limitations.md](../../docs/limitations.md). En résumé pour la 0.2 :
-la sortie des opérations longues n'est pas encore diffusée en direct (seul le
-résultat final s'affiche), et la fiche détaillée AppStream (icônes, captures)
-n'est pas encore branchée sur l'interface.
+la progression n'est mesurée que pour les paquets DEB (Flatpak affiche une
+barre indéterminée et sa dernière ligne), et la fiche détaillée AppStream
+(icônes, captures) n'est pas encore branchée sur l'interface.
+
+## Opérations longues
+
+Installation, désinstallation et mises à jour affichent une étape, une barre de
+progression et, sur demande (« Voir le détail »), tout ce que la commande a
+écrit, avec un bouton pour le copier. En cas d'échec, ce sont les dernières
+lignes écrites qui s'affichent — sortie standard comprise : c'est là qu'apt
+explique ses abandons.
+
+Le Center lance `pkexec auxi --yes --progress …` : `--yes` parce qu'aucune
+question ne peut recevoir de réponse sans terminal, `--progress` pour les
+lignes d'avancement d'apt (voir `auxi --help`). Une seule opération à la fois :
+les boutons qui en lanceraient une seconde sont inactifs pendant ce temps.

@@ -10,12 +10,16 @@ use cosmic::{iced, widget, Element};
 use crate::ui::{widgets, App, Loading, Message};
 
 pub fn view(app: &App) -> Element<'_, Message> {
+    // Une seule transaction a la fois: pendant une mise a jour, les boutons qui
+    // en lanceraient une autre sont inactifs (verrou de dpkg).
+    let idle = !app.op_running();
+
     let header = widgets::header(
         "Mises a jour",
         app.os_version.clone(),
         vec![
             widget::button::standard("Actualiser les listes")
-                .on_press(Message::RefreshIndexes)
+                .on_press_maybe(idle.then_some(Message::RefreshIndexes))
                 .into(),
             widget::button::standard("Rechercher")
                 .on_press(Message::RefreshUpdates)
@@ -55,7 +59,7 @@ pub fn view(app: &App) -> Element<'_, Message> {
                             .push(info)
                             .push(
                                 widget::button::standard("Mettre a jour")
-                                    .on_press(Message::UpdateOne(index)),
+                                    .on_press_maybe(idle.then_some(Message::UpdateOne(index))),
                             ),
                     )
                     .class(cosmic::theme::Container::Card)
@@ -84,7 +88,7 @@ pub fn view(app: &App) -> Element<'_, Message> {
             ))
             .push(
                 widget::button::suggested("Mettre a jour le systeme")
-                    .on_press(Message::UpgradeAll),
+                    .on_press_maybe(idle.then_some(Message::UpgradeAll)),
             ),
     )
     .class(cosmic::theme::Container::Card)

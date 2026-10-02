@@ -80,6 +80,8 @@ fn card<'a>(app: &'a App, index: usize, entry: &'a AppEntry) -> Element<'a, Mess
     )));
 
     let mut actions = widget::Row::new().spacing(8).align_y(iced::Alignment::Center);
+    // Inactifs pendant une autre installation: voir App::op_running.
+    let idle = !app.op_running();
 
     // La bascule n'apparait que si l'application existe reellement dans les
     // deux sources.
@@ -107,12 +109,12 @@ fn card<'a>(app: &'a App, index: usize, entry: &'a AppEntry) -> Element<'a, Mess
             .push(widget::text::caption("Installee"))
             .push(
                 widget::button::destructive("Desinstaller")
-                    .on_press(Message::Remove(index)),
+                    .on_press_maybe(idle.then_some(Message::Remove(index))),
             );
     } else {
         actions = actions.push(
             widget::button::suggested("Installer")
-                .on_press(Message::Install(index)),
+                .on_press_maybe(idle.then_some(Message::Install(index))),
         );
     }
 

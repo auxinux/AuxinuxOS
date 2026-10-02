@@ -38,6 +38,7 @@ usage() {
 auxi - AuxiNux OS administration command
 
 Usage:
+  auxi [--yes] [--progress] COMMAND ...
   auxi update [--deb|--flatpak]
   auxi upgrade [--deb|--flatpak]
   auxi search [--deb|--flatpak] TERM
@@ -52,12 +53,17 @@ Usage:
   auxi rollback-cleanup [--yes]
   auxi set apt=true|false
   auxi status
+
+Global options (before the command):
+  --yes       answer yes to every question, keep modified configuration files
+  --progress  also print machine-readable progress lines (apt Status-Fd)
 EOF
   else
     cat <<'EOF'
 auxi - commande d'administration AuxiNux OS
 
 Usage:
+  auxi [--yes] [--progress] COMMANDE ...
   auxi update [--deb|--flatpak]
   auxi upgrade [--deb|--flatpak]
   auxi search [--deb|--flatpak] TERME
@@ -72,6 +78,12 @@ Usage:
   auxi rollback-cleanup [--yes]
   auxi set apt=true|false
   auxi status
+
+Options globales (avant la commande):
+  --yes       repond oui a toutes les questions, garde les fichiers de
+              configuration modifies
+  --progress  ajoute des lignes d'avancement lisibles par un programme
+              (Status-Fd d'apt)
 EOF
   fi
 }
@@ -112,6 +124,50 @@ apt_real() {
       "Installation auxi incomplete; verifiez install-auxi-cli.sh." \
       "Incomplete auxi installation; check install-auxi-cli.sh."
     exit 70
+  fi
+}
+
+# apt-get avec les options globales de `auxi`.
+#
+# --yes N'EST PAS UN CONFORT: c'est ce qui permet au centre de controle de
+# mettre le systeme a jour. Il lance `auxi` par pkexec, sans terminal, l'entree
+# standard sur /dev/null. Sans -y, apt-get posait sa question « Continuer ?
+# [O/n] », lisait une fin de fichier, repondait « Abandon. » et sortait en 1 --
+# sur la sortie STANDARD, que l'interface ne montrait pas. L'utilisateur voyait
+# « Echec de l'operation » apres plusieurs minutes, sans aucune explication.
+# Meme chose pour toute desinstallation, et pour toute installation qui tire
+# une dependance.
+#
+# Sans terminal, aucune autre question ne peut recevoir de reponse non plus:
+#   - debconf: frontend noninteractive, les valeurs par defaut s'appliquent;
+#   - dpkg et un fichier de configuration modifie localement (c'est le cas de
+#     /etc/issue, que l'image remplace): --force-confold garde la version
+#     installee, --force-confdef laisse dpkg trancher seul quand il le peut.
+#     Sans ces options, dpkg echoue sur « EOF on stdin at conffile prompt » au
+#     milieu de la transaction.
+#
+# --progress ajoute les lignes « dlstatus: » et « pmstatus: » d'apt sur la
+# sortie standard (pkexec ferme tout descripteur au-dela de 2, d'ou le 1).
+# C'est ce que le centre de controle lit pour afficher sa barre de progression.
+apt_get() {
+  local bin
+  bin="$(apt_real apt-get)"
+  local opts=()
+  if [[ "${ASSUME_YES}" -eq 1 ]]; then
+    opts+=(-y -o "Dpkg::Options::=--force-confdef" -o "Dpkg::Options::=--force-confold")
+  fi
+  if [[ "${PROGRESS}" -eq 1 ]]; then
+    opts+=(-o "APT::Status-Fd=1")
+  fi
+  "${bin}" "${opts[@]}" "$@"
+}
+
+# Options communes de flatpak: -y en toutes circonstances (c'etait deja le cas),
+# et une sortie sans tableau anime quand personne n'est la pour la lire.
+flatpak_opts() {
+  FLATPAK_OPTS=(-y)
+  if [[ "${ASSUME_YES}" -eq 1 ]]; then
+    FLATPAK_OPTS+=(--noninteractive)
   fi
 }
 
@@ -454,24 +510,36 @@ select_mode() {
 
 run_update() {
   select_mode "$@"
+  flatpak_opts
   if [[ "${MODE}" == "both" || "${MODE}" == "flatpak" ]]; then
-    flatpak update --appstream -y || true
+    flatpak update --appstream "${FLATPAK_OPTS[@]}" || true
   fi
   if [[ "${MODE}" == "both" || "${MODE}" == "deb" ]]; then
     require_root_for_deb update "$@"
-    "$(apt_real apt-get)" update
+    apt_get update
   fi
 }
 
 run_upgrade() {
   select_mode "$@"
+  flatpak_opts
+  local failed=0
   if [[ "${MODE}" == "both" || "${MODE}" == "flatpak" ]]; then
-    flatpak update -y
+    # Un echec Flatpak (Flathub injoignable, runtime retire) ne doit pas priver
+    # le systeme de ses correctifs de securite DEB: on continue, et l'echec est
+    # rendu a la fin. Avant, `set -e` arretait tout ici.
+    if ! flatpak update "${FLATPAK_OPTS[@]}"; then
+      failed=1
+      say_err \
+        "La mise a jour des applications Flatpak a echoue; les paquets systeme sont mis a jour quand meme." \
+        "Flatpak application update failed; system packages are updated anyway."
+    fi
   fi
   if [[ "${MODE}" == "both" || "${MODE}" == "deb" ]]; then
     require_root_for_deb upgrade "$@"
-    "$(apt_real apt-get)" upgrade
+    apt_get upgrade
   fi
+  return "${failed}"
 }
 
 run_search() {
@@ -500,20 +568,21 @@ run_install() {
       "Missing package or application to install."
     exit 64
   fi
+  flatpak_opts
   if [[ "${MODE}" == "flatpak" ]]; then
-    flatpak install -y flathub -- "${item}"
+    flatpak install "${FLATPAK_OPTS[@]}" flathub -- "${item}"
   elif [[ "${MODE}" == "deb" ]]; then
     require_root_for_deb install "$@"
-    "$(apt_real apt-get)" install -- "${item}"
+    apt_get install -- "${item}"
   else
     if flatpak remote-ls flathub --app 2>/dev/null | awk '{print $1}' | grep -Fxq "${item}"; then
-      flatpak install -y flathub -- "${item}"
+      flatpak install "${FLATPAK_OPTS[@]}" flathub -- "${item}"
     else
       say \
         "Aucun Flatpak exact trouve pour ${item}; installation DEB." \
         "No exact Flatpak found for ${item}; using DEB installation."
       require_root_for_deb install "$@"
-      "$(apt_real apt-get)" install -- "${item}"
+      apt_get install -- "${item}"
     fi
   fi
 }
@@ -527,21 +596,38 @@ run_uninstall() {
       "Missing package or application to uninstall."
     exit 64
   fi
+  flatpak_opts
   if [[ "${MODE}" == "flatpak" ]]; then
-    flatpak uninstall -y -- "${item}"
+    flatpak uninstall "${FLATPAK_OPTS[@]}" -- "${item}"
   elif [[ "${MODE}" == "deb" ]]; then
     require_root_for_deb uninstall "$@"
-    "$(apt_real apt-get)" remove -- "${item}"
+    apt_get remove -- "${item}"
   else
     require_root_for_deb uninstall "$@"
     # Une desinstallation Flatpak ne modifie pas l'etat systeme capture par
     # "@": aucun instantane n'est pose tant qu'on ne retombe pas sur DEB, ce
     # dont le hook dpkg se charge desormais.
-    if ! flatpak uninstall -y -- "${item}"; then
-      "$(apt_real apt-get)" remove -- "${item}"
+    if ! flatpak uninstall "${FLATPAK_OPTS[@]}" -- "${item}"; then
+      apt_get remove -- "${item}"
     fi
   fi
 }
+
+# Options globales, AVANT la commande. Elles ne sont pas cherchees dans le
+# reste de la ligne: `auxi rollback N --yes` a deja son propre --yes, qui
+# confirme une restauration -- un sens different qu'il ne faut pas capter ici.
+ASSUME_YES=0
+PROGRESS=0
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --yes|-y) ASSUME_YES=1; shift ;;
+    --progress) PROGRESS=1; shift ;;
+    *) break ;;
+  esac
+done
+if [[ "${ASSUME_YES}" -eq 1 ]]; then
+  export DEBIAN_FRONTEND=noninteractive
+fi
 
 case "${1:-}" in
   update)
@@ -562,15 +648,15 @@ case "${1:-}" in
   purge)
     shift
     require_root_for_deb purge "$@"
-    "$(apt_real apt-get)" purge -- "$@"
+    apt_get purge -- "$@"
     ;;
   clean)
     require_root_for_deb clean
-    "$(apt_real apt-get)" clean
+    apt_get clean
     ;;
   autoclean)
     require_root_for_deb autoclean
-    "$(apt_real apt-get)" autoclean
+    apt_get autoclean
     ;;
   snapshot)
     shift; run_snapshot "$@"

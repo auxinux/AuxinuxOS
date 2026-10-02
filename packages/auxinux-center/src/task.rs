@@ -39,3 +39,45 @@ where
         }
     })
 }
+
+/// Lance une operation longue dont chaque ligne de sortie remonte a
+/// l'interface PENDANT qu'elle s'execute (`Message::OpLine`), puis son resultat
+/// (`Message::OpFinished`).
+///
+/// `work` recoit la fonction a appeler pour chaque ligne. Il tourne sur un fil
+/// de travail, comme dans `background()`; les lignes traversent un canal non
+/// borne pour que le fil ne soit jamais bloque par l'affichage.
+pub fn streamed<F>(work: F) -> Task<Message>
+where
+    F: FnOnce(&mut dyn FnMut(&str)) -> crate::model::ActionResult + Send + 'static,
+{
+    use cosmic::iced::futures::channel::mpsc;
+    use cosmic::iced::futures::stream::{self, StreamExt};
+
+    // Le fil n'est cree qu'au premier sondage du flux, donc dans le runtime
+    // tokio de l'application: `spawn_blocking` panique en dehors.
+    let messages = stream::once(async move {
+        let (tx, rx) = mpsc::unbounded::<Message>();
+        tokio::task::spawn_blocking(move || {
+            let mut forward = |line: &str| {
+                let _ = tx.unbounded_send(Message::OpLine(line.to_string()));
+            };
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                work(&mut forward)
+            }));
+            // Meme regle que `background()`: une panique ne doit pas emporter
+            // l'interface, ni la laisser croire que l'operation tourne encore.
+            let result = result.unwrap_or_else(|_| {
+                crate::model::ActionResult::err(
+                    "L'operation s'est interrompue de facon inattendue. Le detail \
+                     ci-dessous montre ce qu'elle a eu le temps d'ecrire.",
+                )
+            });
+            let _ = tx.unbounded_send(Message::OpFinished(result));
+        });
+        rx
+    })
+    .flatten();
+
+    cosmic::task::stream(messages)
+}

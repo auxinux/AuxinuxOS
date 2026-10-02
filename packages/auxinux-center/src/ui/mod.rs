@@ -18,6 +18,7 @@
 
 mod apps_page;
 mod health_page;
+mod operation;
 mod recovery_page;
 mod settings_page;
 mod sources_page;
@@ -129,6 +130,13 @@ pub enum Message {
     OpenSystemSettings,
     OpenUrl(String),
 
+    // Operation longue suivie en direct (voir operation.rs)
+    OpLine(String),
+    OpFinished(ActionResult),
+    ToggleLog,
+    CopyLog,
+    DismissOperation,
+
     // Transverse
     Done(ActionResult),
     DismissToast,
@@ -174,6 +182,10 @@ pub struct App {
     apt_direct: bool,
     profile: crate::profile::ProfileState,
 
+    /// Operation longue (installation, mise a jour) en cours ou terminee, avec
+    /// sa progression et son journal.
+    operation: Option<operation::Operation>,
+
     /// Derniere operation terminee, affichee en bandeau.
     toast: Option<ActionResult>,
     /// Nombre d'operations longues en cours, pour l'indicateur global.
@@ -192,6 +204,26 @@ impl App {
 
     fn start(&mut self) {
         self.busy += 1;
+    }
+
+    /// Vrai pendant une installation ou une mise a jour: les boutons qui en
+    /// lanceraient une seconde sont alors inactifs.
+    pub fn op_running(&self) -> bool {
+        self.operation.as_ref().is_some_and(|op| op.running())
+    }
+
+    /// Lance une operation longue suivie en direct. Refusee si une autre tourne
+    /// deja: les deux se disputeraient le verrou de dpkg.
+    fn launch<F>(&mut self, title: String, work: F) -> Task<Message>
+    where
+        F: FnOnce(&mut dyn FnMut(&str)) -> ActionResult + Send + 'static,
+    {
+        if self.op_running() {
+            return Task::none();
+        }
+        self.toast = None;
+        self.operation = Some(operation::Operation::new(title));
+        crate::task::streamed(work)
     }
 
     fn finish(&mut self) {
@@ -322,6 +354,7 @@ impl Application for App {
             custom_key_url: String::new(),
             apt_direct: crate::sources::apt_wrapper_enabled(),
             profile: crate::profile::state(),
+            operation: None,
             toast: None,
             busy: 0,
         };
@@ -410,8 +443,10 @@ impl Application for App {
                     // l'app-id Flatpak. Passer `app.id` installerait le mauvais
                     // paquet.
                     let id = app.id_for(&source).to_string();
-                    self.start();
-                    background(move || crate::apps::install(&id, &source), Message::Done)
+                    let title = format!("Installation de {}", app.name);
+                    self.launch(title, move |on_line| {
+                        crate::apps::install(&id, &source, on_line)
+                    })
                 }
                 None => Task::none(),
             },
@@ -419,8 +454,10 @@ impl Application for App {
                 Some(app) => {
                     let source = self.source_for(app);
                     let id = app.id_for(&source).to_string();
-                    self.start();
-                    background(move || crate::apps::remove(&id, &source), Message::Done)
+                    let title = format!("Desinstallation de {}", app.name);
+                    self.launch(title, move |on_line| {
+                        crate::apps::remove(&id, &source, on_line)
+                    })
                 }
                 None => Task::none(),
             },
@@ -431,8 +468,10 @@ impl Application for App {
                 // Rafraichir les index AVANT de lister les mises a jour: sans
                 // cela, l'utilisateur qui vient d'activer un depot ne voit rien
                 // de nouveau et croit le depot cassé.
-                self.start();
-                background(crate::updates::refresh_indexes, Message::Done)
+                self.launch(
+                    "Actualisation des listes de paquets".into(),
+                    crate::updates::refresh_indexes,
+                )
             }
             Message::UpdatesLoaded(list) => {
                 self.finish();
@@ -440,15 +479,16 @@ impl Application for App {
                 Task::none()
             }
             Message::UpgradeAll => {
-                self.start();
-                background(crate::updates::upgrade_all, Message::Done)
+                self.launch("Mise a jour du systeme".into(), crate::updates::upgrade_all)
             }
             Message::UpdateOne(index) => match self.updates.ready().and_then(|l| l.get(index)) {
                 Some(app) => {
                     let source = app.default_source.clone();
                     let id = app.id_for(&source).to_string();
-                    self.start();
-                    background(move || crate::apps::update_app(&id, &source), Message::Done)
+                    let title = format!("Mise a jour de {}", app.name);
+                    self.launch(title, move |on_line| {
+                        crate::apps::update_app(&id, &source, on_line)
+                    })
                 }
                 None => Task::none(),
             },
@@ -581,6 +621,43 @@ impl Application for App {
                 Task::none()
             }
 
+            // --- Operation longue ---
+            Message::OpLine(line) => {
+                if let Some(op) = self.operation.as_mut() {
+                    op.feed(&line);
+                }
+                Task::none()
+            }
+            Message::OpFinished(result) => {
+                if let Some(op) = self.operation.as_mut() {
+                    op.result = Some(result);
+                }
+                // La liste des mises a jour est perimee des qu'un paquet a
+                // bouge. Si l'utilisateur est sur une autre page, elle sera
+                // relue a sa prochaine visite: sinon il verrait encore les
+                // paquets qu'il vient de mettre a jour, et recommencerait.
+                if self.page != Page::Updates {
+                    self.updates = Loading::Idle;
+                }
+                self.reload_current_page()
+            }
+            Message::ToggleLog => {
+                if let Some(op) = self.operation.as_mut() {
+                    op.show_log = !op.show_log;
+                }
+                Task::none()
+            }
+            Message::CopyLog => match &self.operation {
+                Some(op) => cosmic::iced::clipboard::write::<cosmic::Action<Message>>(op.log_text()),
+                None => Task::none(),
+            },
+            Message::DismissOperation => {
+                if !self.op_running() {
+                    self.operation = None;
+                }
+                Task::none()
+            }
+
             // --- Transverse ---
             Message::Done(result) => {
                 self.finish();
@@ -625,6 +702,12 @@ impl Application for App {
 
         if self.busy > 0 {
             column = column.push(widgets::activity(self.busy));
+        }
+
+        // Reste affichee d'une page a l'autre: on peut naviguer pendant une
+        // mise a jour, et en retrouver le resultat ensuite.
+        if let Some(op) = &self.operation {
+            column = column.push(operation::view(op));
         }
 
         if let Some(toast) = &self.toast {
