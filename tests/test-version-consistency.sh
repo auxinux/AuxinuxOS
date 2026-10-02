@@ -51,7 +51,10 @@ echo "== construction de l'ISO =="
 BUILD="${ROOT}/image-builder/build-image.sh"
 contains "nom de l'ISO"      "${BUILD}" "auxinuxos-${VERSION}-amd64.iso"
 contains "profil de build"   "${BUILD}" "PROFILE=\"${VERSION}-live\""
-contains "menu GRUB du live" "${BUILD}" "menuentry \"${PRETTY} Live\""
+# Deux entrees principales depuis le 2026-10-02: installer (par defaut) et
+# essayer le bureau live.
+contains "menu GRUB: installer" "${BUILD}" "menuentry \"Installer ${PRETTY} maintenant"
+contains "menu GRUB: live"      "${BUILD}" "menuentry \"Essayer ${PRETTY} (bureau live)"
 
 echo "== installateur (si present) =="
 contains "branding versionedName" \

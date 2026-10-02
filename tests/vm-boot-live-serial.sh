@@ -7,6 +7,10 @@ cd "$(dirname "$0")"
 ./vm-driver.py start "$name" --iso "$iso" --disk "$disk" --size 60G --mem 4608 --cpus 4 || exit 1
 # Retient le menu GRUB: toute touche arrete le compte a rebours.
 for i in $(seq 1 50); do ./vm-driver.py key "$name" up >/dev/null 2>&1; sleep 2; done
+# Entree GRUB: 0 = « Installer maintenant » (par defaut depuis le
+# 2026-10-02), 1 = bureau live (Calamares). Le banc vise le bureau live sauf
+# AUXINUX_ENTREE=0.
+for i in $(seq 1 "${AUXINUX_ENTREE:-1}"); do ./vm-driver.py key "$name" down; sleep 1; done
 ./vm-driver.py key "$name" e; sleep 2
 ./vm-driver.py key "$name" down down ctrl-e
 ./vm-driver.py type "$name" " console=tty0 console=ttyS0,115200 nvme_core.io_timeout=600 loglevel=3 nowatchdog nmi_watchdog=0 rcupdate.rcu_cpu_stall_suppress=1"

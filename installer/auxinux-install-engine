@@ -1,0 +1,500 @@
+#!/usr/bin/env bash
+# Moteur d'installation d'AuxiNux OS (« Install NOW »).
+#
+# Lance en root par l'installateur console (auxinux-installer), qui pose les
+# questions et suit l'avancement. Ce script ne pose AUCUNE question: il lit un
+# fichier de configuration, refuse tout ce qui n'est pas valide AVANT de
+# toucher au disque, puis installe.
+#
+# Il reproduit la sequence Calamares validee en VM (voir
+# image-builder/overlays/etc/calamares/settings.conf) et REUTILISE ses scripts
+# de fin, eprouves: post-install-cleanup.sh, setup-btrfs-rollback.sh,
+# verify-installed-boot.sh. Ce qu'il fait de plus: il installe SANS Internet
+# (les paquets de GRUB et de LUKS sont embarques dans l'image, la ou Calamares
+# les telechargeait), et, en ligne, les mises a jour et les applications
+# choisies.
+#
+# Usage:
+#   auxinux-install-engine CONFIG            installe
+#   auxinux-install-engine CONFIG --simuler  affiche ce qui serait fait,
+#                                            sans rien executer (tests)
+#
+# CONFIG: lignes CLE=VALEUR (jamais evaluees par le shell):
+#   DISQUE=/dev/nvme0n1        disque ENTIER a effacer
+#   CHIFFREMENT=0|1            LUKS2
+#   CLE_LUKS=/run/...          fichier de la phrase de passe (si CHIFFREMENT=1)
+#   LOCALE=fr_CA.UTF-8|en_CA.UTF-8
+#   FUSEAU=America/Toronto
+#   CLAVIER=ca  VARIANTE_CLAVIER=   (xkb)
+#   NOM_MACHINE=  UTILISATEUR=  NOM_COMPLET=
+#   MOT_DE_PASSE=/run/...      fichier du mot de passe
+#   EN_LIGNE=0|1               mises a jour + applications
+#   PROFIL=bureautique|multimedia|gaming
+#   APPLICATIONS=--flatpak org.mozilla.firefox --brave ...  (arguments de
+#                              auxinux-assistant-apply, en ligne seulement)
+#
+# Sortie: « auxinux-etape:N:TOTAL:CODE » au debut de chaque etape (CODE:
+# disque, sous-volumes, copie, configuration, demarrage, mises-a-jour,
+# applications, finalisation, demontage -- l'installateur les traduit dans la
+# langue choisie), « auxinux-progression:POURCENT » pendant la copie, et
+# « auxinux-erreur:MESSAGE » en cas d'echec.
+set -euo pipefail
+
+CONFIG="${1:?usage: auxinux-install-engine CONFIG [--simuler]}"
+SIMULER=0
+[[ "${2:-}" == "--simuler" ]] && SIMULER=1
+
+TARGET="/mnt/auxinux-cible"
+MAPPER="auxinux-racine"
+PAQUETS="/usr/share/auxinux/installateur/paquets"
+LOG="/var/log/auxinux-installation.log"
+SOURCES=(/run/live/rootfs/filesystem.squashfs /run/live/medium/live/filesystem.squashfs)
+SOUS_VOLUMES=(@ @home @snapshots @var_log @var_cache @var_tmp @var_lib_flatpak @swap)
+# Memes options que mount.conf de Calamares.
+OPTIONS_BTRFS="defaults,noatime,compress=zstd:1,space_cache=v2"
+GROUPES=(cdrom floppy sudo audio dip video plugdev netdev lpadmin scanner bluetooth users)
+
+if [[ "${SIMULER}" -eq 1 ]]; then
+  # En simulation, les fichiers sont ecrits dans un repertoire jetable et les
+  # commandes seulement affichees: le plan complet est verifiable sans disque.
+  TARGET="${AUXINUX_SIMULATION_CIBLE:-$(mktemp -d)}"
+  LOG="/dev/null"
+fi
+
+erreur() {
+  echo "auxinux-erreur:$*" >&2
+  exit 1
+}
+trap 'erreur "commande en echec a la ligne ${LINENO}: ${BASH_COMMAND}"' ERR
+
+run() {
+  if [[ "${SIMULER}" -eq 1 ]]; then
+    echo "SIMULATION: $*"
+  else
+    "$@"
+  fi
+}
+
+dans_cible() {
+  run chroot "${TARGET}" "$@"
+}
+
+# --- Configuration -----------------------------------------------------------
+
+declare -A C=()
+while IFS= read -r ligne || [[ -n "${ligne}" ]]; do
+  [[ -z "${ligne}" || "${ligne}" == \#* ]] && continue
+  cle="${ligne%%=*}"
+  valeur="${ligne#*=}"
+  case "${cle}" in
+    DISQUE|CHIFFREMENT|CLE_LUKS|LOCALE|FUSEAU|CLAVIER|VARIANTE_CLAVIER|NOM_MACHINE|\
+    UTILISATEUR|NOM_COMPLET|MOT_DE_PASSE|EN_LIGNE|PROFIL|APPLICATIONS)
+      C[${cle}]="${valeur}" ;;
+    *) erreur "cle inconnue dans la configuration: ${cle}" ;;
+  esac
+done <"${CONFIG}"
+
+val() { printf '%s' "${C[$1]:-}"; }
+
+# --- Validation: RIEN n'est touche avant qu'elle soit passee -----------------
+
+DISQUE="$(val DISQUE)"
+[[ "${DISQUE}" =~ ^/dev/[a-z0-9]+$ ]] || erreur "disque invalide: ${DISQUE}"
+[[ "$(lsblk -dno TYPE "${DISQUE}" 2>/dev/null)" == "disk" ]] || erreur "${DISQUE} n'est pas un disque"
+# Le support d'installation lui-meme ne doit jamais etre efface.
+support="$(findmnt -no SOURCE /run/live/medium 2>/dev/null || true)"
+if [[ -n "${support}" ]]; then
+  parent="$(lsblk -no PKNAME "${support}" 2>/dev/null | head -n1)"
+  [[ "/dev/${parent}" != "${DISQUE}" && "${support}" != "${DISQUE}" ]] \
+    || erreur "${DISQUE} est le support d'installation"
+fi
+
+CHIFFREMENT="$(val CHIFFREMENT)"
+[[ "${CHIFFREMENT}" =~ ^[01]$ ]] || erreur "CHIFFREMENT doit valoir 0 ou 1"
+if [[ "${CHIFFREMENT}" -eq 1 ]]; then
+  [[ -s "$(val CLE_LUKS)" ]] || erreur "phrase de passe de chiffrement absente"
+fi
+
+LOCALE="$(val LOCALE)"
+case "${LOCALE}" in fr_CA.UTF-8|en_CA.UTF-8) ;; *) erreur "langue non prise en charge: ${LOCALE}" ;; esac
+FUSEAU="$(val FUSEAU)"
+[[ "${FUSEAU}" =~ ^[A-Za-z_]+(/[A-Za-z0-9_+-]+)*$ && -f "/usr/share/zoneinfo/${FUSEAU}" ]] \
+  || erreur "fuseau horaire inconnu: ${FUSEAU}"
+CLAVIER="$(val CLAVIER)"
+VARIANTE="$(val VARIANTE_CLAVIER)"
+[[ "${CLAVIER}" =~ ^[a-z]{2,3}$ && "${VARIANTE}" =~ ^[a-z0-9_-]*$ ]] || erreur "clavier invalide"
+NOM_MACHINE="$(val NOM_MACHINE)"
+[[ "${NOM_MACHINE}" =~ ^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$ ]] || erreur "nom de machine invalide"
+UTILISATEUR="$(val UTILISATEUR)"
+[[ "${UTILISATEUR}" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]] || erreur "nom d'utilisateur invalide"
+case "${UTILISATEUR}" in root|nobody|auxinux) erreur "nom d'utilisateur reserve: ${UTILISATEUR}" ;; esac
+NOM_COMPLET="$(val NOM_COMPLET)"
+[[ "${NOM_COMPLET}" != *[:,$'\n']* ]] || erreur "le nom complet ne peut pas contenir « : » ni « , »"
+[[ -s "$(val MOT_DE_PASSE)" ]] || erreur "mot de passe absent"
+EN_LIGNE="$(val EN_LIGNE)"
+[[ "${EN_LIGNE}" =~ ^[01]$ ]] || erreur "EN_LIGNE doit valoir 0 ou 1"
+PROFIL="$(val PROFIL)"
+case "${PROFIL}" in bureautique|multimedia|gaming) ;; *) erreur "profil inconnu: ${PROFIL}" ;; esac
+# Arguments de auxinux-assistant-apply, decoupes sans evaluation par le
+# shell; le helper revalide chaque identifiant.
+read -r -a APPLICATIONS <<<"$(val APPLICATIONS)"
+
+SOURCE=""
+for s in "${SOURCES[@]}"; do
+  if [[ -d "${s}" || -f "${s}" ]]; then SOURCE="${s}"; break; fi
+done
+[[ "${SIMULER}" -eq 1 ]] && SOURCE="${SOURCE:-/run/live/rootfs/filesystem.squashfs}"
+[[ -n "${SOURCE}" ]] || erreur "systeme a copier introuvable (support live)"
+
+EFI=0
+[[ -d /sys/firmware/efi ]] && EFI=1
+[[ "${SIMULER}" -eq 1 && -n "${AUXINUX_SIMULATION_EFI:-}" ]] && EFI="${AUXINUX_SIMULATION_EFI}"
+
+# Partitions: nvme0n1 -> nvme0n1p3, sda -> sda3.
+partition() {
+  if [[ "${DISQUE}" =~ [0-9]$ ]]; then echo "${DISQUE}p$1"; else echo "${DISQUE}$1"; fi
+}
+P_EFI="$(partition 2)"
+P_RACINE="$(partition 3)"
+
+TOTAL=7
+[[ "${EN_LIGNE}" -eq 1 ]] && TOTAL=$((TOTAL + 1))
+[[ "${EN_LIGNE}" -eq 1 && "${#APPLICATIONS[@]}" -gt 0 ]] && TOTAL=$((TOTAL + 1))
+ETAPE=0
+etape() {
+  ETAPE=$((ETAPE + 1))
+  echo "auxinux-etape:${ETAPE}:${TOTAL}:$1"
+}
+
+exec > >(tee -a "${LOG}") 2>&1
+
+# --- 1. Disque -----------------------------------------------------------------
+
+etape "disque"
+# Rien de ce disque ne doit rester monte ou active (installation precedente
+# interrompue, partition d'echange detectee par le live).
+for p in $(lsblk -nrpo NAME "${DISQUE}" 2>/dev/null | tail -n +2); do
+  run swapoff "${p}" 2>/dev/null || true
+  run umount -R "${p}" 2>/dev/null || true
+done
+run cryptsetup close "${MAPPER}" 2>/dev/null || true
+run wipefs -a "${DISQUE}"
+run sgdisk --zap-all "${DISQUE}"
+# Trois partitions, pour demarrer en UEFI COMME en BIOS: bios_grub (1 Mio,
+# ou GRUB BIOS loge son code sur un disque GPT), EFI (512 Mio, comme
+# Calamares), et la racine BTRFS.
+run sgdisk -n1:0:+1M -t1:ef02 -c1:bios_grub \
+           -n2:0:+512M -t2:ef00 -c2:EFI \
+           -n3:0:0 -t3:8300 -c3:AuxiNuxOS "${DISQUE}"
+run partprobe "${DISQUE}"
+run udevadm settle
+run mkfs.vfat -F 32 -n EFI "${P_EFI}"
+
+RACINE="${P_RACINE}"
+if [[ "${CHIFFREMENT}" -eq 1 ]]; then
+  # PBKDF2 et non Argon2id: GRUB 2.12 ne sait deverrouiller que PBKDF2. Or
+  # /boot est DANS la racine chiffree (les instantanes BTRFS doivent le
+  # contenir pour que la restauration redemarre sur le bon noyau).
+  run cryptsetup luksFormat --batch-mode --type luks2 --pbkdf pbkdf2 \
+    --key-file "$(val CLE_LUKS)" "${P_RACINE}"
+  run cryptsetup open --key-file "$(val CLE_LUKS)" "${P_RACINE}" "${MAPPER}"
+  RACINE="/dev/mapper/${MAPPER}"
+fi
+run mkfs.btrfs -f -L AuxiNuxOS "${RACINE}"
+
+# --- 2. Sous-volumes -----------------------------------------------------------
+
+etape "sous-volumes"
+OPTIONS="${OPTIONS_BTRFS}"
+if [[ "$(cat "/sys/block/$(basename "${DISQUE}")/queue/rotational" 2>/dev/null || echo 1)" == "0" ]]; then
+  OPTIONS="${OPTIONS},ssd,discard=async"
+fi
+run mkdir -p "${TARGET}"
+run mount -o subvolid=5 "${RACINE}" "${TARGET}"
+for sv in "${SOUS_VOLUMES[@]}"; do
+  run btrfs subvolume create "${TARGET}/${sv}"
+done
+run umount "${TARGET}"
+
+# Points de montage: memes sous-volumes et memes chemins que mount.conf.
+declare -A MONTAGES=(
+  [@]=/ [@home]=/home [@snapshots]=/.snapshots [@var_log]=/var/log
+  [@var_cache]=/var/cache [@var_tmp]=/var/tmp [@var_lib_flatpak]=/var/lib/flatpak
+  [@swap]=/swap
+)
+ORDRE=(@ @home @snapshots @var_log @var_cache @var_tmp @var_lib_flatpak @swap)
+for sv in "${ORDRE[@]}"; do
+  point="${TARGET}${MONTAGES[${sv}]}"
+  run mkdir -p "${point}"
+  if [[ "${sv}" == "@swap" ]]; then
+    # Pas de compression sur l'echange: btrfs refuse un fichier d'echange
+    # compresse ou en copie-sur-ecriture.
+    run mount -o "subvol=/${sv},defaults,noatime" "${RACINE}" "${point}"
+  else
+    run mount -o "subvol=/${sv},${OPTIONS}" "${RACINE}" "${point}"
+  fi
+done
+run mkdir -p "${TARGET}/boot/efi"
+run mount "${P_EFI}" "${TARGET}/boot/efi"
+
+# --- 3. Copie du systeme -------------------------------------------------------
+
+etape "copie"
+# La source est la couche INTACTE du live (squashfs), jamais la racine
+# modifiee par la session en cours. Pas de -S (fichiers a trous): c'est ce qui
+# rendait le noyau illisible par GRUB (diagnostic du 2026-09-29).
+if [[ -f "${SOURCE}" ]]; then
+  run mkdir -p /run/auxinux-source
+  run mount -o loop,ro "${SOURCE}" /run/auxinux-source
+  SOURCE=/run/auxinux-source
+fi
+if [[ "${SIMULER}" -eq 1 ]]; then
+  echo "SIMULATION: rsync -aHAX ${SOURCE}/ ${TARGET}/"
+else
+  rsync -aHAX --info=progress2 --no-inc-recursive \
+    --exclude=/proc/ --exclude=/sys/ --exclude=/dev/ --exclude=/run/ \
+    --exclude=/tmp/ --exclude=/mnt/ --exclude=/media/ --exclude=/swap/ \
+    --exclude=/boot/efi/ --exclude=/lost+found \
+    "${SOURCE}/" "${TARGET}/" \
+    | stdbuf -oL tr '\r' '\n' \
+    | awk '{ for (i = 1; i <= NF; i++) if ($i ~ /^[0-9]+%$/) { p = $i + 0; if (p != last) { print "auxinux-progression:" p; fflush(); last = p } } }'
+fi
+for d in proc sys dev run tmp mnt media; do run mkdir -p "${TARGET}/${d}"; done
+run chmod 1777 "${TARGET}/tmp"
+
+# Echange: un fichier dans @swap, de la taille de la memoire, plafonne a 8 Gio
+# (meme choix « file » que partition.conf).
+memoire_gio=$(( ($(awk '/MemTotal/ {print $2}' /proc/meminfo) + 1048575) / 1048576 ))
+taille_swap=$(( memoire_gio < 8 ? memoire_gio : 8 ))
+run btrfs filesystem mkswapfile --size "${taille_swap}g" "${TARGET}/swap/swapfile"
+
+# --- 4. Configuration ----------------------------------------------------------
+
+etape "configuration"
+for m in proc sys dev dev/pts run; do run mkdir -p "${TARGET}/${m}"; done
+run mount -t proc proc "${TARGET}/proc"
+run mount -t sysfs sys "${TARGET}/sys"
+run mount --bind /dev "${TARGET}/dev"
+run mount -t devpts devpts "${TARGET}/dev/pts"
+run mount -t tmpfs tmpfs "${TARGET}/run"
+if [[ "${EFI}" -eq 1 ]]; then
+  run mount -t efivarfs efivarfs "${TARGET}/sys/firmware/efi/efivars" 2>/dev/null || true
+fi
+# Resolution de noms pour les mises a jour et les applications.
+run cp --remove-destination /etc/resolv.conf "${TARGET}/etc/resolv.conf"
+
+uuid() { if [[ "${SIMULER}" -eq 1 ]]; then echo "UUID-$(basename "$1")"; else blkid -s UUID -o value "$1"; fi; }
+UUID_RACINE="$(uuid "${RACINE}")"
+UUID_EFI="$(uuid "${P_EFI}")"
+
+mkdir -p "${TARGET}/etc"
+{
+  echo "# /etc/fstab: ecrit par l'installateur AuxiNux OS."
+  for sv in "${ORDRE[@]}"; do
+    opts="${OPTIONS}"
+    [[ "${sv}" == "@swap" ]] && opts="defaults,noatime"
+    printf 'UUID=%s %s btrfs subvol=/%s,%s 0 0\n' "${UUID_RACINE}" "${MONTAGES[${sv}]}" "${sv}" "${opts}"
+  done
+  printf 'UUID=%s /boot/efi vfat umask=0077 0 2\n' "${UUID_EFI}"
+  printf '/swap/swapfile none swap defaults 0 0\n'
+} >"${TARGET}/etc/fstab"
+
+if [[ "${CHIFFREMENT}" -eq 1 ]]; then
+  UUID_LUKS="$(uuid "${P_RACINE}")"
+  # Une seule phrase de passe a taper, dans GRUB: l'initramfs deverrouille
+  # ensuite avec une cle stockee DANS la racine chiffree (meme principe que
+  # le module luksbootkeyfile de Calamares).
+  run dd if=/dev/urandom of="${TARGET}/crypto_keyfile.bin" bs=512 count=4 status=none
+  run chmod 000 "${TARGET}/crypto_keyfile.bin"
+  run cryptsetup luksAddKey --batch-mode --pbkdf pbkdf2 --key-file "$(val CLE_LUKS)" \
+    "${P_RACINE}" "${TARGET}/crypto_keyfile.bin"
+  printf '%s UUID=%s /crypto_keyfile.bin luks,discard\n' "${MAPPER}" "${UUID_LUKS}" >"${TARGET}/etc/crypttab"
+  mkdir -p "${TARGET}/etc/cryptsetup-initramfs" "${TARGET}/etc/initramfs-tools/conf.d"
+  printf 'KEYFILE_PATTERN="/crypto_keyfile.bin"\n' >"${TARGET}/etc/cryptsetup-initramfs/conf-hook"
+  # L'initramfs contient la cle: lisible par root seul.
+  printf 'UMASK=0077\n' >"${TARGET}/etc/initramfs-tools/conf.d/initramfs-permissions"
+fi
+
+# Identite de la machine: jamais celle du live, partagee par toutes les
+# installations faites avec le meme support.
+run rm -f "${TARGET}/etc/machine-id" "${TARGET}/var/lib/dbus/machine-id"
+dans_cible systemd-machine-id-setup
+run ln -sf /etc/machine-id "${TARGET}/var/lib/dbus/machine-id"
+
+# Repertoires ecrits ci-dessous: presents apres la copie, mais on ne compte
+# pas dessus (et la simulation ecrit dans une cible vide).
+mkdir -p "${TARGET}/etc/default" "${TARGET}/etc/auxinux" "${TARGET}/var/lib/dbus"
+
+# Langue: meme chaine que l'ecran d'accueil du live.
+if [[ "${LOCALE}" == fr_CA.UTF-8 ]]; then chaine="fr_CA:fr:en_CA:en"; else chaine="en_CA:en:fr_CA:fr"; fi
+printf 'LANG=%s\nLANGUAGE=%s\n' "${LOCALE}" "${chaine}" >"${TARGET}/etc/default/locale"
+
+# Clavier: /etc/default/keyboard est la source que post-install-cleanup.sh
+# recopie pour la session Plasma (kxkbrc) et que la console applique.
+cat >"${TARGET}/etc/default/keyboard" <<EOF
+XKBMODEL="pc105"
+XKBLAYOUT="${CLAVIER}"
+XKBVARIANT="${VARIANTE}"
+XKBOPTIONS=""
+BACKSPACE="guess"
+EOF
+mkdir -p "${TARGET}/etc/X11/xorg.conf.d"
+cat >"${TARGET}/etc/X11/xorg.conf.d/00-keyboard.conf" <<EOF
+Section "InputClass"
+        Identifier "system-keyboard"
+        MatchIsKeyboard "on"
+        Option "XkbLayout" "${CLAVIER}"
+        Option "XkbModel" "pc105"
+        Option "XkbVariant" "${VARIANTE}"
+EndSection
+EOF
+
+run ln -sf "/usr/share/zoneinfo/${FUSEAU}" "${TARGET}/etc/localtime"
+printf '%s\n' "${FUSEAU}" >"${TARGET}/etc/timezone"
+printf '0.0 0 0.0\n0\nUTC\n' >"${TARGET}/etc/adjtime"
+
+printf '%s\n' "${NOM_MACHINE}" >"${TARGET}/etc/hostname"
+cat >"${TARGET}/etc/hosts" <<EOF
+127.0.0.1 localhost
+127.0.1.1 ${NOM_MACHINE}
+::1       localhost ip6-localhost ip6-loopback
+EOF
+
+# Compte administrateur: membre de sudo, comme dans users.conf. Pas de mot de
+# passe root (setRootPassword: false).
+groupes=()
+for g in "${GROUPES[@]}"; do
+  if [[ "${SIMULER}" -eq 1 ]] || chroot "${TARGET}" getent group "${g}" >/dev/null; then
+    groupes+=("${g}")
+  fi
+done
+liste="$(IFS=,; echo "${groupes[*]}")"
+dans_cible useradd -m -s /bin/bash -c "${NOM_COMPLET}" -G "${liste}" "${UTILISATEUR}"
+if [[ "${SIMULER}" -eq 1 ]]; then
+  echo "SIMULATION: chpasswd (mot de passe lu dans $(val MOT_DE_PASSE))"
+else
+  # Le mot de passe ne passe jamais par la ligne de commande: il serait
+  # visible dans la liste des processus.
+  printf '%s:%s\n' "${UTILISATEUR}" "$(cat "$(val MOT_DE_PASSE)")" | chroot "${TARGET}" chpasswd
+fi
+run chmod 700 "${TARGET}/home/${UTILISATEUR}"
+
+# Reseau: le Wi-Fi configure pendant l'installation reste connu du systeme
+# installe -- la personne n'a pas a ressaisir son mot de passe Wi-Fi.
+if compgen -G "/etc/NetworkManager/system-connections/*" >/dev/null; then
+  run mkdir -p "${TARGET}/etc/NetworkManager/system-connections"
+  run cp -a /etc/NetworkManager/system-connections/. "${TARGET}/etc/NetworkManager/system-connections/"
+  run chmod 600 "${TARGET}"/etc/NetworkManager/system-connections/* 2>/dev/null || true
+fi
+
+# Profil d'usage: ecrit directement, applique par auxinux-profile.service au
+# demarrage. `auxinux-profile set` appliquerait aussi les reglages au systeme
+# EN COURS -- le live.
+mkdir -p "${TARGET}/etc/auxinux"
+printf '%s\n' "${PROFIL}" >"${TARGET}/etc/auxinux/profile"
+# Comme le module enableapt de Calamares: apt direct pendant l'installation,
+# post-install-cleanup.sh remet la politique d'origine.
+printf 'APT_ENABLED=1\n' >"${TARGET}/etc/auxinux/apt.conf"
+
+# --- 5. Chargeur de demarrage --------------------------------------------------
+
+etape "demarrage"
+# Paquets embarques dans l'image: l'installation ne depend pas d'Internet.
+if [[ "${EFI}" -eq 1 ]]; then plateforme=efi; else plateforme=bios; fi
+lots=("${plateforme}")
+[[ "${CHIFFREMENT}" -eq 1 ]] && lots+=(luks)
+for lot in "${lots[@]}"; do
+  if [[ "${SIMULER}" -eq 1 ]]; then
+    echo "SIMULATION: dpkg -i ${PAQUETS}/${lot}/*.deb"
+  else
+    debs=("${TARGET}${PAQUETS}/${lot}"/*.deb)
+    [[ -e "${debs[0]}" ]] || erreur "paquets ${lot} absents de l'image (${PAQUETS}/${lot})"
+    chroot "${TARGET}" env DEBIAN_FRONTEND=noninteractive dpkg -i "${debs[@]#"${TARGET}"}"
+  fi
+done
+
+# Memes valeurs que grubcfg.conf.
+cat >"${TARGET}/etc/default/grub" <<EOF
+# Ecrit par l'installateur AuxiNux OS.
+GRUB_DEFAULT=0
+GRUB_TIMEOUT=5
+GRUB_DISTRIBUTOR="AuxiNux OS"
+GRUB_CMDLINE_LINUX_DEFAULT=""
+GRUB_CMDLINE_LINUX="pci=noaer pcie_aspm=off"
+GRUB_TERMINAL_OUTPUT="gfxterm"
+GRUB_DISABLE_OS_PROBER=false
+EOF
+if [[ "${CHIFFREMENT}" -eq 1 ]]; then
+  printf 'GRUB_ENABLE_CRYPTODISK=y\n' >>"${TARGET}/etc/default/grub"
+fi
+
+if [[ "${EFI}" -eq 1 ]]; then
+  if [[ "${CHIFFREMENT}" -eq 1 ]]; then
+    # Le GRUB signe de Debian est une image figee: il ne sait pas monter une
+    # racine chiffree avant de lire son menu. Secure Boot n'est de toute
+    # facon pas pris en charge (noyau non signe): on construit un GRUB qui
+    # embarque cryptodisk, luks2 et btrfs, et on l'installe AUSSI sur le
+    # chemin de secours EFI/BOOT, qu'il sait amorcer tel quel.
+    dans_cible grub-install --target=x86_64-efi --efi-directory=/boot/efi \
+      --bootloader-id=AuxiNuxOS --no-uefi-secure-boot --force
+    dans_cible grub-install --target=x86_64-efi --efi-directory=/boot/efi \
+      --removable --no-uefi-secure-boot --force
+  else
+    # Exactement la commande du module bootloader de Calamares; le chemin de
+    # secours EFI/BOOT est ecrit par post-install-cleanup.sh (6c).
+    dans_cible grub-install --target=x86_64-efi --efi-directory=/boot/efi \
+      --bootloader-id=AuxiNuxOS --force
+  fi
+else
+  dans_cible grub-install --target=i386-pc "${DISQUE}"
+fi
+dans_cible grub-mkconfig -o /boot/grub/grub.cfg
+
+# --- 6. Mises a jour et applications (en ligne) --------------------------------
+
+if [[ "${EN_LIGNE}" -eq 1 ]]; then
+  etape "mises-a-jour"
+  # Pas d'instantane pendant l'installation: snapper n'est configure qu'a
+  # l'etape suivante, et il n'y a rien a proteger encore.
+  dans_cible env AUXI_NO_SNAPSHOT=1 /usr/bin/auxi --yes --progress update --deb
+  dans_cible env AUXI_NO_SNAPSHOT=1 /usr/bin/auxi --yes --progress upgrade --deb
+
+  if [[ "${#APPLICATIONS[@]}" -gt 0 ]]; then
+    etape "applications"
+    # Le meme programme que l'assistant de premier demarrage. Un echec
+    # d'application n'arrete pas l'installation: l'assistant reste
+    # disponible pour reessayer.
+    # Ses propres lignes « auxinux-etape » sont renommees: ce sont des
+    # sous-etapes de CETTE etape, elles ne doivent pas remettre la barre
+    # globale a zero.
+    if ! dans_cible env AUXI_NO_SNAPSHOT=1 /usr/libexec/auxinux/auxinux-assistant-apply "${APPLICATIONS[@]}" \
+         | sed -u 's/^auxinux-etape:/auxinux-application:/'; then
+      echo "Certaines applications n'ont pas pu etre installees; l'assistant de configuration permettra de reessayer."
+    else
+      # Les choix sont faits: l'assistant ne s'ouvrira pas au premier
+      # demarrage (il reste dans le centre de controle).
+      run mkdir -p "${TARGET}/home/${UTILISATEUR}/.config/auxinux"
+      run touch "${TARGET}/home/${UTILISATEUR}/.config/auxinux/assistant-termine"
+      dans_cible chown -R "${UTILISATEUR}:${UTILISATEUR}" "/home/${UTILISATEUR}/.config"
+    fi
+  fi
+fi
+
+# --- 7. Finalisation (scripts de fin communs avec Calamares) -------------------
+
+etape "finalisation"
+dans_cible env AUXINUX_KEEP_USER="${UTILISATEUR}" /usr/lib/auxinux/post-install-cleanup.sh /
+dans_cible /usr/lib/auxinux/setup-btrfs-rollback.sh /
+# DERNIER controle: un systeme qui s'annonce installe mais dont GRUB ne peut
+# pas lire le noyau est une installation ratee. Son echec fait echouer
+# l'installation.
+dans_cible /usr/lib/auxinux/verify-installed-boot.sh /
+
+[[ "${SIMULER}" -eq 1 ]] || cp "${LOG}" "${TARGET}/var/log/auxinux-installation.log" 2>/dev/null || true
+
+etape "demontage"
+run sync
+run umount -R "${TARGET}"
+[[ "${CHIFFREMENT}" -eq 1 ]] && run cryptsetup close "${MAPPER}"
+mountpoint -q /run/auxinux-source 2>/dev/null && run umount /run/auxinux-source
+echo "Installation terminee."

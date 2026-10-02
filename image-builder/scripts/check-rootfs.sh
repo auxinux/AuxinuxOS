@@ -223,6 +223,23 @@ need_exec /usr/lib/auxinux/post-install-cleanup.sh "les artefacts du live rester
 need_exec /usr/lib/auxinux/verify-installed-boot.sh "une installation produisant un noyau illisible s'annoncerait reussie"
 need_exec /usr/lib/auxinux/wrappers/apt-wrapper "la politique APT ne serait pas appliquee"
 
+echo "-- Installateur console « Install NOW »"
+need_exec /usr/bin/auxinux-installer "l'entree GRUB par defaut menerait a une console vide"
+need_exec /usr/lib/auxinux/auxinux-install-engine "l'installateur ne pourrait rien installer"
+need_file /etc/systemd/system/multi-user.target.wants/auxinux-installer.service \
+  "l'installateur ne se lancerait pas depuis l'entree « Installer maintenant »"
+need_file /etc/calamares/branding/auxinuxos/show.qml "l'installateur graphique n'aurait pas de diaporama"
+# Installation SANS Internet: GRUB (UEFI et BIOS) et LUKS doivent etre dans
+# l'image. Un lot vide, c'est une installation hors ligne qui echoue au
+# moment d'installer le chargeur de demarrage.
+for lot in efi bios luks; do
+  if sudo sh -c "ls '${ROOTFS}/usr/share/auxinux/installateur/paquets/${lot}/'*.deb" >/dev/null 2>&1; then
+    ok "paquets embarques: ${lot}"
+  else
+    fail "paquets embarques: ${lot} — installation hors ligne impossible (chargeur ou chiffrement)"
+  fi
+done
+
 echo "-- Assistants graphiques"
 need_package zenity "les assistants (accueil live, .exe) n'afficheraient aucune fenetre"
 need_package kdialog "boites de dialogue natives pour les scripts KDE"

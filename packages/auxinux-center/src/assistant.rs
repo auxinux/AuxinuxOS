@@ -236,6 +236,15 @@ impl Selection {
     /// Arguments de auxinux-assistant-apply.
     pub fn helper_args(&self) -> Vec<String> {
         let mut args = vec!["--profil".to_string(), self.profil.id().to_string()];
+        args.extend(self.app_args());
+        args
+    }
+
+    /// Les applications seules, sans le profil: l'installateur ecrit le
+    /// profil lui-meme (`auxinux-profile set` reglerait le systeme EN COURS,
+    /// c'est-a-dire le live).
+    pub fn app_args(&self) -> Vec<String> {
+        let mut args = Vec::new();
         for app in self.applications() {
             match app.source {
                 Source::Brave => args.push("--brave".into()),

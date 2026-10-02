@@ -1,0 +1,21 @@
+# Installation slides, in English. See fr.txt for the format.
+Welcome to AuxiNux OS
+A free system designed to help you leave Windows or macOS without losing your bearings. While it installs, here is what sets it apart.
+---
+Your privacy is not a product
+No telemetry, no account to create, no ads. AuxiNux OS collects nothing about you: what you do on your computer is your business alone.
+---
+Nothing is chosen for you
+The installation contains only the essentials. Browser, office suite, media player, games: you choose them at first startup, and you can change your mind at any time.
+---
+Made a mistake? Go back
+Before every update, a restore point is created automatically. If something goes wrong, the system returns to its previous state; your documents are never touched.
+---
+Your Windows applications have a place
+Wine and Bottles run many Windows applications, and Steam with Proton runs a great many games, each in its own space so that one failure does not take the others down.
+---
+A computer that belongs to you
+No update that restarts the machine without warning, no licence, no subscription. The code is open, and the system stays yours for as long as you want.
+---
+Bilingual and Canadian
+AuxiNux OS is a Canadian project that speaks French and English. It is built on Debian, one of the most stable and respected Linux foundations. The AuxiNux control center brings together applications, updates, system health and recovery.
