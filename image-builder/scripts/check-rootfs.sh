@@ -214,6 +214,9 @@ need_file /etc/apt/apt.conf.d/80auxinux-snapshot "le hook ne serait jamais appel
 echo "-- Outils AuxiNux"
 need_exec /usr/bin/auxi "commande d'administration principale"
 need_exec /usr/bin/auxinux-center "centre de controle"
+need_file /usr/share/applications/ca.auxinux.Center.desktop "le centre de controle n'apparaitrait dans aucun menu"
+# Executable: sinon Plasma demande s'il faut faire confiance au raccourci.
+need_exec "/etc/skel/Desktop/AuxiNux OS Center.desktop" "aucun raccourci du centre de controle sur le bureau des nouveaux comptes"
 need_exec /usr/libexec/auxinux/auxinux-source-helper "l'ajout de depot depuis le centre echouerait"
 need_file /usr/share/polkit-1/actions/ca.auxinux.center.policy "l'assistant privilegie n'aurait pas d'action polkit"
 need_exec /usr/lib/auxinux/post-install-cleanup.sh "les artefacts du live resteraient sur le systeme installe"
@@ -232,6 +235,11 @@ need_exec /usr/bin/startplasma-wayland "le bureau ne demarrerait pas"
 need_exec /usr/bin/plasmashell "aucun panneau ni bureau"
 need_exec /usr/bin/kwin_wayland "aucun compositeur Wayland"
 need_exec /usr/bin/systemsettings "le centre de controle renvoie vers les reglages de Plasma"
+need_file /usr/share/plasma/shells/org.kde.plasma.desktop/contents/updates/auxinux-sans-discover.js \
+  "Discover, absent, resterait epingle dans la barre des taches: une icone blanche qui ne lance rien"
+need_file /usr/share/plasma/shells/org.kde.plasma.desktop/contents/updates/auxinux-fond-ecran.js \
+  "le bureau garderait le fond d'ecran de Plasma au lieu de celui d'AuxiNux"
+need_file /usr/share/backgrounds/auxinuxos/default.png "le script du fond d'ecran pointerait vers un fichier absent"
 need_package libgl1-mesa-dri "serveur graphique SANS pilote DRI: KWin ne demarre pas (ce paquet n'est qu'un Recommends)"
 need_package login "PAM sans /etc/pam.d/login: la pile d'authentification du greeter echoue"
 

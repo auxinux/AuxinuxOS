@@ -305,6 +305,10 @@ sudo install -d -m 0755 "${ROOTFS_DIR}/etc/sudoers.d" "${ROOTFS_DIR}/home/auxinu
 echo 'auxinux ALL=(ALL) NOPASSWD:ALL' | sudo tee "${ROOTFS_DIR}/etc/sudoers.d/90-auxinux-live" >/dev/null
 sudo chmod 0440 "${ROOTFS_DIR}/etc/sudoers.d/90-auxinux-live"
 sudo install -m 0755 "${ROOTFS_DIR}/usr/share/applications/auxinux-install.desktop" "${ROOTFS_DIR}/home/auxinux/Desktop/Install AuxiNuxOS.desktop"
+# useradd -m l'a deja copie depuis /etc/skel, sauf sur un rootfs reutilise ou le
+# compte live existait deja (voir install-auxinux-center.sh).
+sudo rm -f "${ROOTFS_DIR}/home/auxinux/Desktop/AuxiNux OS Center.desktop"
+sudo install -m 0755 "${ROOTFS_DIR}/etc/skel/Desktop/AuxiNux OS Center.desktop" "${ROOTFS_DIR}/home/auxinux/Desktop/AuxiNux OS Center.desktop"
 sudo chroot "${ROOTFS_DIR}" chown -R auxinux:auxinux /home/auxinux/Desktop
 
 # --- Pas de verrouillage ni d'extinction d'ecran DANS LE LIVE ----------------

@@ -145,11 +145,11 @@ virtuelle** :
 - Le Center est en **libcosmic sur un bureau Plasma** : il fonctionne (iced +
   winit + wgpu, aucune dépendance à COSMIC) mais **ne suit pas le thème
   Breeze**. Il aura l'air étranger jusqu'à une interface Kirigami/QML.
-- Le fond d'écran par défaut est écrit dans
-  `/etc/xdg/plasma-org.kde.plasma.desktop-appletsrc`, qui suppose que la vue
-  bureau porte le numéro de containment 1 dans la disposition par défaut de
-  Plasma. Si ce numéro change en amont, l'utilisateur voit le fond d'écran de
-  Breeze — pas un bureau cassé, mais le branding est perdu sans avertissement.
+- Le fond d'écran et le retrait de Discover de la barre des tâches sont posés
+  par deux **scripts de mise à jour de Plasma** (`auxinux-fond-ecran.js`,
+  `auxinux-sans-discover.js`), exécutés une fois par compte. Plasma ne rejoue
+  pas un script déjà exécuté : s'il change, il faut lui donner un nouveau nom.
+  Le fond n'est remplacé que s'il est celui de Plasma par défaut.
 - Le thème SDDM est surchargé par `theme.conf.user` dans le thème
   `debian-breeze`. Si Debian renomme ce thème, l'écran de connexion revient à
   son apparence d'origine, silencieusement (`configure-branding.sh` émet un

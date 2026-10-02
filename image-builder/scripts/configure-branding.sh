@@ -77,14 +77,11 @@ fi
 
 # --- Fond d'ecran par defaut du bureau -------------------------------------
 #
-# Purement cosmetique et volontairement minimal: on n'ecrit QUE la cle du fond
-# d'ecran de la vue bureau. kconfig fusionne cle par cle, donc la disposition
-# des panneaux reste celle de Plasma. Au pire, si la numerotation des
-# containments change en amont, l'utilisateur voit le fond d'ecran de Breeze --
-# pas un bureau casse.
-sudo install -D -m 0644 /dev/stdin \
-  "${ROOTFS}/etc/xdg/plasma-org.kde.plasma.desktop-appletsrc" <<'PLASMA_EOF'
-[Containments][1][Wallpaper][org.kde.image][General]
-Image=/usr/share/backgrounds/auxinuxos/default.png
-PreviewImage=/usr/share/backgrounds/auxinuxos/default.png
-PLASMA_EOF
+# Il etait ecrit ici dans /etc/xdg/plasma-org.kde.plasma.desktop-appletsrc,
+# sous le numero de containment suppose de la vue bureau. Constate en VM le
+# 2026-10-02: Plasma ne l'appliquait PAS. Il est desormais pose par le script
+# de mise a jour de Plasma auxinux-fond-ecran.js (overlays/usr/share/plasma/
+# shells/org.kde.plasma.desktop/contents/updates/), qui s'execute pour chaque
+# nouvel utilisateur. L'ancien fichier est retire d'un rootfs reutilise: il ne
+# servait a rien et faisait croire le contraire.
+sudo rm -f "${ROOTFS}/etc/xdg/plasma-org.kde.plasma.desktop-appletsrc"

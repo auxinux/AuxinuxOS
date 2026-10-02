@@ -33,6 +33,21 @@ sudo install -D -m 0644 "${PKG_DIR}/data/ca.auxinux.Center.desktop" \
 sudo install -D -m 0644 "${PKG_DIR}/data/ca.auxinux.Center.metainfo.xml" \
   "${ROOTFS}/usr/share/metainfo/ca.auxinux.Center.metainfo.xml"
 
+# Raccourci sur le bureau de chaque nouveau compte (useradd -m copie /etc/skel).
+#
+# Une COPIE executable, comme le raccourci d'installation du live: Plasma ne
+# lance sans avertissement « programme non fiable » qu'un .desktop executable
+# hors de /usr/share/applications. Un lien symbolique aurait suivi le .desktop
+# installe, mais Plasma l'affiche en italique avec un embleme de lien --
+# essaye en VM le 2026-10-02, et ecarte pour cette raison.
+#
+# ~/Desktop et non un nom traduit: xdg-user-dirs n'est pas installe, donc le
+# bureau de Plasma est ~/Desktop quelle que soit la langue.
+sudo install -d -m 0755 "${ROOTFS}/etc/skel/Desktop"
+sudo rm -f "${ROOTFS}/etc/skel/Desktop/AuxiNux OS Center.desktop"
+sudo install -m 0755 "${PKG_DIR}/data/ca.auxinux.Center.desktop" \
+  "${ROOTFS}/etc/skel/Desktop/AuxiNux OS Center.desktop"
+
 # Le Center est un binaire libcosmic: aucune dependance QML/Kirigami/KF6 a
 # installer. Ses dependances d'execution (libwayland-client, libxkbcommon,
 # pilotes mesa GL/Vulkan) sont toutes tirees par le bureau Plasma et par
