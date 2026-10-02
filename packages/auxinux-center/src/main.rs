@@ -8,6 +8,7 @@
 //! Wayland, libxkbcommon et pile graphique.
 
 mod apps;
+mod assistant;
 mod cli;
 mod health;
 mod model;
@@ -31,9 +32,20 @@ fn main() {
         std::process::exit(cli::run(&args[2..]));
     }
 
+    // --premier-demarrage: lance par /etc/xdg/autostart a chaque ouverture de
+    // session. Ne fait rien si l'assistant a deja ete termine ou passe, ni dans
+    // la session live (voir assistant::should_open_at_login).
+    // --assistant: ouvre l'assistant, toujours (relance manuelle).
+    let first_run = args.get(1).map(|s| s == "--premier-demarrage").unwrap_or(false);
+    if first_run && !assistant::open_at_login_now() {
+        std::process::exit(0);
+    }
+    #[cfg(feature = "gui")]
+    let open_assistant = first_run || args.get(1).map(|s| s == "--assistant").unwrap_or(false);
+
     #[cfg(feature = "gui")]
     {
-        if let Err(e) = ui::run() {
+        if let Err(e) = ui::run(open_assistant) {
             eprintln!("auxinux-center: {e}");
             std::process::exit(70);
         }

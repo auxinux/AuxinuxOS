@@ -42,7 +42,7 @@ Usage:
   auxi update [--deb|--flatpak]
   auxi upgrade [--deb|--flatpak]
   auxi search [--deb|--flatpak] TERM
-  auxi install [--deb|--flatpak] PACKAGE_OR_APP
+  auxi install [--deb|--flatpak] PACKAGE_OR_APP...
   auxi uninstall [--deb|--flatpak] PACKAGE_OR_APP
   auxi purge PACKAGE
   auxi clean
@@ -67,7 +67,7 @@ Usage:
   auxi update [--deb|--flatpak]
   auxi upgrade [--deb|--flatpak]
   auxi search [--deb|--flatpak] TERME
-  auxi install [--deb|--flatpak] PAQUET_OU_APP
+  auxi install [--deb|--flatpak] PAQUET_OU_APP...
   auxi uninstall [--deb|--flatpak] PAQUET_OU_APP
   auxi purge PAQUET
   auxi clean
@@ -569,11 +569,16 @@ run_install() {
     exit 64
   fi
   flatpak_opts
+  # Avec --flatpak ou --deb, PLUSIEURS elements sont acceptes: l'assistant de
+  # premier demarrage installe toute une selection en une seule transaction
+  # (une seule autorisation, un seul instantane). --or-update: une
+  # application deja presente est mise a jour au lieu de faire echouer le
+  # lot -- c'est le cas quand on relance l'assistant.
   if [[ "${MODE}" == "flatpak" ]]; then
-    flatpak install "${FLATPAK_OPTS[@]}" flathub -- "${item}"
+    flatpak install "${FLATPAK_OPTS[@]}" --or-update flathub -- "${ARGS[@]}"
   elif [[ "${MODE}" == "deb" ]]; then
     require_root_for_deb install "$@"
-    apt_get install -- "${item}"
+    apt_get install -- "${ARGS[@]}"
   else
     if flatpak remote-ls flathub --app 2>/dev/null | awk '{print $1}' | grep -Fxq "${item}"; then
       flatpak install "${FLATPAK_OPTS[@]}" flathub -- "${item}"

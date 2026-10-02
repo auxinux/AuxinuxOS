@@ -47,6 +47,13 @@ controle STATIQUE: il ne regarde aucun trafic reseau.
 
 ## Mesures appliquees
 
+- Aucune application imposee (2026-10-02): l'image est un socle, et
+  l'assistant de premier demarrage PROPOSE navigateur, bureautique, lecteur,
+  applications du profil et outils de vie privee. Rien n'est installe avant le
+  recapitulatif, et Steam n'est jamais coche d'avance.
+- Depot Brave livre DESACTIVE: actif, il ferait contacter Brave a chaque
+  `apt update`, meme par qui ne l'utilise pas. L'assistant ne l'active que si
+  Brave est choisi (check-rootfs.sh refuse une image ou il est actif).
 - Brave: policy managee `/etc/brave/policies/managed/auxinux-privacy.json`
   desactivant les rapports de metriques, la collecte anonymisee, Sync, Rewards,
   Wallet, VPN et le service de conversation intégré. A confirmer: clef exacte de desactivation P3A selon
@@ -60,9 +67,10 @@ controle STATIQUE: il ne regarde aucun trafic reseau.
   que la moitie statique.
 - A decider explicitement, destination par destination: NTP, verification de
   connectivite de NetworkManager, requetes Flathub du centre de controle.
-- Steam (couche jeu) collecte pour son compte: son installation en Flatpak, a la
+- Steam (profil Jeu) collecte pour son compte: son installation en Flatpak, a la
   demande, doit etre un acte explicite de l'utilisateur -- jamais une case
-  pre-cochee.
+  pre-cochee. Respecte par l'assistant de premier demarrage (Steam propose,
+  decoche).
 - Brave: confirmer la couverture P3A et les services optionnels restants;
 - Wine: execution de binaires Windows et messages utilisateur;
 - Calamares: partitionnement, creation utilisateur, permissions post-install;

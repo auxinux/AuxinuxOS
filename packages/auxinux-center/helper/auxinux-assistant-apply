@@ -1,0 +1,124 @@
+#!/usr/bin/env bash
+# Applique les choix de l'assistant de premier demarrage, en root.
+#
+# Lance par le centre de controle (auxinux-center --assistant) via pkexec:
+# UNE seule autorisation pour toute la selection, au lieu d'une par
+# application. Comme auxinux-source-helper, ce programme vit a un emplacement
+# fixe appartenant a root et revalide tout ce qu'il recoit: c'est lui qui
+# s'execute en root, donc son controle est le seul qui compte.
+#
+# Usage:
+#   auxinux-assistant-apply [--profil bureautique|multimedia|gaming]
+#                           [--brave] [--deb PAQUET]... [--flatpak APP_ID]...
+#
+# Sortie: la sortie de `auxi --yes --progress`, plus une ligne
+#   auxinux-etape:N:TOTAL:LIBELLE
+# au debut de chaque etape, que le centre lit pour sa barre de progression.
+#
+# Une etape qui echoue n'arrete pas les suivantes: une application Flatpak
+# indisponible ne doit pas priver l'utilisateur des autres. Le code de sortie
+# est 1 si au moins une etape a echoue, et la derniere ligne les nomme.
+set -uo pipefail
+
+AUXI="/usr/bin/auxi"
+PROFILE_BIN="/usr/bin/auxinux-profile"
+SOURCES_DIR="/etc/apt/sources.list.d"
+BRAVE_SOURCE="brave-browser-release.sources"
+
+# Banc d'essai (tests/test-assistant-apply.sh): chemins remplaces par des
+# stubs. Honore UNIQUEMENT hors root -- en root, aucune variable
+# d'environnement ne doit pouvoir rediriger ce qui s'execute.
+if [[ "${EUID}" -ne 0 && -n "${AUXINUX_ASSISTANT_TEST_ROOT:-}" ]]; then
+  AUXI="${AUXINUX_ASSISTANT_TEST_ROOT}/auxi"
+  PROFILE_BIN="${AUXINUX_ASSISTANT_TEST_ROOT}/auxinux-profile"
+  SOURCES_DIR="${AUXINUX_ASSISTANT_TEST_ROOT}/sources.list.d"
+fi
+
+die() {
+  echo "auxinux-assistant-apply: $*" >&2
+  exit 64
+}
+
+# Nom de paquet Debian (avec architecture eventuelle) ou identifiant Flatpak.
+# Jamais de tiret initial: il serait lu comme une option par apt ou flatpak.
+valid_id() {
+  [[ "$1" =~ ^[A-Za-z0-9][A-Za-z0-9.+_:-]{0,254}$ ]]
+}
+
+PROFIL=""
+BRAVE=0
+DEBS=()
+FLATPAKS=()
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --profil)
+      case "${2:-}" in
+        bureautique|multimedia|gaming) PROFIL="$2" ;;
+        *) die "profil inconnu: ${2:-}" ;;
+      esac
+      shift 2 ;;
+    --brave) BRAVE=1; shift ;;
+    --deb)
+      valid_id "${2:-}" || die "nom de paquet invalide: ${2:-}"
+      DEBS+=("$2"); shift 2 ;;
+    --flatpak)
+      valid_id "${2:-}" || die "identifiant Flatpak invalide: ${2:-}"
+      FLATPAKS+=("$2"); shift 2 ;;
+    *) die "argument inconnu: $1" ;;
+  esac
+done
+
+# Brave vient de son depot officiel, en DEB: c'est ce qui applique la
+# politique de confidentialite geree (/etc/brave/policies/managed). Le depot
+# est livre desactive; on ne l'active que maintenant, a la demande.
+if [[ "${BRAVE}" -eq 1 ]]; then
+  DEBS+=("brave-browser")
+fi
+
+TOTAL=0
+[[ -n "${PROFIL}" ]] && TOTAL=$((TOTAL + 1))
+[[ "${#DEBS[@]}" -gt 0 ]] && TOTAL=$((TOTAL + 1))
+TOTAL=$((TOTAL + ${#FLATPAKS[@]}))
+[[ "${TOTAL}" -gt 0 ]] || { echo "Rien a installer."; exit 0; }
+
+STEP=0
+FAILED=()
+step() {
+  STEP=$((STEP + 1))
+  echo "auxinux-etape:${STEP}:${TOTAL}:$1"
+}
+
+if [[ -n "${PROFIL}" ]]; then
+  step "Profil d'usage: ${PROFIL}"
+  "${PROFILE_BIN}" set "${PROFIL}" || FAILED+=("profil ${PROFIL}")
+fi
+
+if [[ "${#DEBS[@]}" -gt 0 ]]; then
+  step "Paquets systeme: ${DEBS[*]}"
+  deb_ok=1
+  if [[ "${BRAVE}" -eq 1 && -e "${SOURCES_DIR}/${BRAVE_SOURCE}.disabled" ]]; then
+    mv -f "${SOURCES_DIR}/${BRAVE_SOURCE}.disabled" "${SOURCES_DIR}/${BRAVE_SOURCE}" \
+      || deb_ok=0
+  fi
+  # Les index sont rafraichis AVANT: ceux de l'image datent de sa construction,
+  # et le depot Brave vient peut-etre d'etre active.
+  if [[ "${deb_ok}" -eq 1 ]]; then
+    "${AUXI}" --yes --progress update --deb && \
+      "${AUXI}" --yes --progress install --deb "${DEBS[@]}" || deb_ok=0
+  fi
+  [[ "${deb_ok}" -eq 1 ]] || FAILED+=("${DEBS[@]}")
+fi
+
+# Une application par etape: la barre avance de facon lisible, et un echec
+# n'emporte que l'application concernee.
+for app in "${FLATPAKS[@]}"; do
+  step "Installation de ${app}"
+  "${AUXI}" --yes --progress install --flatpak "${app}" || FAILED+=("${app}")
+done
+
+if [[ "${#FAILED[@]}" -gt 0 ]]; then
+  echo "Echec pour: ${FAILED[*]}" >&2
+  exit 1
+fi
+echo "Toutes les applications choisies sont installees."
+exit 0

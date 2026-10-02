@@ -79,16 +79,24 @@ l'unité — « Ordering cycle found, skipping auxinux-profile.service » à cha
 démarrage. Jusqu'au 2026-09-29, **le profil n'était donc jamais appliqué** sur
 un système installé.
 
-## Type d'installation et profil d'usage sont deux choses
+## Profil d'usage et applications
 
-Le **type d'installation** décide de ce qui est *installé*
-(`package-lists/layer-*.txt`) ; le **profil d'usage** décide de ce qui est
-*réglé*. Le second est commutable à tout moment, le premier pas.
+Depuis le 2026-10-02, l'image n'installe plus d'applications par usage : c'est
+un socle (voir `image-builder/README.md`). L'**assistant de premier démarrage**
+du centre de contrôle demande le profil, l'applique (`auxinux-profile set`), et
+propose les applications qui vont avec :
 
-L'ISO 0.2.0 embarque les trois couches : l'installation étant une copie du
-squashfs, le médium doit contenir tout ce qu'une installation peut recevoir.
-Choisir un type (donc retirer les couches non voulues) appartient à
-l'installateur maison, qui n'existe pas encore.
+| Profil | Cochées d'avance | Proposées |
+|---|---|---|
+| Bureautique | Thunderbird, Numériseur | Xournal++ |
+| Multimédia | Elisa, Kdenlive, Audacity, GIMP | Krita, OBS Studio |
+| Jeu | Heroic | Steam, Lutris, ProtonUp-Qt |
+
+Steam n'est jamais coché d'avance : il collecte pour son compte (voir
+`docs/privacy-stance.md`). Wine (dans l'image) et Bottles (installé par
+l'assistant quels que soient les choix) font tourner les applications Windows
+pour tous les profils. Le profil se change ensuite dans Réglages ; relancer
+l'assistant installe ce qu'on ajoute, sans rien retirer.
 
 ## Limites
 

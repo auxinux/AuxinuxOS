@@ -1,0 +1,413 @@
+//! Assistant de premier demarrage: le choix des applications.
+//!
+//! Decision d'aporler (2026-10-02): l'image n'impose plus aucune application
+//! d'usage. « Notre valeur de vie privee, de libre choix et de liberte, on ne
+//! la respecte pas a 100 %: nous imposons plein de logiciels des le depart. »
+//! L'installation est un socle -- systeme, KDE Plasma, couche Windows -- et cet
+//! assistant demande, au premier demarrage, ce que la personne veut:
+//! navigateur, LibreOffice, lecteur multimedia, profil d'usage avec ses
+//! applications suggerees, outils de vie privee. Il se relance a tout moment
+//! depuis le centre de controle.
+//!
+//! Flatpak d'abord (arbitrage du meme jour): versions recentes, isolees,
+//! desinstallables sans toucher au systeme. Une seule exception, Brave, en
+//! DEB: c'est ce qui applique la politique de confidentialite geree livree
+//! dans /etc/brave/policies/managed.
+//!
+//! Ce module ne depend pas de l'interface: le catalogue, le plan
+//! d'installation et la regle du premier demarrage sont testes par
+//! `cargo test --no-default-features`.
+
+use crate::model::ActionResult;
+
+/// Programme privilegie qui applique la selection (voir
+/// helper/auxinux-assistant-apply).
+pub const APPLY_HELPER: &str = "/usr/libexec/auxinux/auxinux-assistant-apply";
+
+/// D'ou vient une application.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Source {
+    Flatpak,
+    /// Brave: depot officiel, active a la demande par l'assistant.
+    Brave,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct App {
+    pub id: &'static str,
+    pub name: &'static str,
+    pub summary: &'static str,
+    pub source: Source,
+}
+
+const fn flatpak(id: &'static str, name: &'static str, summary: &'static str) -> App {
+    App { id, name, summary, source: Source::Flatpak }
+}
+
+/// Installee pour TOUT LE MONDE, quels que soient les choix: Bottles fait
+/// tourner les applications Windows, chacune dans son espace, avec Proton-GE
+/// et DXVK (decision d'aporler: « Wine et la couche Proton sont installes peu
+/// importe »). Wine lui-meme est dans l'image (couche-windows.txt).
+pub const TOUJOURS: [App; 1] = [flatpak(
+    "com.usebottles.bottles",
+    "Bottles",
+    "Applications Windows, chacune dans son espace isole (Proton, DXVK)",
+)];
+
+pub const NAVIGATEURS: [App; 5] = [
+    flatpak("org.mozilla.firefox", "Firefox", "Navigateur libre de la fondation Mozilla"),
+    App {
+        id: "brave-browser",
+        name: "Brave",
+        summary: "Bloqueur de publicites integre; telemetrie coupee par AuxiNux",
+        source: Source::Brave,
+    },
+    flatpak(
+        "io.gitlab.librewolf-community",
+        "LibreWolf",
+        "Firefox durci pour la vie privee",
+    ),
+    flatpak("org.chromium.Chromium", "Chromium", "Version libre du moteur de Chrome"),
+    flatpak("com.vivaldi.Vivaldi", "Vivaldi", "Navigateur tres personnalisable"),
+];
+
+pub const LIBREOFFICE: App = flatpak(
+    "org.libreoffice.LibreOffice",
+    "LibreOffice",
+    "Traitement de texte, tableur, presentations",
+);
+
+/// VLC en tete: c'est le lecteur que le projet recommande.
+pub const LECTEURS: [App; 3] = [
+    flatpak("org.videolan.VLC", "VLC", "Lit a peu pres tout (recommande)"),
+    flatpak("org.kde.haruna", "Haruna", "Lecteur video de KDE"),
+    flatpak("io.mpv.Mpv", "mpv", "Lecteur minimaliste"),
+];
+
+pub const VIE_PRIVEE: [App; 5] = [
+    flatpak("org.keepassxc.KeePassXC", "KeePassXC", "Coffre-fort de mots de passe, hors ligne"),
+    flatpak("org.kde.kleopatra", "Kleopatra", "Chiffrement et signature (OpenPGP)"),
+    flatpak("org.onionshare.OnionShare", "OnionShare", "Partage de fichiers anonyme par Tor"),
+    flatpak(
+        "fr.romainvigier.MetadataCleaner",
+        "Metadata Cleaner",
+        "Retire les metadonnees des photos et documents",
+    ),
+    flatpak("org.bleachbit.BleachBit", "BleachBit", "Efface les traces et fichiers temporaires"),
+];
+
+/// Profil d'usage (les trois profils d'auxinux-profile).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Profil {
+    Bureautique,
+    Multimedia,
+    Jeu,
+}
+
+impl Profil {
+    pub const TOUS: [Profil; 3] = [Profil::Bureautique, Profil::Multimedia, Profil::Jeu];
+
+    /// Nom compris par `auxinux-profile set`.
+    pub fn id(self) -> &'static str {
+        match self {
+            Profil::Bureautique => "bureautique",
+            Profil::Multimedia => "multimedia",
+            Profil::Jeu => "gaming",
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Profil::Bureautique => "Bureautique",
+            Profil::Multimedia => "Multimedia",
+            Profil::Jeu => "Jeu",
+        }
+    }
+
+    /// Applications suggerees, et si elles sont cochees d'avance. Cochees:
+    /// celles que l'image installait d'office pour cet usage avant le
+    /// 2026-10-02. Les autres sont proposees, decochees.
+    ///
+    /// Steam est DECOCHE: il collecte pour son compte, et docs/privacy-stance.md
+    /// engage le projet a ce que son installation soit un acte explicite --
+    /// « jamais une case pre-cochee ».
+    pub fn suggestions(self) -> &'static [(App, bool)] {
+        const BUREAUTIQUE: [(App, bool); 3] = [
+            (flatpak("org.mozilla.Thunderbird", "Thunderbird", "Courriel et agenda"), true),
+            (flatpak("org.gnome.SimpleScan", "Numeriseur", "Numeriser des documents"), true),
+            (flatpak("com.github.xournalpp.xournalpp", "Xournal++", "Annoter des PDF, prendre des notes"), false),
+        ];
+        const MULTIMEDIA: [(App, bool); 6] = [
+            (flatpak("org.kde.elisa", "Elisa", "Lecteur de musique de KDE"), true),
+            (flatpak("org.kde.kdenlive", "Kdenlive", "Montage video"), true),
+            (flatpak("org.audacityteam.Audacity", "Audacity", "Edition audio"), true),
+            (flatpak("org.gimp.GIMP", "GIMP", "Retouche d'images"), true),
+            (flatpak("org.kde.krita", "Krita", "Peinture et illustration"), false),
+            (flatpak("com.obsproject.Studio", "OBS Studio", "Enregistrement et diffusion d'ecran"), false),
+        ];
+        const JEU: [(App, bool); 4] = [
+            (flatpak("com.valvesoftware.Steam", "Steam", "Jeux Steam, avec Proton pour les jeux Windows"), false),
+            (flatpak("com.heroicgameslauncher.hgl", "Heroic", "Jeux Epic, GOG et Amazon"), true),
+            (flatpak("net.lutris.Lutris", "Lutris", "Lanceur pour tous les autres jeux"), false),
+            (flatpak("net.davidotek.pupgui2", "ProtonUp-Qt", "Versions supplementaires de Proton"), false),
+        ];
+        match self {
+            Profil::Bureautique => &BUREAUTIQUE,
+            Profil::Multimedia => &MULTIMEDIA,
+            Profil::Jeu => &JEU,
+        }
+    }
+}
+
+/// Ce que la personne a choisi dans l'assistant.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Selection {
+    /// Index dans NAVIGATEURS; `None` = aucun pour l'instant.
+    pub navigateur: Option<usize>,
+    pub libreoffice: bool,
+    /// Index dans LECTEURS; `None` = aucun.
+    pub lecteur: Option<usize>,
+    pub profil: Profil,
+    /// Une case par suggestion du profil, dans l'ordre de `suggestions()`.
+    pub suggestions: Vec<bool>,
+    /// Une case par entree de VIE_PRIVEE.
+    pub vie_privee: Vec<bool>,
+}
+
+impl Default for Selection {
+    /// Les valeurs proposees d'avance. Firefox parce qu'il faut un navigateur
+    /// et que c'est le choix le plus neutre; VLC parce que c'est le lecteur
+    /// recommande; les outils de vie privee coches, comme convenu. Tout se
+    /// decoche.
+    fn default() -> Self {
+        let profil = Profil::Bureautique;
+        Selection {
+            navigateur: Some(0),
+            libreoffice: true,
+            lecteur: Some(0),
+            profil,
+            suggestions: defaults_for(profil),
+            vie_privee: vec![true; VIE_PRIVEE.len()],
+        }
+    }
+}
+
+impl Selection {
+    /// Change de profil et repart de ses cases par defaut: les cases d'un
+    /// autre profil n'ont pas de sens pour celui-ci.
+    pub fn set_profil(&mut self, profil: Profil) {
+        if self.profil != profil {
+            self.profil = profil;
+            self.suggestions = defaults_for(profil);
+        }
+    }
+
+    /// Toutes les applications qui seront installees, dans l'ordre affiche
+    /// par le recapitulatif.
+    pub fn applications(&self) -> Vec<App> {
+        let mut apps = Vec::new();
+        if let Some(app) = self.navigateur.and_then(|i| NAVIGATEURS.get(i)) {
+            apps.push(*app);
+        }
+        if self.libreoffice {
+            apps.push(LIBREOFFICE);
+        }
+        if let Some(app) = self.lecteur.and_then(|i| LECTEURS.get(i)) {
+            apps.push(*app);
+        }
+        for ((app, _), chosen) in self.profil.suggestions().iter().zip(&self.suggestions) {
+            if *chosen {
+                apps.push(*app);
+            }
+        }
+        for (app, chosen) in VIE_PRIVEE.iter().zip(&self.vie_privee) {
+            if *chosen {
+                apps.push(*app);
+            }
+        }
+        apps.extend(TOUJOURS);
+        // Une meme application ne doit pas etre installee deux fois si deux
+        // etapes la proposent un jour.
+        let mut seen = std::collections::HashSet::new();
+        apps.retain(|app| seen.insert(app.id));
+        apps
+    }
+
+    /// Arguments de auxinux-assistant-apply.
+    pub fn helper_args(&self) -> Vec<String> {
+        let mut args = vec!["--profil".to_string(), self.profil.id().to_string()];
+        for app in self.applications() {
+            match app.source {
+                Source::Brave => args.push("--brave".into()),
+                Source::Flatpak => {
+                    args.push("--flatpak".into());
+                    args.push(app.id.into());
+                }
+            }
+        }
+        args
+    }
+}
+
+fn defaults_for(profil: Profil) -> Vec<bool> {
+    profil.suggestions().iter().map(|(_, on)| *on).collect()
+}
+
+/// Installe la selection: une seule invite d'autorisation, avancement transmis
+/// ligne a ligne (voir progress.rs pour les lignes « auxinux-etape »).
+pub fn apply(selection: &Selection, on_line: &mut dyn FnMut(&str)) -> ActionResult {
+    let args = selection.helper_args();
+    let mut full: Vec<&str> = vec![APPLY_HELPER];
+    full.extend(args.iter().map(String::as_str));
+    let result = crate::progress::privileged(&full, on_line, "Vos applications sont installees");
+    if result.ok {
+        let _ = mark_done();
+    }
+    result
+}
+
+// ---------------------------------------------------------------------------
+// Premier demarrage
+// ---------------------------------------------------------------------------
+
+/// Fichier qui dit que l'assistant a ete termine ou passe pour ce compte.
+pub fn done_marker() -> Option<std::path::PathBuf> {
+    let config = match std::env::var_os("XDG_CONFIG_HOME").filter(|v| !v.is_empty()) {
+        Some(dir) => std::path::PathBuf::from(dir),
+        None => std::path::PathBuf::from(std::env::var_os("HOME")?).join(".config"),
+    };
+    Some(config.join("auxinux").join("assistant-termine"))
+}
+
+/// Marque l'assistant comme termine. Appele quand l'installation reussit, ou
+/// quand la personne choisit « Passer »: dans les deux cas elle ne doit plus le
+/// voir s'ouvrir a chaque session. Il reste dans le centre de controle.
+pub fn mark_done() -> std::io::Result<()> {
+    let path = done_marker().ok_or_else(|| std::io::Error::other("HOME inconnu"))?;
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    std::fs::write(path, b"")
+}
+
+/// Faut-il ouvrir l'assistant a l'ouverture de session ?
+///
+/// Non dans la session live: on y essaie le systeme, et tout ce qui serait
+/// installe disparaitrait au redemarrage. Non plus une fois termine ou passe.
+pub fn should_open_at_login(cmdline: &str, marker_exists: bool) -> bool {
+    let live = cmdline.split_whitespace().any(|w| w == "boot=live");
+    !live && !marker_exists
+}
+
+/// `should_open_at_login` sur l'etat reel de la machine.
+pub fn open_at_login_now() -> bool {
+    let cmdline = std::fs::read_to_string("/proc/cmdline").unwrap_or_default();
+    let marker = done_marker().map(|p| p.exists()).unwrap_or(false);
+    should_open_at_login(&cmdline, marker)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn ids(sel: &Selection) -> Vec<&'static str> {
+        sel.applications().iter().map(|a| a.id).collect()
+    }
+
+    #[test]
+    fn defaults_install_a_browser_libreoffice_vlc_privacy_tools_and_bottles() {
+        let sel = Selection::default();
+        let ids = ids(&sel);
+        for expected in [
+            "org.mozilla.firefox",
+            "org.libreoffice.LibreOffice",
+            "org.videolan.VLC",
+            "org.mozilla.Thunderbird",
+            "org.keepassxc.KeePassXC",
+            "com.usebottles.bottles",
+        ] {
+            assert!(ids.contains(&expected), "{expected} manque: {ids:?}");
+        }
+        // Proposee mais decochee.
+        assert!(!ids.contains(&"com.github.xournalpp.xournalpp"));
+    }
+
+    #[test]
+    fn bottles_is_installed_even_when_everything_is_declined() {
+        let sel = Selection {
+            navigateur: None,
+            libreoffice: false,
+            lecteur: None,
+            profil: Profil::Bureautique,
+            suggestions: vec![false; 3],
+            vie_privee: vec![false; VIE_PRIVEE.len()],
+        };
+        assert_eq!(ids(&sel), vec!["com.usebottles.bottles"]);
+    }
+
+    #[test]
+    fn brave_goes_through_its_repository_not_flatpak() {
+        let mut sel = Selection::default();
+        sel.navigateur = NAVIGATEURS.iter().position(|a| a.name == "Brave");
+        let args = sel.helper_args();
+        assert!(args.contains(&"--brave".to_string()));
+        assert!(!args.iter().any(|a| a == "brave-browser"));
+        assert!(!args.iter().any(|a| a == "org.mozilla.firefox"));
+    }
+
+    #[test]
+    fn changing_profile_resets_its_suggestions_and_sets_it() {
+        let mut sel = Selection::default();
+        sel.set_profil(Profil::Jeu);
+        // Steam decoche d'avance (docs/privacy-stance.md), Heroic coche.
+        assert_eq!(sel.suggestions, vec![false, true, false, false]);
+        let args = sel.helper_args();
+        assert_eq!(&args[..2], &["--profil".to_string(), "gaming".to_string()]);
+        assert!(!args.contains(&"com.valvesoftware.Steam".to_string()));
+        sel.suggestions[0] = true;
+        assert!(sel.helper_args().contains(&"com.valvesoftware.Steam".to_string()));
+        assert!(!args.contains(&"org.mozilla.Thunderbird".to_string()));
+    }
+
+    #[test]
+    fn every_flatpak_argument_follows_its_flag() {
+        let args = Selection::default().helper_args();
+        for (i, a) in args.iter().enumerate() {
+            if a.contains('.') {
+                assert_eq!(args[i - 1], "--flatpak", "{a} sans --flatpak");
+            }
+        }
+    }
+
+    #[test]
+    fn catalog_ids_pass_the_helper_validation() {
+        // Meme regle que valid_id() dans auxinux-assistant-apply: un
+        // identifiant refuse ici ferait echouer toute l'installation.
+        let valid = |id: &str| {
+            let mut c = id.chars();
+            c.next().is_some_and(|f| f.is_ascii_alphanumeric())
+                && id.len() <= 255
+                && id.chars().all(|ch| ch.is_ascii_alphanumeric() || ".+_:-".contains(ch))
+        };
+        let mut all: Vec<App> = NAVIGATEURS.to_vec();
+        all.extend(LECTEURS);
+        all.extend(VIE_PRIVEE);
+        all.extend(TOUJOURS);
+        all.push(LIBREOFFICE);
+        for p in Profil::TOUS {
+            all.extend(p.suggestions().iter().map(|(a, _)| *a));
+        }
+        for app in all {
+            assert!(valid(app.id), "identifiant refuse par l'assistant: {}", app.id);
+        }
+    }
+
+    #[test]
+    fn never_opens_in_the_live_session_nor_once_done() {
+        let installed = "BOOT_IMAGE=/@/boot/vmlinuz root=UUID=x rootflags=subvol=@ rw";
+        let live = "BOOT_IMAGE=/live/vmlinuz boot=live components quiet";
+        assert!(should_open_at_login(installed, false));
+        assert!(!should_open_at_login(installed, true));
+        assert!(!should_open_at_login(live, false));
+    }
+}

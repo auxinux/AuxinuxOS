@@ -1,4 +1,12 @@
-# Couche JEU (ex windows-support.txt).
+# Couche WINDOWS: installee pour TOUT LE MONDE, quel que soit le profil
+# (arbitrage d'aporler, 2026-10-02: « Wine et la couche Proton sont installes
+# peu importe, pour faire tourner des applications Windows 11 »). Ex
+# layer-gaming.txt.
+#
+# Proton passe par Bottles (Flatpak, avec ses executeurs Proton-GE et DXVK),
+# que l'assistant de premier demarrage installe TOUJOURS, et que
+# auxinux-windows-wizard installe a la demande s'il manque. Steam, qui apporte
+# le Proton de Valve, est propose dans le profil Jeu.
 #
 # Steam n'est PAS ici: il est installe en FLATPAK a la demande (arbitrage du
 # 2026-09-12), ce qui l'isole et evite de figer un client qui se met a jour
@@ -32,8 +40,9 @@ libgl1-mesa-dri
 libgl1-mesa-dri:i386
 vulkan-tools
 
-# gamemode ajuste gouverneur CPU et priorites pendant une partie; mangohud
-# affiche le compteur d'images.
+# gamemode ajuste gouverneur CPU et priorites pendant une partie. Les
+# applications de mesure (MangoHud, GOverlay) ne sont plus dans l'image: elles
+# ne servent pas a Steam en Flatpak, qui embarque les siennes.
 #
 # PAS de `gamemode:i386`: le paquet est « Multi-Arch: allowed », donc les deux
 # architectures ne sont PAS co-installables et apt refuse net
@@ -44,7 +53,3 @@ vulkan-tools
 gamemode
 libgamemode0:i386
 libgamemodeauto0:i386
-# mangohud, lui, est « Multi-Arch: same »: sa variante i386 s'installe a cote.
-mangohud
-mangohud:i386
-goverlay

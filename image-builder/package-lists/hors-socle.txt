@@ -1,0 +1,49 @@
+# Ce qui ne doit PLUS etre dans l'image (decision d'aporler, 2026-10-02).
+#
+# « Notre valeur de vie privee, de libre choix et de liberte, on ne la respecte
+# pas a 100 %: nous imposons plein de logiciels des le depart. » L'image ne
+# contient plus que le systeme, KDE Plasma et ses outils de base. Le reste est
+# PROPOSE par l'assistant de premier demarrage (auxinux-center --assistant),
+# que l'on peut relancer a tout moment depuis le centre de controle, et
+# installe en Flatpak de preference.
+#
+# Ce fichier a deux usages, et c'est pour cela qu'il existe:
+#   - build-image.sh PURGE ces paquets: sur un rootfs reutilise, les retirer
+#     des listes ne suffit pas, ils resteraient installes;
+#   - check-rootfs.sh REFUSE une image qui en contient un.
+
+# Navigateur (l'assistant propose Firefox, Brave, LibreWolf, Chromium, Vivaldi)
+brave-browser
+
+# Vie privee (proposes, coches par defaut, dans l'assistant)
+keepassxc
+kleopatra
+kgpg
+onionshare
+metadata-cleaner
+bleachbit
+
+# Bureautique
+libreoffice-writer
+libreoffice-calc
+libreoffice-impress
+libreoffice-kf6
+libreoffice-l10n-fr
+libreoffice-help-fr
+libreoffice-help-en-us
+thunderbird
+thunderbird-l10n-fr
+thunderbird-l10n-en-ca
+simple-scan
+
+# Multimedia
+vlc
+elisa
+kdenlive
+audacity
+gimp
+
+# Jeu
+mangohud
+mangohud:i386
+goverlay

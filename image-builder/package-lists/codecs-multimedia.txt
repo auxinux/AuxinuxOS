@@ -1,10 +1,12 @@
-# Couche MULTIMEDIA.
+# Codecs et decodage materiel: ce qui permet de LIRE, pas une application.
 #
-# Le noyau 7.2.5 est deja configure pour cet usage (HZ=1000, PREEMPT complet,
-# NO_HZ_FULL). Ce qui manque cote espace utilisateur: les CODECS, un ordonnan-
-# cement temps reel pour l'audio, et les vignettes video.
+# Ex layer-multimedia.txt. Depuis le 2026-10-02, les applications (VLC, Elisa,
+# Kdenlive, Audacity, GIMP) ne sont plus dans l'image: l'assistant de premier
+# demarrage les propose (voir hors-socle.txt). Restent ici les codecs, dont le
+# navigateur et les apercus de Dolphin ont besoin quel que soit le lecteur
+# choisi, l'ordonnancement temps reel de l'audio, et le decodage materiel que
+# le controle materiel interroge (vainfo).
 
-vlc
 ffmpeg
 # Les plugins GStreamer conditionnent la lecture de la plupart des formats
 # courants. Sans -bad/-ugly/-libav, une bonne partie des videos ne s'ouvre pas
@@ -14,12 +16,6 @@ gstreamer1.0-plugins-bad
 gstreamer1.0-plugins-ugly
 gstreamer1.0-libav
 ffmpegthumbs
-elisa
-
-# Creation
-kdenlive
-audacity
-gimp
 
 # rtkit accorde la priorite temps reel a PipeWire pour les utilisateurs du
 # groupe audio. Sans lui, l'enregistrement multipiste decroche sous charge.

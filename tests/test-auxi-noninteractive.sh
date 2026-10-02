@@ -110,7 +110,18 @@ ASSUME_YES=1 PROGRESS=1
 check "reussit sans terminal" "$?" "0"
 has "remove recoit -y" "apt-get -y "
 
-echo "== 6. Options globales: avant la commande seulement =="
+echo "== 6. Plusieurs elements en une transaction (assistant de premier demarrage) =="
+: >"${CALLS}"
+ASSUME_YES=1 PROGRESS=1
+( set -e; run_install --flatpak org.mozilla.firefox org.videolan.VLC ) </dev/null >/dev/null 2>&1
+check "reussit" "$?" "0"
+has "les deux applications en un seul appel, deja installee = mise a jour" \
+  "flatpak install -y --noninteractive --or-update flathub -- org.mozilla.firefox org.videolan.VLC"
+: >"${CALLS}"
+( set -e; run_install --deb brave-browser vlc ) </dev/null >/dev/null 2>&1
+has "les deux paquets en un seul apt-get" "install -- brave-browser vlc"
+
+echo "== 7. Options globales: avant la commande seulement =="
 parse() {
   # Sous-shell: chaque cas repart d'un etat vierge.
   ( set -- "$@"; source "${AUXI_BIN}" >/dev/null 2>&1; echo "${ASSUME_YES}${PROGRESS} ${DEBIAN_FRONTEND:-}" )

@@ -141,11 +141,12 @@ package_csv() {
 # l'installation: deux enumerations separees, c'etait deux sources de verite
 # pour le meme contenu.
 #
-# L'ISO embarque LES TROIS couches d'usage (bureautique, multimedia, jeu):
-# l'installation est une copie du squashfs, donc le medium doit contenir tout
-# ce qu'une installation peut recevoir. Retirer les couches non choisies
-# appartient a l'installateur maison; tant qu'il n'existe pas, toute
-# installation est « complete ».
+# L'image est un SOCLE (decision d'aporler, 2026-10-02): le systeme, KDE
+# Plasma et ses outils de base, les codecs, le pare-feu et la couche Windows.
+# AUCUNE application d'usage -- navigateur, bureautique, multimedia, jeu, vie
+# privee: l'assistant de premier demarrage les propose et les installe, en
+# Flatpak de preference. Ce qui ne doit plus etre dans l'image est liste dans
+# hors-socle.txt, purge plus bas et refuse par check-rootfs.sh.
 BOOTSTRAP_LISTS=(
   base.txt
   firmware.txt
@@ -154,18 +155,16 @@ BOOTSTRAP_LISTS=(
   live-installer.txt
   rollback.txt
   performance.txt
-  layer-bureautique.txt
-  layer-multimedia.txt
+  codecs-multimedia.txt
+  securite.txt
 )
-# Ces trois listes ne peuvent PAS etre traitees par mmdebstrap:
-#   - layer-gaming.txt contient des paquets :i386, et l'architecture etrangere
-#     n'est garantie qu'apres le `dpkg --add-architecture` ci-dessous;
-#   - apps-socle.txt contient brave-browser, qui vient du depot Brave;
-#   - auxinux-system.txt contient le noyau, qui vient du depot AuxiNux.
-# Les trois depots n'existent qu'apres configure-apt-sources.sh.
+# Ces deux listes ne peuvent PAS etre traitees par mmdebstrap:
+#   - couche-windows.txt contient des paquets :i386, et l'architecture
+#     etrangere n'est garantie qu'apres le `dpkg --add-architecture` ci-dessous;
+#   - auxinux-system.txt contient le noyau, qui vient du depot AuxiNux, qui
+#     n'existe qu'apres configure-apt-sources.sh.
 EXTRA_LISTS=(
-  layer-gaming.txt
-  apps-socle.txt
+  couche-windows.txt
   auxinux-system.txt
 )
 
@@ -269,6 +268,21 @@ sudo chroot "${ROOTFS_DIR}" apt-get install -y --no-install-recommends ${INSTALL
 # q4wine a ete retire de la couche Windows (interface abandonnee en amont, et
 # gestion brute des prefixes). Sur un rootfs reutilise il resterait installe.
 sudo chroot "${ROOTFS_DIR}" apt-get purge -y q4wine 2>/dev/null || true
+
+# Applications sorties de l'image (hors-socle.txt). Sur un rootfs reutilise,
+# les retirer des listes ne les desinstalle pas. On ne purge que ce qui est
+# reellement installe: apt-get refuse un nom qu'il ne trouve dans aucun index
+# -- c'est le cas de brave-browser, dont le depot est desormais desactive.
+mapfile -t HORS_SOCLE < <(awk 'NF && $1 !~ /^#/ {print $1}' \
+  "${PROJECT_DIR}/image-builder/package-lists/hors-socle.txt")
+mapfile -t HORS_SOCLE_PRESENTS < <(sudo chroot "${ROOTFS_DIR}" \
+  dpkg-query -W -f='${binary:Package} ${db:Status-Status}\n' "${HORS_SOCLE[@]}" 2>/dev/null \
+  | awk '$2 == "installed" {print $1}')
+if [[ "${#HORS_SOCLE_PRESENTS[@]}" -gt 0 ]]; then
+  echo "==> Retrait des applications sorties du socle: ${HORS_SOCLE_PRESENTS[*]}"
+  sudo chroot "${ROOTFS_DIR}" env DEBIAN_FRONTEND=noninteractive \
+    apt-get purge -y "${HORS_SOCLE_PRESENTS[@]}"
+fi
 sudo chroot "${ROOTFS_DIR}" apt-get autoremove -y --purge
 
 # Le bureau vient desormais de Debian: voir package-lists/desktop-plasma.txt,

@@ -40,12 +40,18 @@ Le contenu de l’image est décrit par `package-lists/`, et par rien d’autre 
 | `i18n-canada.txt` | dictionnaires fr/en-CA |
 | `live-installer.txt` | installateur du médium live |
 | `rollback.txt`, `performance.txt` | snapper/grub-btrfs, zram |
-| `apps-socle.txt` | navigateur et outils de vie privée |
-| `layer-bureautique.txt`, `layer-multimedia.txt`, `layer-gaming.txt` | les trois usages |
+| `codecs-multimedia.txt` | codecs, décodage matériel, audio temps réel |
+| `securite.txt` | pare-feu UFW |
+| `couche-windows.txt` | Wine, Vulkan 64/32 bits, gamemode — pour tout le monde |
 | `auxinux-system.txt` | noyau `kernel-auxinuxos` |
+| `hors-socle.txt` | ce qui ne doit **pas** être dans l’image (purgé, puis refusé par `check-rootfs.sh`) |
 
-L’ISO embarque les trois couches : voir
-[les profils d’usage](../docs/profils-usage.md).
+L’image est un **socle** : système, KDE Plasma et ses outils de base, codecs,
+pare-feu et couche Windows. Aucune application d’usage (navigateur,
+bureautique, lecteur, jeux, outils de vie privée) n’est imposée : l’assistant
+de premier démarrage du centre de contrôle les propose, en Flatpak de
+préférence, et se relance depuis Réglages. Le dépôt Brave est livré
+**désactivé** ; l’assistant ne l’active que si Brave est choisi.
 
 ## Sources et caches
 

@@ -410,6 +410,26 @@ refuse_file /etc/greetd/cosmic-greeter.toml "reste de l'ancien gestionnaire de s
 refuse_package plasma-discover "double du centre de controle et ramene PackageKit"
 refuse_package plasma-welcome "recupere du contenu en ligne au premier demarrage"
 
+echo "-- Socle: aucune application imposee"
+# Decision d'aporler (2026-10-02): l'image ne contient plus aucune application
+# d'usage; l'assistant de premier demarrage les propose. hors-socle.txt est la
+# seule liste de ce qui doit etre absent: la purge de build-image.sh et ce
+# controle la lisent tous deux.
+HORS_SOCLE_LIST="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/package-lists/hors-socle.txt"
+while read -r pkg; do
+  refuse_package "${pkg}" "application imposee: elle doit etre proposee par l'assistant, pas installee d'office"
+done < <(awk 'NF && $1 !~ /^#/ {print $1}' "${HORS_SOCLE_LIST}")
+# Le depot Brave est livre, mais DESACTIVE: actif, il ferait contacter Brave a
+# chaque `apt update`, meme par qui ne l'a pas choisi.
+refuse_file /etc/apt/sources.list.d/brave-browser-release.sources \
+  "depot Brave actif sans que l'utilisateur ait choisi Brave"
+need_file /etc/apt/sources.list.d/brave-browser-release.sources.disabled \
+  "l'assistant ne pourrait pas activer le depot Brave quand Brave est choisi"
+need_exec /usr/libexec/auxinux/auxinux-assistant-apply \
+  "l'assistant de premier demarrage ne pourrait rien installer"
+need_file /etc/xdg/autostart/auxinux-assistant.desktop \
+  "l'assistant ne s'ouvrirait pas au premier demarrage"
+
 echo "-- Session live: rien qui ressemble a un ecran noir"
 # Le live ne doit NI se verrouiller NI eteindre l'ecran: un visiteur qui laisse
 # la machine deux minutes revenait devant un ecran noir, puis un mot de passe

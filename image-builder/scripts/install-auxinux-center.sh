@@ -33,6 +33,11 @@ sudo install -D -m 0644 "${PKG_DIR}/data/ca.auxinux.Center.desktop" \
 sudo install -D -m 0644 "${PKG_DIR}/data/ca.auxinux.Center.metainfo.xml" \
   "${ROOTFS}/usr/share/metainfo/ca.auxinux.Center.metainfo.xml"
 
+# Assistant de premier demarrage: ouvert a chaque ouverture de session tant
+# qu'il n'a pas ete termine ou passe (le centre en decide lui-meme).
+sudo install -D -m 0644 "${PKG_DIR}/data/auxinux-assistant.desktop" \
+  "${ROOTFS}/etc/xdg/autostart/auxinux-assistant.desktop"
+
 # Raccourci sur le bureau de chaque nouveau compte (useradd -m copie /etc/skel).
 #
 # Une COPIE executable, comme le raccourci d'installation du live: Plasma ne

@@ -17,6 +17,7 @@
 //! dans son propre module et n'expose qu'une fonction `view`.
 
 mod apps_page;
+mod assistant_page;
 mod health_page;
 mod operation;
 mod recovery_page;
@@ -44,6 +45,7 @@ pub enum Page {
     Recovery,
     Sources,
     Settings,
+    Assistant,
 }
 
 /// Contenu actuellement affiche dans la page Applications.
@@ -130,6 +132,19 @@ pub enum Message {
     OpenSystemSettings,
     OpenUrl(String),
 
+    // Assistant de premier demarrage
+    AssistantRestart,
+    AssistantNext,
+    AssistantBack,
+    AssistantSkip,
+    AssistantBrowser(Option<usize>),
+    AssistantLibreOffice(bool),
+    AssistantPlayer(Option<usize>),
+    AssistantProfil(crate::assistant::Profil),
+    AssistantSuggestion(usize, bool),
+    AssistantPrivacy(usize, bool),
+    AssistantInstall,
+
     // Operation longue suivie en direct (voir operation.rs)
     OpLine(String),
     OpFinished(ActionResult),
@@ -181,6 +196,10 @@ pub struct App {
     // Reglages
     apt_direct: bool,
     profile: crate::profile::ProfileState,
+
+    // Assistant de premier demarrage
+    assistant_step: usize,
+    selection: crate::assistant::Selection,
 
     /// Operation longue (installation, mise a jour) en cours ou terminee, avec
     /// sa progression et son journal.
@@ -289,14 +308,16 @@ impl App {
             Page::Health => self.load_health(),
             Page::Recovery => self.load_recovery(),
             Page::Sources => self.load_sources(),
-            Page::Settings => Task::none(),
+            Page::Settings | Page::Assistant => Task::none(),
         }
     }
 }
 
 impl Application for App {
     type Executor = executor::Default;
-    type Flags = ();
+    /// Vrai: ouvrir directement l'assistant (premier demarrage ou
+    /// `--assistant`).
+    type Flags = bool;
     type Message = Message;
 
     const APP_ID: &'static str = APP_ID;
@@ -309,7 +330,7 @@ impl Application for App {
         &mut self.core
     }
 
-    fn init(core: Core, _flags: Self::Flags) -> (Self, Task<Self::Message>) {
+    fn init(core: Core, open_assistant: Self::Flags) -> (Self, Task<Self::Message>) {
         let mut nav = nav_bar::Model::default();
         for (title, icon, page) in [
             // Le second nom de chaque ligne est celui que porte Breeze, qui
@@ -323,6 +344,7 @@ impl Application for App {
             ("Restauration", ["document-revert-symbolic", "edit-undo"], Page::Recovery),
             ("Sources", ["application-x-addon-symbolic", "repository"], Page::Sources),
             ("Reglages", ["preferences-system-symbolic", "configure"], Page::Settings),
+            ("Assistant", ["tools-wizard-symbolic", "tools-wizard"], Page::Assistant),
         ] {
             nav.insert()
                 .text(title)
@@ -354,12 +376,20 @@ impl Application for App {
             custom_key_url: String::new(),
             apt_direct: crate::sources::apt_wrapper_enabled(),
             profile: crate::profile::state(),
+            assistant_step: 0,
+            selection: crate::assistant::Selection::default(),
             operation: None,
             toast: None,
             busy: 0,
         };
 
-        let task = app.load_apps_featured();
+        let task = if open_assistant {
+            app.page = Page::Assistant;
+            app.nav.activate_position(6);
+            Task::none()
+        } else {
+            app.load_apps_featured()
+        };
         let title = app.set_window_title(format!("Centre de controle — {}", app.os_version));
         (app, Task::batch(vec![task, title]))
     }
@@ -621,6 +651,70 @@ impl Application for App {
                 Task::none()
             }
 
+            // --- Assistant de premier demarrage ---
+            Message::AssistantRestart => {
+                self.assistant_step = 0;
+                self.selection = crate::assistant::Selection::default();
+                self.page = Page::Assistant;
+                self.nav.activate_position(6);
+                Task::none()
+            }
+            Message::AssistantNext => {
+                self.assistant_step = (self.assistant_step + 1).min(assistant_page::STEPS - 1);
+                Task::none()
+            }
+            Message::AssistantBack => {
+                self.assistant_step = self.assistant_step.saturating_sub(1);
+                Task::none()
+            }
+            Message::AssistantSkip => {
+                // « Passer » vaut reponse: l'assistant ne s'ouvrira plus a
+                // chaque session, et il reste ici.
+                let _ = crate::assistant::mark_done();
+                self.nav.activate_position(0);
+                // Le changement de page efface le bandeau: on le pose apres.
+                let task = self.update(Message::Page(Page::Apps));
+                self.toast = Some(ActionResult::ok(
+                    "Assistant passe. Vous pouvez le relancer a tout moment: \
+                     Reglages, « Relancer l'assistant ».",
+                ));
+                task
+            }
+            Message::AssistantBrowser(choice) => {
+                self.selection.navigateur = choice;
+                Task::none()
+            }
+            Message::AssistantLibreOffice(yes) => {
+                self.selection.libreoffice = yes;
+                Task::none()
+            }
+            Message::AssistantPlayer(choice) => {
+                self.selection.lecteur = choice;
+                Task::none()
+            }
+            Message::AssistantProfil(profil) => {
+                self.selection.set_profil(profil);
+                Task::none()
+            }
+            Message::AssistantSuggestion(index, on) => {
+                if let Some(slot) = self.selection.suggestions.get_mut(index) {
+                    *slot = on;
+                }
+                Task::none()
+            }
+            Message::AssistantPrivacy(index, on) => {
+                if let Some(slot) = self.selection.vie_privee.get_mut(index) {
+                    *slot = on;
+                }
+                Task::none()
+            }
+            Message::AssistantInstall => {
+                let selection = self.selection.clone();
+                self.launch("Installation de vos applications".into(), move |on_line| {
+                    crate::assistant::apply(&selection, on_line)
+                })
+            }
+
             // --- Operation longue ---
             Message::OpLine(line) => {
                 if let Some(op) = self.operation.as_mut() {
@@ -696,6 +790,7 @@ impl Application for App {
             Page::Recovery => recovery_page::view(self),
             Page::Sources => sources_page::view(self),
             Page::Settings => settings_page::view(self),
+            Page::Assistant => assistant_page::view(self),
         };
 
         let mut column = cosmic::widget::Column::new().spacing(12).push(content);
@@ -856,7 +951,7 @@ pub fn icon(name: &'static str, fallbacks: &[&'static str]) -> cosmic::widget::i
     )))
 }
 
-pub fn run() -> Result<(), Box<dyn std::error::Error>> {
+pub fn run(open_assistant: bool) -> Result<(), Box<dyn std::error::Error>> {
     let mut settings = Settings::default();
     // Voir system::icon_theme(): sans cela, le theme « Cosmic », absent sous
     // Plasma, et une fenetre sans aucune icone -- boutons reduire, agrandir et
@@ -864,6 +959,6 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     if let Some(theme) = crate::system::icon_theme() {
         settings = settings.default_icon_theme(theme);
     }
-    cosmic::app::run::<App>(settings, ())?;
+    cosmic::app::run::<App>(settings, open_assistant)?;
     Ok(())
 }

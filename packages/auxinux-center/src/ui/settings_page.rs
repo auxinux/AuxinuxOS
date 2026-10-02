@@ -1,4 +1,5 @@
-//! Page REGLAGES: politique APT maison et acces aux reglages du bureau.
+//! Page REGLAGES: assistant de configuration, politique APT maison, profil
+//! d'usage et acces aux reglages du bureau.
 //!
 //! Le Center ne reimplemente pas les reglages du bureau: il y renvoie.
 //! Dupliquer les panneaux du bureau produirait deux endroits pour changer la
@@ -89,6 +90,24 @@ pub fn view(app: &App) -> Element<'_, Message> {
         .padding(14)
         .width(iced::Length::Fill);
 
+    let assistant = widget::container(
+        widget::Column::new()
+            .spacing(8)
+            .push(widget::text::heading("Assistant de configuration"))
+            .push(widget::text::caption(
+                "L'assistant du premier demarrage: navigateur, LibreOffice, lecteur \
+                 multimedia, applications selon votre profil, outils de vie privee. \
+                 Le relancer n'enleve rien: il installe ce que vous ajoutez.",
+            ))
+            .push(
+                widget::button::suggested("Relancer l'assistant")
+                    .on_press(Message::AssistantRestart),
+            ),
+    )
+    .class(cosmic::theme::Container::Card)
+    .padding(14)
+    .width(iced::Length::Fill);
+
     let desktop = widget::container(
         widget::Column::new()
             .spacing(8)
@@ -131,6 +150,7 @@ pub fn view(app: &App) -> Element<'_, Message> {
             widget::scrollable(
                 widget::Column::new()
                     .spacing(12)
+                    .push(assistant)
                     .push(apt)
                     .push(profile)
                     .push(desktop)

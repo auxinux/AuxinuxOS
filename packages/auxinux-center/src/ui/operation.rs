@@ -30,6 +30,9 @@ pub struct Operation {
     /// `None` tant que l'operation tourne.
     pub result: Option<ActionResult>,
     pub show_log: bool,
+    /// Etape courante d'une operation en plusieurs etapes (assistant de
+    /// premier demarrage): numero, total, libelle.
+    stage: Option<(u32, u32, String)>,
 }
 
 impl Operation {
@@ -40,6 +43,7 @@ impl Operation {
             log: VecDeque::new(),
             result: None,
             show_log: false,
+            stage: None,
         }
     }
 
@@ -56,20 +60,43 @@ impl Operation {
                 fraction,
                 detail,
             } => {
-                self.step = Step {
-                    label: label.to_string(),
-                    fraction: Some(fraction),
-                    detail: shorten(&detail),
+                // Dans une operation en plusieurs etapes, la barre reste
+                // GLOBALE: l'avancement d'apt n'est qu'une fraction de l'etape
+                // en cours, sinon elle repartirait de zero a chaque etape.
+                self.step = match &self.stage {
+                    Some((index, total, name)) => Step {
+                        label: format!("Etape {index} sur {total} — {name} — {label}"),
+                        fraction: Some(((*index - 1) as f32 + fraction) / *total as f32),
+                        detail: shorten(&detail),
+                    },
+                    None => Step {
+                        label: label.to_string(),
+                        fraction: Some(fraction),
+                        detail: shorten(&detail),
+                    },
                 };
+            }
+            Parsed::Stage { index, total, label } => {
+                self.step = Step {
+                    label: format!("Etape {index} sur {total} — {label}"),
+                    fraction: Some((index - 1) as f32 / total as f32),
+                    detail: String::new(),
+                };
+                self.stage = Some((index, total, label.clone()));
+                self.push_log(format!("== Etape {index} sur {total}: {label}"));
             }
             Parsed::Log(text) => {
                 self.step.detail = shorten(&text);
-                if self.log.len() == LOG_LIMIT {
-                    self.log.pop_front();
-                }
-                self.log.push_back(text);
+                self.push_log(text);
             }
         }
+    }
+
+    fn push_log(&mut self, text: String) {
+        if self.log.len() == LOG_LIMIT {
+            self.log.pop_front();
+        }
+        self.log.push_back(text);
     }
 
     pub fn log_text(&self) -> String {
@@ -197,6 +224,17 @@ mod tests {
         assert_eq!(op.step.fraction, Some(0.5));
         assert!(op.step.detail.starts_with("Depaquetage"));
         assert_eq!(op.log.len(), 2);
+    }
+
+    #[test]
+    fn stages_keep_the_bar_global() {
+        let mut op = Operation::new("Installation de vos applications");
+        op.feed("auxinux-etape:2:4:Paquets systeme");
+        assert_eq!(op.step.fraction, Some(0.25));
+        op.feed("pmstatus:brave-browser:50:Configuration de brave-browser");
+        // Moitie de l'etape 2 sur 4: 1,5 / 4.
+        assert_eq!(op.step.fraction, Some(0.375));
+        assert!(op.step.label.starts_with("Etape 2 sur 4"));
     }
 
     #[test]

@@ -1,0 +1,12 @@
+# Securite du systeme: ce qui PROTEGE la machine, pas une application.
+#
+# Jusqu'au 2026-10-02, ce fichier (alors apps-socle.txt) installait pour tout
+# le monde un navigateur (Brave) et six outils de vie privee. aporler l'a
+# constate: imposer des logiciels contredit le libre choix que le projet
+# defend. Ils sont desormais PROPOSES par l'assistant de premier demarrage
+# (auxinux-center --assistant), et la liste de ce qui ne doit plus etre dans
+# l'image est hors-socle.txt.
+#
+# Le pare-feu reste: c'est une protection active par defaut, sans interface
+# imposee (plasma-firewall, dans desktop-plasma.txt, sert a le regler).
+ufw

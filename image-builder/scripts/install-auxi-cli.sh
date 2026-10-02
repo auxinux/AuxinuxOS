@@ -65,6 +65,7 @@ sudo install -D -m 0755 "${PROJECT_DIR}/packages/auxi-cli/apt-snapshot-hook" "${
 
 # Assistant privilegie du centre de controle + son action polkit.
 sudo install -D -m 0755 "${PROJECT_DIR}/packages/auxinux-center/helper/auxinux-source-helper" "${ROOTFS}/usr/libexec/auxinux/auxinux-source-helper"
+sudo install -D -m 0755 "${PROJECT_DIR}/packages/auxinux-center/helper/auxinux-assistant-apply" "${ROOTFS}/usr/libexec/auxinux/auxinux-assistant-apply"
 sudo install -D -m 0644 "${PROJECT_DIR}/packages/auxinux-center/helper/ca.auxinux.center.policy" "${ROOTFS}/usr/share/polkit-1/actions/ca.auxinux.center.policy"
 
 # Script de nettoyage post-installation, appele par le module Calamares

@@ -139,6 +139,19 @@ virtuelle** :
   2026-10-02 : fenêtre et icônes, page Mises à jour, mise à jour complète du
   système (18 paquets) avec progression et journal. Les pages Applications
   (installation), Sources et Restauration n’ont pas été rejouées en VM.
+- **Assistant de premier démarrage** (2026-10-02) : il demande une connexion
+  Internet (tout s’installe depuis Flathub, Brave depuis son dépôt). Hors
+  ligne, l’installation échoue avec son journal ; on relance l’assistant depuis
+  Réglages une fois connecté. Il **installe** ce qu’on coche mais ne
+  **désinstalle** jamais ce qu’on décoche en le relançant : la page
+  Applications sert à cela.
+- La **session live** n’a plus de navigateur ni d’applications : l’assistant
+  ne s’y ouvre pas (tout ce qu’il installerait disparaîtrait au redémarrage).
+  La page Applications du centre reste utilisable dans le live.
+- Bottles est installé par l’assistant, pas par l’image (un Flatpak et son
+  runtime GNOME pèseraient près d’un gigaoctet dans l’ISO). Si l’assistant est
+  passé, `auxinux-windows-wizard` propose de l’installer à l’ouverture du
+  premier `.exe` ; Wine, lui, est toujours dans l’image.
 - `Cargo.lock` épingle `tinyvec` en 1.8.1 : la version 1.13.0, tirée
   transitivement par la pile de rendu de texte, ne compile pas.
 - La progression des opérations longues est **mesurée pour la partie DEB**

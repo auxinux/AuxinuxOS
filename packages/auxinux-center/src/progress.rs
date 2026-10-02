@@ -51,6 +51,13 @@ pub enum Parsed {
         fraction: f32,
         detail: String,
     },
+    /// Debut d'une etape de l'assistant de premier demarrage
+    /// (`auxinux-etape:N:TOTAL:LIBELLE`, ecrit par auxinux-assistant-apply).
+    Stage {
+        index: u32,
+        total: u32,
+        label: String,
+    },
     /// Ligne ordinaire, a garder dans le journal.
     Log(String),
 }
@@ -91,6 +98,17 @@ pub fn parse(line: &str) -> Parsed {
                 };
             }
         }
+        "auxinux-etape" if fields.len() >= 4 => {
+            if let (Ok(index), Ok(total)) = (fields[1].parse::<u32>(), fields[2].parse::<u32>()) {
+                if index >= 1 && index <= total {
+                    return Parsed::Stage {
+                        index,
+                        total,
+                        label: fields[3..].join(":").trim().to_string(),
+                    };
+                }
+            }
+        }
         _ => {}
     }
     Parsed::Log(line.to_string())
@@ -105,6 +123,13 @@ pub fn auxi(args: &[&str], on_line: &mut dyn FnMut(&str), success: &str) -> Acti
     let mut full = vec!["auxi", "--yes", "--progress"];
     full.extend_from_slice(args);
     let (out, recent) = run_tracked("pkexec", &full, on_line);
+    conclude(&out, &recent, true, success)
+}
+
+/// Lance un programme privilegie quelconque par pkexec (`args[0]` = chemin du
+/// programme). Utilise par l'assistant de premier demarrage.
+pub fn privileged(args: &[&str], on_line: &mut dyn FnMut(&str), success: &str) -> ActionResult {
+    let (out, recent) = run_tracked("pkexec", args, on_line);
     conclude(&out, &recent, true, success)
 }
 
@@ -232,6 +257,17 @@ mod tests {
         // garde l'ancien (--force-confold), et la ligne reste au journal.
         let conffile = "pmconffile:/etc/essai-a.conf:66.6667:'/etc/essai-a.conf' '/etc/essai-a.conf.dpkg-new' 1 1 ";
         assert_eq!(parse(conffile), Parsed::Log(conffile.into()));
+    }
+
+    #[test]
+    fn assistant_stage_lines() {
+        assert_eq!(
+            parse("auxinux-etape:2:7:Installation de org.mozilla.firefox"),
+            Parsed::Stage { index: 2, total: 7, label: "Installation de org.mozilla.firefox".into() }
+        );
+        // Incoherente: reste une ligne de journal plutot qu'une barre fausse.
+        assert!(matches!(parse("auxinux-etape:9:7:x"), Parsed::Log(_)));
+        assert!(matches!(parse("auxinux-etape:a:7:x"), Parsed::Log(_)));
     }
 
     #[test]

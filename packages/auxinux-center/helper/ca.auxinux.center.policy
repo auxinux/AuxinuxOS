@@ -27,4 +27,24 @@
     <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/auxinux/auxinux-source-helper</annotate>
     <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
   </action>
+
+  <!--
+    Action de l'assistant de premier demarrage: installer en une fois les
+    applications choisies. Une seule invite pour toute la selection, et un
+    message qui dit ce qui va etre fait, plutot que « executer un programme ».
+  -->
+  <action id="ca.auxinux.center.assistant-apply">
+    <description>Install the chosen applications</description>
+    <description xml:lang="fr">Installer les applications choisies</description>
+    <message>Authentication is required to install the applications you chose</message>
+    <message xml:lang="fr">Une authentification est requise pour installer les applications que vous avez choisies</message>
+    <icon_name>system-software-install</icon_name>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/auxinux/auxinux-assistant-apply</annotate>
+    <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
+  </action>
 </policyconfig>

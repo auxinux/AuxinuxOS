@@ -140,13 +140,22 @@ sudo rm -f "${ROOTFS}/etc/apt/sources.list.d/debian-i386.sources" \
   "${ROOTFS}/etc/apt/sources.list.d/debian-i386.sources.disabled"
 
 # Brave: methode officielle (brave.com/linux), avec verification d'empreinte.
+#
+# Le depot est livre DESACTIVE (.disabled) depuis le 2026-10-02: Brave n'est
+# plus impose, c'est un choix de l'assistant de premier demarrage. Actif, ce
+# depot ferait contacter les serveurs de Brave a chaque `apt update`, chez des
+# utilisateurs qui ne s'en servent pas. L'assistant l'active (simple
+# renommage, cle deja verifiee ici) quand Brave est choisi -- en DEB et non en
+# Flatpak, pour que la politique de confidentialite geree
+# (/etc/brave/policies/managed/auxinux-privacy.json) s'applique.
 fetch_verified \
   https://brave-browser-apt-release.s3.brave.com/brave-browser-archive-keyring.gpg \
   "${ROOTFS}/usr/share/keyrings/brave-browser-archive-keyring.gpg" \
   "${BRAVE_KEYRING_SHA256}"
 fetch_verified \
   https://brave-browser-apt-release.s3.brave.com/brave-browser.sources \
-  "${ROOTFS}/etc/apt/sources.list.d/brave-browser-release.sources" \
+  "${ROOTFS}/etc/apt/sources.list.d/brave-browser-release.sources.disabled" \
   "${BRAVE_SOURCES_SHA256}"
+sudo rm -f "${ROOTFS}/etc/apt/sources.list.d/brave-browser-release.sources"
 
 sudo chroot "${ROOTFS}" apt-get update

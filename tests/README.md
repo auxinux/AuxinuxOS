@@ -7,6 +7,7 @@ Aucune suite automatisée complète n’est actuellement fournie.
 ```bash
 bash tests/test-rollback.sh
 bash tests/test-auxi-noninteractive.sh
+bash tests/test-assistant-apply.sh
 bash tests/test-windows-wizard.sh
 bash tests/test-apt-snapshot-hook.sh
 bash tests/test-post-install.sh
@@ -32,6 +33,12 @@ la mise à jour du système échouait sans message visible. Le faux `apt-get` du
 test reproduit ce comportement ; le test vérifie aussi qu’un échec Flatpak
 n’empêche plus les correctifs DEB, et que l’option `--yes` d’`auxi rollback`
 n’est pas confondue avec l’option globale.
+
+`test-assistant-apply.sh` couvre ce que l’assistant de premier démarrage
+exécute en root. Cas critiques : une application indisponible sur Flathub ne
+prive pas la personne des autres, le dépôt Brave n’est activé que si Brave est
+choisi, et un identifiant commençant par un tiret est refusé avant d’atteindre
+apt ou flatpak.
 
 `test-windows-wizard.sh` couvre l’assistant `.exe` : arguments invalides, sortie
 en erreur explicite quand `zenity` manque, annulation, et — le cas critique —
