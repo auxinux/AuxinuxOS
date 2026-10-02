@@ -425,6 +425,8 @@ refuse_file /etc/apt/sources.list.d/brave-browser-release.sources \
   "depot Brave actif sans que l'utilisateur ait choisi Brave"
 need_file /etc/apt/sources.list.d/brave-browser-release.sources.disabled \
   "l'assistant ne pourrait pas activer le depot Brave quand Brave est choisi"
+need_file /usr/share/keyrings/brave-browser-archive-keyring.gpg \
+  "depot Brave sans sa cle: choisir Brave dans l'assistant echouerait (« Failed to parse keyring »)"
 need_exec /usr/libexec/auxinux/auxinux-assistant-apply \
   "l'assistant de premier demarrage ne pourrait rien installer"
 need_file /etc/xdg/autostart/auxinux-assistant.desktop \

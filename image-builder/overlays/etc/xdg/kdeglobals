@@ -1,7 +1,9 @@
 # Defauts KDE d'AuxiNuxOS. /etc/xdg est lu AVANT ~/.config: ce sont des
 # defauts, chaque utilisateur peut les changer et sa version l'emporte.
 [General]
-BrowserApplication=brave-browser.desktop
+# Aucun navigateur par defaut impose (2026-10-02): l'image n'en contient plus,
+# et l'assistant de premier demarrage declare celui que la personne choisit
+# (xdg-settings set default-web-browser).
 
 [KDE]
 # Simple clic pour ouvrir: c'est le defaut de KDE. On l'ecrit explicitement

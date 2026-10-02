@@ -249,6 +249,24 @@ impl Selection {
     }
 }
 
+impl App {
+    /// Lanceur .desktop installe par cette application, et l'endroit ou il
+    /// apparait une fois installee.
+    pub fn desktop_file(&self) -> (String, std::path::PathBuf) {
+        match self.source {
+            Source::Brave => (
+                "brave-browser.desktop".into(),
+                "/usr/share/applications/brave-browser.desktop".into(),
+            ),
+            Source::Flatpak => {
+                let name = format!("{}.desktop", self.id);
+                let path = std::path::Path::new("/var/lib/flatpak/exports/share/applications").join(&name);
+                (name, path)
+            }
+        }
+    }
+}
+
 fn defaults_for(profil: Profil) -> Vec<bool> {
     profil.suggestions().iter().map(|(_, on)| *on).collect()
 }
@@ -260,6 +278,21 @@ pub fn apply(selection: &Selection, on_line: &mut dyn FnMut(&str)) -> ActionResu
     let mut full: Vec<&str> = vec![APPLY_HELPER];
     full.extend(args.iter().map(String::as_str));
     let result = crate::progress::privileged(&full, on_line, "Vos applications sont installees");
+    // Le navigateur choisi devient celui du bureau (liens ouverts depuis les
+    // applications, lanceur « navigateur » de la barre des taches). L'image
+    // n'en declare plus aucun. Seulement s'il est REELLEMENT installe: une
+    // autre application a pu echouer sans lui, et lui sans elles.
+    if let Some(browser) = selection.navigateur.and_then(|i| NAVIGATEURS.get(i)) {
+        let (desktop, path) = browser.desktop_file();
+        if path.exists() {
+            let out = crate::util::run("xdg-settings", &["set", "default-web-browser", &desktop]);
+            on_line(&if out.ok {
+                format!("Navigateur par defaut: {}", browser.name)
+            } else {
+                format!("Impossible de declarer {} comme navigateur par defaut: {}", browser.name, out.stderr.trim())
+            });
+        }
+    }
     if result.ok {
         let _ = mark_done();
     }
@@ -400,6 +433,15 @@ mod tests {
         for app in all {
             assert!(valid(app.id), "identifiant refuse par l'assistant: {}", app.id);
         }
+    }
+
+    #[test]
+    fn browser_launchers_are_where_flatpak_and_brave_put_them() {
+        let (name, path) = NAVIGATEURS[0].desktop_file();
+        assert_eq!(name, "org.mozilla.firefox.desktop");
+        assert!(path.starts_with("/var/lib/flatpak/exports/share/applications"));
+        let brave = NAVIGATEURS.iter().find(|a| a.source == Source::Brave).unwrap();
+        assert_eq!(brave.desktop_file().0, "brave-browser.desktop");
     }
 
     #[test]
