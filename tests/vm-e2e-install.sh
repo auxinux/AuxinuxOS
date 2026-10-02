@@ -25,7 +25,9 @@ sleep 30
 $V click "$name" 770 505; sleep 40
 $V click "$name" 639 492; sleep 25
 for try in 1 2 3 4; do
-  $V click "$name" 57 45 --double; sleep 50
+  # 2e icone du bureau: depuis le 2026-10-02, « AuxiNux OS Center » precede
+  # « Install AuxiNuxOS » (ordre alphabetique), et le banc ouvrait le centre.
+  $V click "$name" 173 45 --double; sleep 50
   n=$($V sh "$name" "pgrep -c -x calamares" --timeout 60 | head -1)
   [ "${n:-0}" -ge 1 ] 2>/dev/null && break
 done
