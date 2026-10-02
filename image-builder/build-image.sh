@@ -242,6 +242,21 @@ fi
 # « Unable to locate package libvulkan1:i386 » sans expliquer pourquoi.
 sudo chroot "${ROOTFS_DIR}" apt-get update
 
+# Mise a jour de TOUT le rootfs, pas seulement des paquets des listes.
+#
+# Sur un rootfs reutilise, `apt-get install` ci-dessous ne touche qu'aux
+# paquets nommes et a leurs dependances: tout le reste garde la version de la
+# premiere construction. L'ISO du 2026-09-29 a ainsi ete livree avec 18 mises a
+# jour de securite en attente (ghostscript, xserver-xorg-core...), constate en
+# VM le 2026-10-02. Sur un rootfs neuf, l'etape ne fait rien.
+#
+# Memes options que `auxi --yes`: sans terminal, dpkg echoue sur un fichier de
+# configuration modifie (« end of file on stdin at conffile prompt ») -- c'est
+# le cas de /etc/issue, que l'overlay remplace. Les overlays sont de toute
+# facon reappliques plus bas.
+sudo chroot "${ROOTFS_DIR}" env DEBIAN_FRONTEND=noninteractive apt-get upgrade -y \
+  -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold
+
 # Une SEULE installation, pilotee par les listes de paquets.
 #
 # Les blocs `apt-get install` qui suivaient reprenaient a la main dosfstools,
