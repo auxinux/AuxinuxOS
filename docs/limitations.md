@@ -49,6 +49,16 @@ complète** (Calamares, redémarrage, connexion) : l'assistant s'ouvre seul à l
 première session, et les 12 étapes de la sélection par défaut réussissent avec
 une seule autorisation. L'ISO précédente du 2026-10-02 a été retirée.
 
+**Remplacée le 2026-10-03 par `auxinuxos-0.2.0-20261003-amd64.iso`**
+(commit `c77235d`, sha256 `119b2286…97551cca`) : dans le centre de contrôle,
+la recherche d'applications et la recherche de mises à jour affichent une
+barre animée et l'étape en cours, et l'assistant se termine sur une page de
+bilan (tout installé, ou ce qui a échoué et pourquoi, avec « Réessayer »).
+Validée en VM (session live, Center ouvert, recherche). L'ISO 20261002-2 a été
+retirée. Constat non corrigé : dans la VM, une recherche Flathub prend près de
+deux minutes, et la toute première n'a rien trouvé (l'index AppStream
+téléchargé n'a pas été installé).
+
 Reste à valider : le démarrage par le chemin UEFI de secours (`EFI/BOOT`, le
 micrologiciel l'a bien choisi après suppression de l'entrée NVRAM, mais l'écran
 obtenu n'a pas pu être capturé), le démarrage sur un instantané depuis le
