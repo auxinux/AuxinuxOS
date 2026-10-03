@@ -36,12 +36,8 @@ fn main() {
     let resultat = App::new().executer(&mut terminal);
     ratatui::restore();
     match resultat {
-        Ok(Sortie::Redemarrer) => {
-            let _ = util::run("systemctl", &["reboot"]);
-        }
-        Ok(Sortie::Eteindre) => {
-            let _ = util::run("systemctl", &["poweroff"]);
-        }
+        Ok(Sortie::Redemarrer) => arreter("reboot", "b"),
+        Ok(Sortie::Eteindre) => arreter("poweroff", "o"),
         // Le bureau live, tel qu'il demarre depuis l'entree « Live »: on
         // bascule simplement vers la cible graphique.
         Ok(Sortie::BureauLive) => {
@@ -52,5 +48,26 @@ fn main() {
             eprintln!("auxinux-installer: {e}");
             std::process::exit(1);
         }
+    }
+}
+
+/// Redemarre ou eteint la machine, MEME si le support d'installation a deja
+/// ete retire.
+///
+/// Le systeme live s'execute DEPUIS ce support, et l'ecran de fin demande de
+/// le retirer avant d'appuyer sur Entree. `systemctl reboot` arretait alors
+/// tout proprement... puis systemd ne pouvait plus charger son programme
+/// d'arret final, reste sur le support: « Failed to execute shutdown
+/// binary », machine figee (constate en VM le 2026-10-02).
+///
+/// On passe donc directement par le noyau (sysrq), qui n'a besoin d'aucun
+/// fichier: ecriture des tampons (s), remontage en lecture seule (u), puis
+/// redemarrage ou arret. Sans perte possible: la session live n'a rien a
+/// sauvegarder, et le moteur a deja demonte le systeme installe.
+/// /proc/sysrq-trigger est accessible a root quel que soit kernel.sysrq.
+fn arreter(_action: &str, sysrq: &str) {
+    for touche in ["s", "u", sysrq] {
+        let _ = std::fs::write("/proc/sysrq-trigger", touche);
+        std::thread::sleep(std::time::Duration::from_secs(2));
     }
 }
