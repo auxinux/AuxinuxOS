@@ -59,6 +59,13 @@ retirée. Constat non corrigé : dans la VM, une recherche Flathub prend près d
 deux minutes, et la toute première n'a rien trouvé (l'index AppStream
 téléchargé n'a pas été installé).
 
+**Remplacée le même jour par `auxinuxos-0.2.0-20261003-2-amd64.iso`**
+(commit `c378d92`, sha256 `a0c3cbf2…c80d0d3c`) : la même image, plus
+l'**installateur maison « Install NOW »**, entrée par défaut de GRUB. Validée
+en VM par une installation complète sans intervention (UEFI, en ligne, sans
+chiffrement, Firefox + Bottles) jusqu'au bureau du système installé.
+L'ISO 20261003 a été retirée.
+
 Reste à valider : le démarrage par le chemin UEFI de secours (`EFI/BOOT`, le
 micrologiciel l'a bien choisi après suppression de l'entrée NVRAM, mais l'écran
 obtenu n'a pas pu être capturé), le démarrage sur un instantané depuis le
