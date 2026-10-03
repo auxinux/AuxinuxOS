@@ -200,8 +200,22 @@ if [ -s "${GRUB_CFG}" ] && command -v "${GRUB_FSTEST}" >/dev/null 2>&1 &&
     [ -n "${gpath}" ] || continue
     real="$(grub_local_path "${gpath}")"
     [ -f "${real}" ] || continue   # absence deja signalee au point 3
-    rm -f "${grub_read}"
-    "${GRUB_FSTEST}" "${BOOT_DEV}" cp "(loop0)${gpath}" "${grub_read}" >/dev/null 2>&1
+    # grub-fstest lit le PERIPHERIQUE BRUT, dont Linux garde un cache distinct
+    # de celui du systeme de fichiers: il peut encore servir des blocs lus
+    # plus tot (grub-probe, grub-mkconfig), d'avant la reecriture de /boot
+    # par post-install-cleanup.sh. Constate le 2026-10-02 (installateur
+    # maison): « 0 octets relus », puis le fichier entier quelques minutes
+    # plus tard, sans que rien n'ait change sur le disque. drop_caches, plus
+    # haut, ne suffit pas. On invalide ce cache avant chaque lecture, et une
+    # lecture courte est retentee une fois avant de conclure.
+    for essai in 1 2; do
+      sync
+      blockdev --flushbufs "${BOOT_DEV}" 2>/dev/null || true
+      rm -f "${grub_read}"
+      "${GRUB_FSTEST}" "${BOOT_DEV}" cp "(loop0)${gpath}" "${grub_read}" >/dev/null 2>&1
+      cmp -s "${grub_read}" "${real}" && break
+      [ "${essai}" -eq 1 ] && sleep 3
+    done
     if cmp -s "${grub_read}" "${real}"; then
       ok "${gpath} relu en entier par le pilote de GRUB"
     else

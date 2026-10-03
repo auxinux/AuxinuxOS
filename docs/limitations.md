@@ -140,6 +140,21 @@ virtuelle** :
 - L’hôte de build a besoin de `libxkbcommon-dev libwayland-dev libudev-dev
   libinput-dev`. Qt6 et KF6 ne sont plus nécessaires.
 
+## Installateur maison « Install NOW » (2026-10-02)
+
+- **Disque entier seulement** : pas d’installation à côté de Windows ni dans
+  une partition existante (arbitrage d’aporler pour cette version) ; le
+  double démarrage reste possible par Calamares, depuis le bureau live.
+- Validé en VM (UEFI, en ligne, disque **chiffré**) : installation, GRUB qui
+  demande la phrase de passe une seule fois, bureau, applications choisies
+  pendant l’installation. **Pas encore rejoué** : installation BIOS, hors
+  ligne, Wi-Fi réel (la VM est en filaire), matériel réel.
+- Le Wi-Fi est choisi dans l’installateur et recopié dans le système installé ;
+  les réseaux d’entreprise (WPA-Entreprise) ne sont pas gérés.
+- Le clavier choisi est appliqué à la console du live (`ckbcomp | loadkeys`).
+  Si cela échoue, l’installateur le dit : le mot de passe pourrait alors être
+  tapé avec une autre disposition que celle du système installé.
+
 ## Applications et centre de contrôle
 
 - Le centre a été reconstruit en libcosmic (0.2). Validé en VM sous Plasma le
