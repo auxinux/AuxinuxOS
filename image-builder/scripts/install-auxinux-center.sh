@@ -33,6 +33,24 @@ sudo install -D -m 0644 "${PKG_DIR}/data/ca.auxinux.Center.desktop" \
 sudo install -D -m 0644 "${PKG_DIR}/data/ca.auxinux.Center.metainfo.xml" \
   "${ROOTFS}/usr/share/metainfo/ca.auxinux.Center.metainfo.xml"
 
+# Installateur console « Install NOW » (entree GRUB par defaut du live):
+# programme, moteur et unite qui le lance sur la premiere console. Tous trois
+# sont retires du systeme installe par post-install-cleanup.sh.
+INSTALLER_BIN="${AUXINUX_INSTALLER_BIN:-${PKG_DIR}/target/release/auxinux-installer}"
+if [[ ! -x "${INSTALLER_BIN}" ]]; then
+  echo "==> Compilation de l'installateur console"
+  if [[ -x "${HOME}/.cargo/bin/cargo" ]]; then export PATH="${HOME}/.cargo/bin:${PATH}"; fi
+  (cd "${PKG_DIR}" && cargo build --release --no-default-features --features tui --bin auxinux-installer)
+fi
+sudo install -D -m 0755 "${INSTALLER_BIN}" "${ROOTFS}/usr/bin/auxinux-installer"
+sudo install -D -m 0755 "${PROJECT_DIR}/installer/auxinux-install-engine" \
+  "${ROOTFS}/usr/lib/auxinux/auxinux-install-engine"
+sudo install -D -m 0644 "${PROJECT_DIR}/installer/auxinux-installer.service" \
+  "${ROOTFS}/etc/systemd/system/auxinux-installer.service"
+sudo install -d -m 0755 "${ROOTFS}/etc/systemd/system/multi-user.target.wants"
+sudo ln -sf /etc/systemd/system/auxinux-installer.service \
+  "${ROOTFS}/etc/systemd/system/multi-user.target.wants/auxinux-installer.service"
+
 # Assistant de premier demarrage: ouvert a chaque ouverture de session tant
 # qu'il n'a pas ete termine ou passe (le centre en decide lui-meme).
 sudo install -D -m 0644 "${PKG_DIR}/data/auxinux-assistant.desktop" \

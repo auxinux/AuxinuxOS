@@ -260,6 +260,14 @@ rm -f "${prefix}/usr/share/applications/calamares.desktop" \
 #     so not removed »). Ils decrivent comment partitionner et formater un
 #     disque: rien a faire sur un systeme en service.
 rm -rf "${prefix}/etc/calamares"
+#     Meme raison pour l'installateur maison « Install NOW »: son programme,
+#     son moteur (qui efface un disque entier), son unite de demarrage et les
+#     paquets de GRUB/LUKS embarques pour installer sans Internet.
+rm -f "${prefix}/usr/bin/auxinux-installer" \
+      "${prefix}/usr/lib/auxinux/auxinux-install-engine" \
+      "${prefix}/etc/systemd/system/auxinux-installer.service" \
+      "${prefix}/etc/systemd/system/multi-user.target.wants/auxinux-installer.service"
+rm -rf "${prefix}/usr/share/auxinux/installateur"
 
 # 6b. Regenere l'initramfs maintenant que live-boot est purge. Le module
 #     Calamares `initramfs` a deja tourne plus tot dans la sequence (avec
@@ -339,6 +347,10 @@ if [ -d "${esp}/EFI" ]; then
     echo "grub-efi-amd64 grub2/force_efi_extra_removable boolean true" \
       | chroot "${TARGET_ROOT}" debconf-set-selections 2>/dev/null \
       || echo "post-install-cleanup: AVERTISSEMENT: grub2/force_efi_extra_removable non pose." >&2
+  elif [ -n "${vendor}" ] && [ ! -e "${vendor}/shimx64.efi" ] && [ -s "${vendor}/grubx64.efi" ]; then
+    # GRUB autonome (disque chiffre, installateur maison): il a ecrit lui-meme
+    # EFI/BOOT/BOOTX64.EFI avec grub-install --removable.
+    :
   else
     echo "post-install-cleanup: AVERTISSEMENT: EFI/AuxiNuxOS incomplet; chemin de secours EFI/BOOT non ecrit." >&2
   fi

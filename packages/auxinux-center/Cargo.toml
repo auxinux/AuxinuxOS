@@ -10,6 +10,11 @@ repository = "https://auxinux.ca/"
 name = "auxinux-center"
 path = "src/main.rs"
 
+[[bin]]
+name = "auxinux-installer"
+path = "src/installer/main.rs"
+required-features = ["tui"]
+
 [features]
 # L'interface est optionnelle POUR POUVOIR VALIDER LE BACKEND partout:
 #   cargo check --no-default-features   # logique seule, aucune dependance systeme
@@ -19,6 +24,11 @@ path = "src/main.rs"
 # verification du backend devient impossible hors de l'hote de build.
 default = ["gui"]
 gui = ["dep:libcosmic", "dep:tokio", "dep:open"]
+# Installateur console « Install NOW » (auxinux-installer). Separe de "gui":
+# il tourne sur la console du live, sans pile graphique, et ne doit pas tirer
+# libcosmic. `cargo build --release --no-default-features --features tui
+# --bin auxinux-installer`.
+tui = ["dep:ratatui"]
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }
@@ -38,3 +48,6 @@ libcosmic = { git = "https://github.com/pop-os/libcosmic", default-features = fa
 ], optional = true }
 tokio = { version = "1", features = ["rt-multi-thread", "process", "time", "macros"], optional = true }
 open = { version = "5", optional = true }
+
+# --- Installateur console (feature "tui") ------------------------------------
+ratatui = { version = "0.29", optional = true }

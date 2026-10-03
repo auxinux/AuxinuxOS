@@ -1,0 +1,24 @@
+# Diapositives de l'installation, en français. Source UNIQUE: l'installateur
+# console (auxinux-installer) les embarque, et le diaporama de Calamares
+# (show.qml) en est généré à la construction de l'ISO. Une diapositive par bloc,
+# blocs séparés par une ligne « --- »; la première ligne est le titre.
+Bienvenue dans AuxiNux OS
+Un système libre, pensé pour vous aider à quitter Windows ou macOS sans perdre vos repères. Pendant l'installation, voici ce qui le distingue.
+---
+Votre vie privée n'est pas un produit
+Aucune télémétrie, aucun compte à créer, aucune publicité. AuxiNux OS ne collecte rien sur vous : ce que vous faites sur votre ordinateur ne regarde que vous.
+---
+Rien n'est choisi à votre place
+L'installation ne contient que l'essentiel. Navigateur, bureautique, lecteur multimédia, jeux : c'est vous qui choisissez, au premier démarrage, et vous pouvez changer d'avis à tout moment.
+---
+Une erreur ? On revient en arrière
+Avant chaque mise à jour, un point de restauration est créé automatiquement. Si quelque chose tourne mal, le système revient à l'état précédent ; vos documents ne sont jamais touchés.
+---
+Vos applications Windows ont leur place
+Wine et Bottles font tourner de nombreuses applications Windows, et Steam avec Proton un grand nombre de jeux, chacun dans son propre espace pour qu'une erreur n'emporte pas les autres.
+---
+Un ordinateur qui vous appartient
+Pas de mise à jour qui redémarre la machine sans prévenir, pas de licence, pas d'abonnement. Le code est ouvert, et le système reste à vous, aussi longtemps que vous le voulez.
+---
+Bilingue et canadien
+AuxiNux OS est un projet canadien qui parle français et anglais. Il s'appuie sur Debian, l'une des bases Linux les plus stables et les plus respectées. Le centre de contrôle AuxiNux réunit applications, mises à jour, santé du système et restauration.

@@ -47,6 +47,14 @@ if [[ -d "${ROOTFS}/etc/calamares/branding/auxinuxos" ]]; then
     "${ROOTFS}/etc/calamares/branding/auxinuxos/banner-AuxiNuxOS.png"
 fi
 
+# Diaporama de l'installateur graphique, GENERE depuis installer/diapositives/
+# -- la meme source que l'installateur console, dans la langue choisie.
+if [[ -d "${ROOTFS}/etc/calamares/branding/auxinuxos" ]]; then
+  python3 "${SCRIPT_DIR}/generate-slideshow.py" "${PROJECT_DIR}/../installer/diapositives" /tmp/auxinux-show.qml
+  sudo install -m 0644 /tmp/auxinux-show.qml "${ROOTFS}/etc/calamares/branding/auxinuxos/show.qml"
+  rm -f /tmp/auxinux-show.qml
+fi
+
 # --- Ecran de connexion SDDM -----------------------------------------------
 #
 # Le theme debian-breeze pointe son fond d'ecran et son logo vers

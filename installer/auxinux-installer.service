@@ -1,0 +1,33 @@
+# Installateur console « Install NOW », sur la premiere console.
+#
+# Ne demarre QUE si le live a ete lance par l'entree GRUB « Installer
+# maintenant » (auxinux.install=1, avec systemd.unit=multi-user.target: pas de
+# bureau). L'entree « Live » ne le declenche jamais. Retire du systeme installe
+# par post-install-cleanup.sh.
+[Unit]
+Description=Installateur AuxiNux OS (Install NOW)
+ConditionKernelCommandLine=auxinux.install=1
+After=systemd-user-sessions.service NetworkManager.service
+Conflicts=getty@tty1.service
+Before=getty@tty1.service
+
+[Service]
+Type=idle
+# Police Unicode: cadres, fleches et accents de l'interface. La police par
+# defaut (Lat15) n'a pas les traits de cadre.
+ExecStartPre=-/usr/bin/setfont -C /dev/tty1 Uni3-Terminus16
+ExecStart=/usr/bin/auxinux-installer
+StandardInput=tty-force
+StandardOutput=tty
+StandardError=journal
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+Environment=TERM=linux
+# Apres « Ouvrir une console » ou une erreur: une invite de connexion plutot
+# qu'un ecran vide (compte live auxinux / auxinux).
+ExecStopPost=-/bin/systemctl --no-block start getty@tty1.service
+Restart=no
+
+[Install]
+WantedBy=multi-user.target

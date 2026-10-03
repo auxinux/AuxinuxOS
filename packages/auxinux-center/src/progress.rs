@@ -98,6 +98,16 @@ pub fn parse(line: &str) -> Parsed {
                 };
             }
         }
+        // Copie des fichiers par l'installateur (rsync --info=progress2).
+        "auxinux-progression" if fields.len() >= 2 => {
+            if let Ok(percent) = fields[1].trim().parse::<f32>() {
+                return Parsed::Status {
+                    label: "Copie des fichiers",
+                    fraction: (percent / 100.0).clamp(0.0, 1.0),
+                    detail: String::new(),
+                };
+            }
+        }
         "auxinux-etape" if fields.len() >= 4 => {
             if let (Ok(index), Ok(total)) = (fields[1].parse::<u32>(), fields[2].parse::<u32>()) {
                 if index >= 1 && index <= total {
@@ -268,6 +278,13 @@ mod tests {
         // Incoherente: reste une ligne de journal plutot qu'une barre fausse.
         assert!(matches!(parse("auxinux-etape:9:7:x"), Parsed::Log(_)));
         assert!(matches!(parse("auxinux-etape:a:7:x"), Parsed::Log(_)));
+    }
+
+    #[test]
+    fn installer_copy_progress() {
+        let (label, fraction, _) = status("auxinux-progression:42");
+        assert_eq!(label, "Copie des fichiers");
+        assert!((fraction - 0.42).abs() < 1e-6);
     }
 
     #[test]

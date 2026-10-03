@@ -8,6 +8,7 @@ Aucune suite automatisée complète n’est actuellement fournie.
 bash tests/test-rollback.sh
 bash tests/test-auxi-noninteractive.sh
 bash tests/test-assistant-apply.sh
+bash tests/test-install-engine.sh
 bash tests/test-windows-wizard.sh
 bash tests/test-apt-snapshot-hook.sh
 bash tests/test-post-install.sh
@@ -39,6 +40,14 @@ exécute en root. Cas critiques : une application indisponible sur Flathub ne
 prive pas la personne des autres, le dépôt Brave n’est activé que si Brave est
 choisi, et un identifiant commençant par un tiret est refusé avant d’atteindre
 apt ou flatpak.
+
+`test-install-engine.sh` exécute le moteur de l’installateur maison en
+`--simuler` : les commandes sont affichées, pas exécutées. Cas critiques : une
+configuration invalide est refusée **avant toute commande sur le disque**, le
+support d’installation n’est jamais une cible, et un disque chiffré reste
+déverrouillable par GRUB (PBKDF2, GRUB non signé avec cryptodisk).
+`vm-install-now.sh` rejoue, lui, une vraie installation en VM par l’entrée GRUB
+par défaut, jusqu’au bureau.
 
 `test-windows-wizard.sh` couvre l’assistant `.exe` : arguments invalides, sortie
 en erreur explicite quand `zenity` manque, annulation, et — le cas critique —

@@ -2,20 +2,45 @@
 
 Installateur graphique et backend pour l'installation classique d'AuxiNuxOS.
 
-## 0.2.0 : Calamares, en attendant l'installateur maison
+## Deux installateurs
 
-L'arbitrage du 2026-09-12 retient un **installateur maison** (contrôle matériel
-bloquant, choix de la langue, du clavier et du fuseau, disque, type
-d'installation). Il n'est **pas** dans la 0.2.0 : écrire un partitionneur et un
-poseur d'amorçage depuis zéro est un chantier de plusieurs semaines, et livrer
-une ISO avec un installateur à moitié écrit serait pire que livrer Calamares,
-qui fonctionne.
+Le menu GRUB du live propose, **par défaut**, « Installer AuxiNux OS
+maintenant » : le live démarre en console et lance l’**installateur maison**
+(« Install NOW »). L’entrée « Essayer » donne le bureau live, inchangé, avec
+**Calamares** (icône `Install AuxiNuxOS`). Les deux finissent par les mêmes
+scripts : `post-install-cleanup.sh`, `setup-btrfs-rollback.sh`,
+`verify-installed-boot.sh`.
 
-La 0.2.0 conserve donc Calamares, reconfiguré pour Plasma. Le live expose
-l'icone `Install AuxiNuxOS`.
+## Installateur maison « Install NOW »
 
-L'installation finale ne doit pas conserver cette icone. Le script
-`post-install-cleanup.sh` supprime les artefacts live dans la cible installee.
+- **Interface** : `packages/auxinux-center/src/installer/` (Rust + ratatui,
+  binaire `auxinux-installer`, feature `tui`), lancée sur la première console
+  par `auxinux-installer.service` quand le noyau reçoit `auxinux.install=1`.
+  Bilingue : langue, connexion Internet (choix d’un réseau Wi-Fi si une carte
+  est détectée), fuseau, clavier (appliqué tout de suite à la console), disque
+  entier et chiffrement LUKS optionnel, compte administrateur, puis — en ligne
+  seulement — les questions de l’assistant (navigateur, LibreOffice, lecteur,
+  profil et applications, vie privée). Résumé avec confirmation tapée
+  (`OUI`/`YES`), barre de progression globale, diapositives, journal (`J`).
+- **Moteur** : `auxinux-install-engine` (bash, root). Lit un fichier
+  `CLE=VALEUR`, **valide tout avant de toucher au disque**, refuse le support
+  d’installation comme cible, puis : GPT (bios_grub + EFI + BTRFS), sous-volumes
+  de `mount.conf`, copie de la couche intacte du live (sans `rsync -S`),
+  configuration, GRUB, en ligne mises à jour et applications, scripts de fin.
+  `--simuler` affiche le plan sans rien exécuter (`tests/test-install-engine.sh`).
+- **Hors ligne** : `grub-efi-amd64`, `grub-pc` et les outils LUKS sont embarqués
+  dans l’image (`/usr/share/auxinux/installateur/paquets/`) ; Calamares les
+  téléchargeait. Sans Internet, l’installation est **minimale** et le dit :
+  l’assistant de premier démarrage proposera les applications une fois connecté.
+- **Chiffrement** : LUKS2 en **PBKDF2** (GRUB ne déverrouille pas Argon2), avec
+  `/boot` dans la racine chiffrée pour que les instantanés contiennent le bon
+  noyau. GRUB est alors construit **non signé** avec cryptodisk (le GRUB signé de
+  Debian ne sait pas ouvrir LUKS avant de lire son menu — Secure Boot n’est de
+  toute façon pas pris en charge) ; une clé interne à la racine évite de taper
+  la phrase de passe deux fois.
+- **Diapositives** : `installer/diapositives/{fr,en}.txt`, source unique ;
+  l’installateur console les embarque, `image-builder/scripts/
+  generate-slideshow.py` en fait le `show.qml` de Calamares.
 
 ## Configuration Calamares
 

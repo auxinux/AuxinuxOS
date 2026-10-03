@@ -292,6 +292,27 @@ sudo chroot "${ROOTFS_DIR}" apt-get purge -y q4wine 2>/dev/null || true
 
 sudo chroot "${ROOTFS_DIR}" apt-get autoremove -y --purge
 
+# Paquets que l'installateur console installe DANS la cible, embarques pour
+# installer SANS Internet. Calamares les telechargeait pendant l'installation
+# (helper bootloader-config): sans reseau, pas de GRUB. Un lot par cas:
+#   efi  -> grub-efi-amd64      bios -> grub-pc
+#   luks -> cryptsetup-initramfs, keyutils (deverrouillage au demarrage)
+# Les deux paquets GRUB sont incompatibles entre eux: ils ne peuvent pas etre
+# installes dans l'image, seulement prets a l'etre. Retires du systeme installe
+# par post-install-cleanup.sh.
+PAQUETS_INSTALLATEUR="/usr/share/auxinux/installateur/paquets"
+sudo rm -rf "${ROOTFS_DIR}${PAQUETS_INSTALLATEUR}"
+for lot in "efi:grub-efi-amd64" "bios:grub-pc" "luks:cryptsetup-initramfs keyutils"; do
+  nom="${lot%%:*}"
+  sudo chroot "${ROOTFS_DIR}" apt-get clean
+  # shellcheck disable=SC2086
+  sudo chroot "${ROOTFS_DIR}" apt-get install --download-only -y --no-install-recommends ${lot#*:}
+  sudo install -d -m 0755 "${ROOTFS_DIR}${PAQUETS_INSTALLATEUR}/${nom}"
+  sudo find "${ROOTFS_DIR}/var/cache/apt/archives" -maxdepth 1 -name '*.deb' \
+    -exec cp {} "${ROOTFS_DIR}${PAQUETS_INSTALLATEUR}/${nom}/" \;
+done
+sudo chroot "${ROOTFS_DIR}" apt-get clean
+
 # Le bureau vient desormais de Debian: voir package-lists/desktop-plasma.txt,
 # installe par le bloc apt ci-dessus comme n'importe quel autre paquet.
 #
@@ -588,21 +609,31 @@ sudo mksquashfs "${ROOTFS_DIR}" "${ISO_ROOT}/live/filesystem.squashfs" \
 # installe: `splash` est inerte (pas de plymouth dans l'image) et `quiet`
 # masque tout, y compris les raisons d'un demarrage qui n'aboutit pas. Un
 # medium live sert AUSSI a diagnostiquer une machine: il doit parler.
+# « Installer maintenant » est l'entree PAR DEFAUT (demande d'aporler,
+# 2026-10-02): le live demarre en console (multi-user.target, pas de bureau) et
+# auxinux-installer.service lance l'installateur maison. « Essayer » donne le
+# bureau live, inchange, avec son installateur graphique. Libelles bilingues:
+# la langue n'est pas encore choisie a ce stade.
 cat >"${ISO_ROOT}/boot/grub/grub.cfg" <<'EOF'
-set timeout=5
+set timeout=10
 set default=0
 
-menuentry "AuxiNux OS 0.2.0 Live" {
+menuentry "Installer AuxiNux OS 0.2.0 maintenant  /  Install AuxiNux OS 0.2.0 now" {
+    linux /live/vmlinuz boot=live components username=auxinux hostname=auxinuxos-live pci=noaer pcie_aspm=off systemd.unit=multi-user.target auxinux.install=1
+    initrd /live/initrd.img
+}
+
+menuentry "Essayer AuxiNux OS 0.2.0 (bureau live)  /  Try AuxiNux OS 0.2.0 (live desktop)" {
     linux /live/vmlinuz boot=live components username=auxinux hostname=auxinuxos-live pci=noaer pcie_aspm=off
     initrd /live/initrd.img
 }
 
-menuentry "AuxiNux OS 0.2.0 (graphiques de secours / nomodeset)" {
+menuentry "Essayer, graphiques de secours  /  Try, safe graphics (nomodeset)" {
     linux /live/vmlinuz boot=live components username=auxinux hostname=auxinuxos-live pci=noaer pcie_aspm=off nomodeset
     initrd /live/initrd.img
 }
 
-menuentry "AuxiNux OS 0.2.0 (copie en RAM / toram)" {
+menuentry "Essayer, copie en memoire  /  Try, copy to RAM (toram)" {
     linux /live/vmlinuz boot=live components username=auxinux hostname=auxinuxos-live pci=noaer pcie_aspm=off toram
     initrd /live/initrd.img
 }

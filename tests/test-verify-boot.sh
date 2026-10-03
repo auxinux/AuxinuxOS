@@ -183,6 +183,24 @@ echo "== 12. UEFI: aucun GRUB sur la partition EFI -> echoue =="
 T="${WORK}/uefi-vide"; make_target "${T}" 12288 34816; mkdir -p "${T}/boot/efi/EFI"
 out="$(AUXINUX_EFI_SYSFS="${WORK}/efi-sysfs" bash "${VERIFY}" "${T}" 2>&1)"; rc=$?
 check "sort en 1" "${rc}" "1"
+echo "== 12b. UEFI, disque chiffre: GRUB autonome sans grub.cfg -> laisse passer =="
+# L'installateur maison construit un GRUB NON signe qui embarque sa
+# configuration (cryptomount, chemin du menu): ni shim, ni grub.cfg a cote.
+T="${WORK}/uefi-autonome"; make_target "${T}" 12288 34816; make_esp "${T}"
+rm -f "${T}/boot/efi/EFI/AuxiNuxOS/shimx64.efi" "${T}/boot/efi/EFI/AuxiNuxOS/grub.cfg" \
+      "${T}/boot/efi/EFI/BOOT/grub.cfg"
+printf 'MZ...cryptomount -u 4f1d...' > "${T}/boot/efi/EFI/AuxiNuxOS/grubx64.efi"
+out="$(AUXINUX_EFI_SYSFS="${WORK}/efi-sysfs" bash "${VERIFY}" "${T}" 2>&1)"; rc=$?
+check "sort en 0" "${rc}" "0"
+check "reconnu comme GRUB autonome" "$(grep -c 'GRUB autonome' <<<"${out}")" "1"
+check "chemin de secours accepte sans grub.cfg" "$(grep -c 'chemin de secours EFI/BOOT/BOOTX64.EFI complet' <<<"${out}")" "1"
+
+echo "== 12c. UEFI: GRUB non signe SANS configuration -> echoue =="
+T="${WORK}/uefi-nu"; make_target "${T}" 12288 34816; make_esp "${T}"
+rm -f "${T}/boot/efi/EFI/AuxiNuxOS/shimx64.efi" "${T}/boot/efi/EFI/AuxiNuxOS/grub.cfg"
+out="$(AUXINUX_EFI_SYSFS="${WORK}/efi-sysfs" bash "${VERIFY}" "${T}" 2>&1)"; rc=$?
+check "sort en 1" "${rc}" "1"
+check "annonce l'invite grub>" "$(grep -c 'invite « grub> »' <<<"${out}")" "1"
 rm -f "${STUBS}/findmnt"
 
 # --- Relecture par le pilote de GRUB (grub-fstest) --------------------------
