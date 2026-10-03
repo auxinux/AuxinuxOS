@@ -33,7 +33,7 @@ use crate::model::{
     ActionResult, AppEntry, AptSource, FlatpakRemote, HealthReport, RecoveryState, SourcePreset,
     SystemReport, SOURCE_DEB, SOURCE_FLATHUB,
 };
-use crate::task::background;
+use crate::task::{background, staged};
 
 pub const APP_ID: &str = "ca.auxinux.Center";
 
@@ -87,7 +87,10 @@ pub enum Message {
     // Applications
     SearchInput(String),
     SearchSubmit,
-    AppsLoaded(Vec<AppEntry>),
+    /// Etape en cours d'un chargement de la page (numero de chargement,
+    /// libelle). Le numero ecarte les nouvelles d'une recherche depassee.
+    AppsStage(u64, String),
+    AppsLoaded(u64, Vec<AppEntry>),
     ShowInstalled,
     ShowFeatured,
     SelectSource(usize, String),
@@ -97,7 +100,8 @@ pub enum Message {
     // Mises a jour
     RefreshUpdates,
     RefreshIndexes,
-    UpdatesLoaded(Vec<AppEntry>),
+    UpdatesStage(u64, String),
+    UpdatesLoaded(u64, Vec<AppEntry>),
     UpgradeAll,
     UpdateOne(usize),
 
@@ -144,6 +148,7 @@ pub enum Message {
     AssistantSuggestion(usize, bool),
     AssistantPrivacy(usize, bool),
     AssistantInstall,
+    AssistantFinish,
 
     // Operation longue suivie en direct (voir operation.rs)
     OpLine(String),
@@ -167,11 +172,18 @@ pub struct App {
     query: String,
     apps: Loading<Vec<AppEntry>>,
     apps_view: AppsView,
+    /// Etape du chargement en cours, affichee sous la barre d'attente.
+    apps_stage: String,
+    /// Numero du dernier chargement lance: une recherche relancee avant la fin
+    /// de la precedente ne doit pas etre ecrasee par son resultat.
+    apps_generation: u64,
     /// Source retenue pour chaque fiche, quand l'utilisateur en change.
     chosen_source: std::collections::HashMap<String, String>,
 
     // Mises a jour
     updates: Loading<Vec<AppEntry>>,
+    updates_stage: String,
+    updates_generation: u64,
     os_version: String,
 
     // Sante
@@ -200,6 +212,11 @@ pub struct App {
     // Assistant de premier demarrage
     assistant_step: usize,
     selection: crate::assistant::Selection,
+    /// Vrai entre le clic sur « Installer » et la fin de l'installation.
+    assistant_installing: bool,
+    /// Bilan de la derniere installation de l'assistant: s'il existe, la page
+    /// finale remplace le recapitulatif.
+    assistant_bilan: Option<crate::assistant::Bilan>,
 
     /// Operation longue (installation, mise a jour) en cours ou terminee, avec
     /// sa progression et son journal.
@@ -257,18 +274,32 @@ impl App {
     /// Recharge la page Applications dans la vue courante.
     fn reload_apps(&mut self) -> Task<Message> {
         self.apps = Loading::Busy;
+        self.apps_stage.clear();
+        self.apps_generation += 1;
+        let generation = self.apps_generation;
         self.start();
+        let stage = move |label| Message::AppsStage(generation, label);
+        let done = move |list| Message::AppsLoaded(generation, list);
         match self.apps_view.clone() {
-            AppsView::Featured => background(crate::apps::featured, Message::AppsLoaded),
-            AppsView::Installed => background(crate::apps::list_installed, Message::AppsLoaded),
-            AppsView::Search(q) => background(move || crate::apps::search(&q), Message::AppsLoaded),
+            AppsView::Featured => staged(crate::apps::featured_with, stage, done),
+            AppsView::Installed => staged(crate::apps::list_installed_with, stage, done),
+            AppsView::Search(q) => {
+                staged(move |on_stage| crate::apps::search_with(&q, on_stage), stage, done)
+            }
         }
     }
 
     fn load_updates(&mut self) -> Task<Message> {
         self.updates = Loading::Busy;
+        self.updates_stage.clear();
+        self.updates_generation += 1;
+        let generation = self.updates_generation;
         self.start();
-        background(crate::apps::list_updates, Message::UpdatesLoaded)
+        staged(
+            crate::apps::list_updates_with,
+            move |label| Message::UpdatesStage(generation, label),
+            move |list| Message::UpdatesLoaded(generation, list),
+        )
     }
 
     fn load_health(&mut self) -> Task<Message> {
@@ -360,8 +391,12 @@ impl Application for App {
             query: String::new(),
             apps: Loading::Idle,
             apps_view: AppsView::Featured,
+            apps_stage: String::new(),
+            apps_generation: 0,
             chosen_source: std::collections::HashMap::new(),
             updates: Loading::Idle,
+            updates_stage: String::new(),
+            updates_generation: 0,
             os_version: crate::updates::os_version(),
             health: Loading::Idle,
             system: Loading::Idle,
@@ -378,6 +413,8 @@ impl Application for App {
             profile: crate::profile::state(),
             assistant_step: 0,
             selection: crate::assistant::Selection::default(),
+            assistant_installing: false,
+            assistant_bilan: None,
             operation: None,
             toast: None,
             busy: 0,
@@ -455,9 +492,17 @@ impl Application for App {
                 self.apps_view = AppsView::Installed;
                 self.reload_apps()
             }
-            Message::AppsLoaded(list) => {
+            Message::AppsStage(generation, label) => {
+                if generation == self.apps_generation {
+                    self.apps_stage = label;
+                }
+                Task::none()
+            }
+            Message::AppsLoaded(generation, list) => {
                 self.finish();
-                self.apps = Loading::Ready(list);
+                if generation == self.apps_generation {
+                    self.apps = Loading::Ready(list);
+                }
                 Task::none()
             }
             Message::SelectSource(index, source) => {
@@ -503,9 +548,17 @@ impl Application for App {
                     crate::updates::refresh_indexes,
                 )
             }
-            Message::UpdatesLoaded(list) => {
+            Message::UpdatesStage(generation, label) => {
+                if generation == self.updates_generation {
+                    self.updates_stage = label;
+                }
+                Task::none()
+            }
+            Message::UpdatesLoaded(generation, list) => {
                 self.finish();
-                self.updates = Loading::Ready(list);
+                if generation == self.updates_generation {
+                    self.updates = Loading::Ready(list);
+                }
                 Task::none()
             }
             Message::UpgradeAll => {
@@ -655,6 +708,7 @@ impl Application for App {
             Message::AssistantRestart => {
                 self.assistant_step = 0;
                 self.selection = crate::assistant::Selection::default();
+                self.assistant_bilan = None;
                 self.page = Page::Assistant;
                 self.nav.activate_position(6);
                 Task::none()
@@ -709,10 +763,22 @@ impl Application for App {
                 Task::none()
             }
             Message::AssistantInstall => {
+                if self.op_running() {
+                    return Task::none();
+                }
                 let selection = self.selection.clone();
+                self.assistant_installing = true;
+                self.assistant_bilan = None;
                 self.launch("Installation de vos applications".into(), move |on_line| {
                     crate::assistant::apply(&selection, on_line)
                 })
+            }
+            Message::AssistantFinish => {
+                // Le bilan est sur la page finale: le panneau d'operation, qui
+                // dit la meme chose, n'a plus de raison de rester affiche.
+                self.operation = None;
+                self.nav.activate_position(0);
+                self.update(Message::Page(Page::Apps))
             }
 
             // --- Operation longue ---
@@ -723,6 +789,21 @@ impl Application for App {
                 Task::none()
             }
             Message::OpFinished(result) => {
+                // Fin de l'installation de l'assistant: on passe a la page
+                // finale, qui dit ce qui est installe et ce qui a echoue, au
+                // lieu de laisser le recapitulatif et son bouton « Installer ».
+                if std::mem::take(&mut self.assistant_installing) {
+                    // Relue a la prochaine visite: sinon les applications que
+                    // l'assistant vient d'installer y restent « a installer ».
+                    if self.page != Page::Apps {
+                        self.apps = Loading::Idle;
+                    }
+                    self.assistant_bilan = Some(crate::assistant::bilan(
+                        &self.selection,
+                        &result,
+                        |app| app.desktop_file().1.exists(),
+                    ));
+                }
                 if let Some(op) = self.operation.as_mut() {
                     op.result = Some(result);
                 }
@@ -899,15 +980,39 @@ pub mod widgets {
     /// Etat « en cours de chargement », avec un texte qui dit CE QUI est en
     /// cours: un indicateur muet ne distingue pas une attente d'un blocage.
     pub fn busy(what: &str) -> Element<'_, Message> {
-        widget::container(
-            widget::Column::new()
-                .spacing(10)
-                .align_x(iced::Alignment::Center)
-                .push(widget::text::body(what))
-                .push(widget::text::caption(
-                    "Vous pouvez continuer a naviguer pendant l'operation.",
-                )),
-        )
+        loading(what, "")
+    }
+
+    /// Etape d'un chargement, ou un texte d'attente tant que le fil de travail
+    /// ne l'a pas encore annoncee: la page ne saute pas a la premiere etape.
+    pub fn stage_or_start(stage: &str) -> &str {
+        if stage.is_empty() {
+            "Demarrage…"
+        } else {
+            stage
+        }
+    }
+
+    /// `busy`, avec une barre animee et l'etape en cours (`detail`, vide si
+    /// le chargement ne l'a pas encore annoncee). La barre bouge tant que
+    /// l'interface vit: c'est ce qui distingue une attente d'un gel.
+    pub fn loading<'a>(what: &'a str, detail: &'a str) -> Element<'a, Message> {
+        let mut col = widget::Column::new()
+            .spacing(10)
+            .align_x(iced::Alignment::Center)
+            .push(widget::text::body(what))
+            .push(
+                widget::container(
+                    widget::progress_bar::indeterminate_linear().width(iced::Length::Fill),
+                )
+                .max_width(420),
+            );
+        if !detail.is_empty() {
+            col = col.push(widget::text::caption(detail));
+        }
+        widget::container(col.push(widget::text::caption(
+            "Vous pouvez continuer a naviguer pendant l'operation.",
+        )))
         .center_x(iced::Length::Fill)
         .padding(40)
         .into()

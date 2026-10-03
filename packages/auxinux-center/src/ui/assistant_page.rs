@@ -3,7 +3,8 @@
 //! Sept etapes, une question par ecran: bienvenue, navigateur, LibreOffice,
 //! lecteur multimedia, profil d'usage (avec ses applications suggerees), vie
 //! privee, recapitulatif. Rien n'est installe avant le dernier ecran, et le
-//! recapitulatif montre exactement ce qui le sera. Le catalogue et le calcul de
+//! recapitulatif montre exactement ce qui le sera. Une fois l'installation
+//! finie, une page de bilan le remplace: ce qui est installe, ce qui a echoue. Le catalogue et le calcul de
 //! la selection vivent dans assistant.rs, hors de l'interface.
 
 use cosmic::{iced, widget, Element};
@@ -16,6 +17,9 @@ pub const STEPS: usize = 7;
 const AUCUN: usize = usize::MAX;
 
 pub fn view(app: &App) -> Element<'_, Message> {
+    if let Some(bilan) = &app.assistant_bilan {
+        return fin(app, bilan);
+    }
     let sel = &app.selection;
     let step = app.assistant_step.min(STEPS - 1);
 
@@ -83,8 +87,12 @@ pub fn view(app: &App) -> Element<'_, Message> {
         );
     } else {
         nav = nav.push(
-            widget::button::suggested("Installer")
-                .on_press_maybe(idle.then_some(Message::AssistantInstall)),
+            widget::button::suggested(if app.assistant_installing {
+                "Installation en cours…"
+            } else {
+                "Installer"
+            })
+            .on_press_maybe(idle.then_some(Message::AssistantInstall)),
         );
     }
 
@@ -265,4 +273,122 @@ fn recap(app: &App) -> Element<'_, Message> {
                  minutes; vous pouvez suivre le detail ci-dessous.",
             )),
     )
+}
+
+/// Page finale: le bilan de l'installation. Elle dit ce qui est installe, et
+/// en cas d'erreur ce qui ne l'est pas, avec de quoi reessayer.
+fn fin<'a>(app: &'a App, bilan: &'a assistant::Bilan) -> Element<'a, Message> {
+    let idle = !app.op_running();
+    // Rien d'installe du tout (autorisation refusee, pas de reseau...): ce
+    // n'est pas une installation « avec des erreurs », elle n'a pas eu lieu.
+    let partiel = !bilan.ok && !bilan.installees.is_empty();
+
+    let header = widgets::header(
+        "Assistant de configuration",
+        if bilan.ok { "Termine" } else { "Termine, avec des erreurs" },
+        vec![],
+    );
+
+    let (icone, titre) = if bilan.ok {
+        // Noms Breeze MONOCHROMES en repli: une icone en couleur est teintee
+        // d'un bloc et s'affiche en forme pleine.
+        (
+            crate::ui::icon("emblem-ok-symbolic", &["state-ok-symbolic", "object-select-symbolic"]),
+            "Tout est installe !",
+        )
+    } else if partiel {
+        (
+            crate::ui::icon(
+                "dialog-warning-symbolic",
+                &["state-warning-symbolic", "messagebox_warning-symbolic"],
+            ),
+            "Installation terminee, avec des erreurs",
+        )
+    } else {
+        (
+            crate::ui::icon("dialog-error-symbolic", &["state-error-symbolic"]),
+            "L'installation n'a pas abouti",
+        )
+    };
+
+    let mut col = widget::Column::new().spacing(12).push(
+        widget::Row::new()
+            .spacing(12)
+            .align_y(iced::Alignment::Center)
+            .push(icone.size(32))
+            .push(widget::text::title4(titre)),
+    );
+
+    if !bilan.installees.is_empty() {
+        col = col.push(widget::text::heading(if bilan.ok {
+            "Vos applications sont pretes:"
+        } else {
+            "Installees:"
+        }));
+        col = col.push(liste(&bilan.installees));
+    }
+    if !bilan.echecs.is_empty() {
+        col = col.push(widget::text::heading(if partiel {
+            "Non installees:"
+        } else {
+            "Aucune application n'a ete installee:"
+        }));
+        col = col.push(liste(&bilan.echecs));
+    }
+    if bilan.profil_echoue {
+        col = col.push(widget::text::body(format!(
+            "Le profil d'usage « {} » n'a pas pu etre applique.",
+            app.selection.profil.label()
+        )));
+    }
+
+    if bilan.ok {
+        col = col.push(widget::text::caption(
+            "Elles sont dans le menu des applications. Pour en ajouter d'autres, \
+             ouvrez la page Applications. L'assistant reste disponible ici a tout \
+             moment.",
+        ));
+    } else {
+        // La cause est ecrite ICI, et pas seulement dans le panneau
+        // d'operation: celui-ci se ferme, la page finale reste.
+        if !bilan.message.is_empty() {
+            col = col
+                .push(widget::text::heading("Cause signalee:"))
+                .push(widget::text::monotext(bilan.message.clone()));
+        }
+        col = col.push(widget::text::caption(
+            "« Reessayer » relance l'installation de votre selection; verifiez \
+             d'abord la connexion Internet. Le journal complet est dans le panneau \
+             ci-dessous (« Voir le detail »). Tant que l'installation n'a pas \
+             reussi, l'assistant se rouvrira a la prochaine session.",
+        ));
+    }
+
+    let mut nav = widget::Row::new().spacing(8).align_y(iced::Alignment::Center);
+    nav = nav.push(widget::Space::new().width(iced::Length::Fill));
+    if !bilan.ok {
+        nav = nav.push(
+            widget::button::standard("Reessayer")
+                .on_press_maybe(idle.then_some(Message::AssistantInstall)),
+        );
+    }
+    nav = nav.push(
+        widget::button::suggested(if bilan.ok { "Terminer" } else { "Fermer l'assistant" })
+            .on_press_maybe(idle.then_some(Message::AssistantFinish)),
+    );
+
+    widget::Column::new()
+        .spacing(16)
+        .push(header)
+        .push(widget::scrollable(card(col)).height(iced::Length::Fill))
+        .push(nav)
+        .into()
+}
+
+fn liste<'a>(noms: &[&'static str]) -> Element<'a, Message> {
+    let mut col = widget::Column::new().spacing(4).padding([0, 0, 0, 12]);
+    for nom in noms {
+        col = col.push(widget::text::body(format!("• {nom}")));
+    }
+    col.into()
 }

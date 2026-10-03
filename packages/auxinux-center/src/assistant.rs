@@ -299,6 +299,44 @@ pub fn apply(selection: &Selection, on_line: &mut dyn FnMut(&str)) -> ActionResu
     result
 }
 
+/// Ce que l'installation de l'assistant a reellement donne, pour sa page
+/// finale.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Bilan {
+    pub ok: bool,
+    pub installees: Vec<&'static str>,
+    pub echecs: Vec<&'static str>,
+    /// Le changement de profil d'usage a echoue (« Echec pour: profil ... »).
+    pub profil_echoue: bool,
+    /// Message du resultat: l'explication de l'echec, s'il y en a un.
+    pub message: String,
+}
+
+/// Bilan d'une installation terminee. En cas d'echec, chaque application est
+/// jugee sur pieces (`installed`: son lanceur est-il la ?) plutot que sur le
+/// texte d'erreur: le programme d'installation continue apres un echec, donc
+/// une partie de la selection peut tres bien etre installee.
+pub fn bilan(selection: &Selection, result: &ActionResult, installed: impl Fn(&App) -> bool) -> Bilan {
+    let apps = selection.applications();
+    let (installees, echecs): (Vec<&App>, Vec<&App>) = if result.ok {
+        (apps.iter().collect(), Vec::new())
+    } else {
+        apps.iter().partition(|app| installed(app))
+    };
+    let profil_echoue = !result.ok
+        && result
+            .message
+            .lines()
+            .any(|l| l.trim_start().starts_with("Echec pour:") && l.contains("profil "));
+    Bilan {
+        ok: result.ok,
+        installees: installees.iter().map(|a| a.name).collect(),
+        echecs: echecs.iter().map(|a| a.name).collect(),
+        profil_echoue,
+        message: result.message.clone(),
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Premier demarrage
 // ---------------------------------------------------------------------------
@@ -451,5 +489,34 @@ mod tests {
         assert!(should_open_at_login(installed, false));
         assert!(!should_open_at_login(installed, true));
         assert!(!should_open_at_login(live, false));
+    }
+
+    #[test]
+    fn bilan_reussi_liste_toute_la_selection() {
+        let sel = Selection::default();
+        let b = bilan(&sel, &ActionResult::ok("ok"), |_| false);
+        assert!(b.ok);
+        assert!(b.echecs.is_empty());
+        assert_eq!(b.installees.len(), sel.applications().len());
+        assert!(b.installees.contains(&"Bottles"));
+    }
+
+    #[test]
+    fn bilan_echec_partiel_juge_chaque_application() {
+        let sel = Selection::default();
+        let result = ActionResult::err("flatpak: erreur reseau\nEchec pour: com.usebottles.bottles");
+        let b = bilan(&sel, &result, |app| app.name != "Bottles");
+        assert!(!b.ok);
+        assert_eq!(b.echecs, vec!["Bottles"]);
+        assert!(!b.installees.contains(&"Bottles"));
+        assert!(!b.profil_echoue);
+    }
+
+    #[test]
+    fn bilan_repere_l_echec_du_profil() {
+        let result = ActionResult::err("Echec pour: profil gaming");
+        let b = bilan(&Selection::default(), &result, |_| true);
+        assert!(b.profil_echoue);
+        assert!(b.echecs.is_empty());
     }
 }

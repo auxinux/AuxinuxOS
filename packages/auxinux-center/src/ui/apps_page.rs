@@ -8,7 +8,7 @@
 use cosmic::{iced, widget, Element};
 
 use crate::model::{AppEntry, SOURCE_DEB, SOURCE_FLATHUB};
-use crate::ui::{widgets, App, Loading, Message};
+use crate::ui::{widgets, App, AppsView, Loading, Message};
 
 pub fn view(app: &App) -> Element<'_, Message> {
     let search = widget::search_input("Rechercher une application…", &app.query)
@@ -30,8 +30,15 @@ pub fn view(app: &App) -> Element<'_, Message> {
     );
 
     let body: Element<Message> = match &app.apps {
-        Loading::Busy => widgets::busy("Recherche en cours…"),
-        Loading::Idle => widgets::busy("Chargement…"),
+        Loading::Busy => widgets::loading(
+            match app.apps_view {
+                AppsView::Search(_) => "Recherche en cours…",
+                AppsView::Installed => "Lecture des applications installees…",
+                AppsView::Featured => "Chargement des suggestions…",
+            },
+            widgets::stage_or_start(&app.apps_stage),
+        ),
+        Loading::Idle => widgets::loading("Chargement…", ""),
         Loading::Ready(list) if list.is_empty() => widgets::empty(
             "Aucune application trouvee",
             "Essayez un autre terme, ou parcourez les suggestions.",

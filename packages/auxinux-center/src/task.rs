@@ -81,3 +81,43 @@ where
 
     cosmic::task::stream(messages)
 }
+
+/// Comme `background()`, pour un chargement qui annonce ses etapes: chaque
+/// libelle passe a `on_stage` devient `stage(libelle)` a l'ecran PENDANT le
+/// chargement, puis le resultat arrive par `done`.
+///
+/// Sans cela, une recherche Flathub ou une recherche de mises a jour laissait
+/// la page sur un texte fixe pendant de longues secondes: on croyait la
+/// fenetre figee.
+pub fn staged<T, F, S, D>(work: F, stage: S, done: D) -> Task<Message>
+where
+    F: FnOnce(&mut dyn FnMut(&str)) -> T + Send + 'static,
+    T: Send + 'static,
+    S: Fn(String) -> Message + Send + 'static,
+    D: FnOnce(T) -> Message + Send + 'static,
+{
+    use cosmic::iced::futures::channel::mpsc;
+    use cosmic::iced::futures::stream::{self, StreamExt};
+
+    // Meme construction que `streamed()`: le fil n'est cree qu'au premier
+    // sondage du flux, dans le runtime tokio de l'application.
+    let messages = stream::once(async move {
+        let (tx, rx) = mpsc::unbounded::<Message>();
+        tokio::task::spawn_blocking(move || {
+            let mut forward = |label: &str| {
+                let _ = tx.unbounded_send(stage(label.to_string()));
+            };
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                work(&mut forward)
+            }));
+            let _ = tx.unbounded_send(match result {
+                Ok(value) => done(value),
+                Err(_) => Message::TaskPanicked,
+            });
+        });
+        rx
+    })
+    .flatten();
+
+    cosmic::task::stream(messages)
+}

@@ -33,6 +33,20 @@ fn is_safe_app_id(id: &str) -> bool {
             .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_' | '+'))
 }
 
+/// Colonnes d'une ligne de `flatpak ... --columns=application,...`, ou `None`
+/// si la ligne n'est pas une application. Sans resultat, `flatpak search`
+/// ecrit « No matches found » (traduit selon la langue) sur la sortie
+/// standard, avec un code de retour nul: cette phrase s'affichait comme une
+/// application, avec son bouton « Installer ».
+fn flatpak_row(line: &str) -> Option<Vec<&str>> {
+    if !line.contains('\t') {
+        return None;
+    }
+    let cols: Vec<&str> = line.split('\t').map(str::trim).collect();
+    let id = cols[0];
+    (id.contains('.') && is_safe_app_id(id)).then_some(cols)
+}
+
 /// `apt-cache`. Il n'est plus detourne par la politique APT -- c'est une
 /// commande de LECTURE SEULE, la masquer ne protegeait rien. Le chemin de
 /// diversion reste teste pour les systemes installes avant ce changement, dont
@@ -124,6 +138,13 @@ fn mark_installed(entries: &mut [AppEntry]) {
 }
 
 pub fn search(query: &str) -> Vec<AppEntry> {
+    search_with(query, &mut |_| {})
+}
+
+/// `search`, en annoncant chaque etape a `on_stage`: la recherche Flathub peut
+/// prendre de longues secondes (premiere lecture de l'AppStream), et sans
+/// nouvelles l'utilisateur croyait la fenetre figee.
+pub fn search_with(query: &str, on_stage: &mut dyn FnMut(&str)) -> Vec<AppEntry> {
     let query = query.trim();
     if query.len() < 2 {
         return Vec::new();
@@ -132,6 +153,7 @@ pub fn search(query: &str) -> Vec<AppEntry> {
     let mut entries: Vec<AppEntry> = Vec::new();
 
     // --- Flathub (prioritaire) ---
+    on_stage("Recherche sur Flathub…");
     let fp = run(
         "flatpak",
         &["search", "--columns=application,name,description,version", "--", query],
@@ -141,11 +163,8 @@ pub fn search(query: &str) -> Vec<AppEntry> {
             if line.trim().is_empty() {
                 continue;
             }
-            let cols: Vec<&str> = line.split('\t').collect();
-            let id = cols.first().copied().unwrap_or("").trim();
-            if id.is_empty() {
-                continue;
-            }
+            let Some(cols) = flatpak_row(line) else { continue };
+            let id = cols[0];
             entries.push(AppEntry {
                 id: id.to_string(),
                 name: cols.get(1).copied().unwrap_or(id).trim().to_string(),
@@ -164,6 +183,7 @@ pub fn search(query: &str) -> Vec<AppEntry> {
     // --- DEB (apt-cache search) ---
     // "--": un terme commencant par un tiret etait lu comme une option par
     // apt-cache.
+    on_stage("Recherche dans les paquets DEB d'AuxiNux…");
     let deb = run(apt_cache_bin(), &["search", "--", query]);
     if deb.ok {
         let mut added = 0usize;
@@ -201,12 +221,18 @@ pub fn search(query: &str) -> Vec<AppEntry> {
         }
     }
 
+    on_stage("Verification des applications deja installees…");
     mark_installed(&mut entries);
     entries
 }
 
 /// Selection d'applications mises en avant a l'ouverture (Flathub + DEB si disponible).
 pub fn featured() -> Vec<AppEntry> {
+    featured_with(&mut |_| {})
+}
+
+/// `featured`, en annoncant chaque etape a `on_stage`.
+pub fn featured_with(on_stage: &mut dyn FnMut(&str)) -> Vec<AppEntry> {
     // (flatpak_id, nom, resume, paquet_deb_candidat)
     let curated: &[(&str, &str, &str, &str)] = &[
         ("org.videolan.VLC",          "VLC",        "Lecteur multimedia universel",              "vlc"),
@@ -227,6 +253,7 @@ pub fn featured() -> Vec<AppEntry> {
     let deb_candidates: Vec<&str> = curated.iter().map(|(_, _, _, d)| *d).collect();
     let mut args = vec!["show", "--no-all-versions"];
     args.extend(deb_candidates.iter().copied());
+    on_stage("Verification des paquets DEB disponibles…");
     let deb_out = run(apt_cache_bin(), &args);
     let mut available_debs: std::collections::HashSet<String> = std::collections::HashSet::new();
     for line in deb_out.stdout.lines() {
@@ -258,15 +285,22 @@ pub fn featured() -> Vec<AppEntry> {
             }
         })
         .collect();
+    on_stage("Verification des applications deja installees…");
     mark_installed(&mut entries);
     entries
 }
 
 pub fn list_installed() -> Vec<AppEntry> {
+    list_installed_with(&mut |_| {})
+}
+
+/// `list_installed`, en annoncant chaque etape a `on_stage`.
+pub fn list_installed_with(on_stage: &mut dyn FnMut(&str)) -> Vec<AppEntry> {
     let mut entries: Vec<AppEntry> = Vec::new();
     let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
 
     // --- Applications Flatpak ---
+    on_stage("Lecture des applications Flatpak…");
     let fp = run(
         "flatpak",
         &["list", "--app", "--columns=application,name,version,origin"],
@@ -276,11 +310,8 @@ pub fn list_installed() -> Vec<AppEntry> {
             if line.trim().is_empty() {
                 continue;
             }
-            let cols: Vec<&str> = line.split('\t').collect();
-            let id = cols.first().copied().unwrap_or("").trim();
-            if id.is_empty() {
-                continue;
-            }
+            let Some(cols) = flatpak_row(line) else { continue };
+            let id = cols[0];
             let name = cols.get(1).copied().unwrap_or(id).trim().to_string();
             seen.insert(name.to_lowercase());
             entries.push(AppEntry {
@@ -302,6 +333,7 @@ pub fn list_installed() -> Vec<AppEntry> {
     // On resout le NOM DE PAQUET de chaque .desktop (l'id du fichier, ex.
     // org.kde.kate, n'est pas le paquet "kate") pour que install/remove/status
     // fonctionnent ensuite.
+    on_stage("Lecture des applications du systeme (DEB)…");
     let pkg_map = desktop_package_map();
     if let Ok(rd) = std::fs::read_dir("/usr/share/applications") {
         for f in rd.flatten() {
@@ -669,9 +701,16 @@ pub fn update_app(id: &str, source: &str, on_line: &mut dyn FnMut(&str)) -> Acti
 /// consolidated "what has an update" list across Flatpak and DEB, so
 /// the UI can offer a single updates view instead of one fiche per app.
 pub fn list_updates() -> Vec<AppEntry> {
+    list_updates_with(&mut |_| {})
+}
+
+/// `list_updates`, en annoncant chaque etape a `on_stage`. L'interrogation de
+/// Flathub passe par le reseau: c'est l'etape qui faisait croire a un gel.
+pub fn list_updates_with(on_stage: &mut dyn FnMut(&str)) -> Vec<AppEntry> {
     let mut entries: Vec<AppEntry> = Vec::new();
 
     // Flatpak apps with a newer commit on their remote.
+    on_stage("Interrogation de Flathub (applications Flatpak)…");
     let fp = run(
         "flatpak",
         &["remote-ls", "--updates", "--app", "--columns=application,name,version"],
@@ -681,11 +720,8 @@ pub fn list_updates() -> Vec<AppEntry> {
             if line.trim().is_empty() {
                 continue;
             }
-            let cols: Vec<&str> = line.split('\t').collect();
-            let id = cols.first().copied().unwrap_or("").trim();
-            if id.is_empty() {
-                continue;
-            }
+            let Some(cols) = flatpak_row(line) else { continue };
+            let id = cols[0];
             entries.push(AppEntry {
                 id: id.to_string(),
                 name: cols.get(1).copied().unwrap_or(id).trim().to_string(),
@@ -702,6 +738,7 @@ pub fn list_updates() -> Vec<AppEntry> {
     }
 
     // Upgradable DEB packages (simulated upgrade, read-only).
+    on_stage("Calcul des mises a jour du systeme (paquets DEB)…");
     let deb = run(apt_cache_bin(), &["-s", "upgrade"]);
     let apt_get_sim = if deb.ok && deb.stdout.contains("Inst ") {
         deb
@@ -750,3 +787,20 @@ fn apt_get_bin() -> &'static str {
     }
 }
 
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn flatpak_rows_ignore_the_no_match_sentence() {
+        assert!(flatpak_row("No matches found").is_none());
+        assert!(flatpak_row("Aucune correspondance trouvée").is_none());
+        assert!(flatpak_row("").is_none());
+        assert!(flatpak_row("-x.y\tOption").is_none());
+        assert_eq!(
+            flatpak_row("org.gimp.GIMP\tGIMP\tRetouche\t3.0").unwrap(),
+            vec!["org.gimp.GIMP", "GIMP", "Retouche", "3.0"]
+        );
+    }
+}

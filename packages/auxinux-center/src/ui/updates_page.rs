@@ -28,7 +28,12 @@ pub fn view(app: &App) -> Element<'_, Message> {
     );
 
     let body: Element<Message> = match &app.updates {
-        Loading::Idle | Loading::Busy => widgets::busy("Recherche des mises a jour…"),
+        Loading::Idle | Loading::Busy => {
+            widgets::loading(
+                "Recherche des mises a jour…",
+                widgets::stage_or_start(&app.updates_stage),
+            )
+        }
         Loading::Ready(list) if list.is_empty() => widgets::empty(
             "Votre systeme est a jour",
             "Rien a installer pour le moment.",
