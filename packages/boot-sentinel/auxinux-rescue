@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # auxinux-rescue — console de secours d'AuxiNuxOS, avec restauration.
 #
 # Elle ne s'affiche que si auxinux-boot-sentinel a constate que le bureau n'a
@@ -6,18 +6,25 @@
 # laisser l'utilisateur devant un ecran noir sans recours.
 #
 # --auto : restaure sans rien demander (3e echec consecutif).
+#
+# bash et non sh: le menu attend 120 s avec `read -t`, que dash (le /bin/sh de
+# Debian) ne connait pas. Sous dash, `read -t` echouait aussitot, le script le
+# prenait pour « aucune reponse » et restaurait SANS ATTENDRE -- une des deux
+# causes de la boucle de restauration du 2026-10-04.
 set -u
 
-STATE_DIR=/var/lib/auxinux
-SENTINEL=/usr/lib/auxinux/auxinux-boot-sentinel
+STATE_DIR="${AUXINUX_STATE_DIR:-/var/lib/auxinux}"
+SENTINEL="${AUXINUX_SENTINEL:-/usr/lib/auxinux/auxinux-boot-sentinel}"
+# Reglable UNIQUEMENT pour les tests (tests/test-boot-sentinel.sh).
+SNAPPER_CONF="${AUXINUX_SNAPPER_CONF:-/etc/snapper/configs/root}"
 AUTO=0
 [ "${1:-}" = "--auto" ] && AUTO=1
 
 # Sans argument, le seuil decide: au 3e echec consecutif, plus de question.
 # Le compteur est la seule source de verite, l'unite systemd n'a pas a la
 # dupliquer.
-if [ "${AUTO}" = "0" ] && [ -x /usr/lib/auxinux/auxinux-boot-sentinel ]; then
-  _st=$(/usr/lib/auxinux/auxinux-boot-sentinel status 2>/dev/null)
+if [ "${AUTO}" = "0" ] && [ -x "${SENTINEL}" ]; then
+  _st=$("${SENTINEL}" status 2>/dev/null)
   _f=$(printf '%s\n' "${_st}" | sed -n 's/^failures=//p')
   _a=$(printf '%s\n' "${_st}" | sed -n 's/^auto_threshold=//p')
   # Les deux valeurs sont validees SEPAREMENT: concatenees, une valeur vide
@@ -33,8 +40,8 @@ say() { printf '%s\n' "$1"; printf '%s\n' "$2"; }
 rule() { printf '%s\n' "------------------------------------------------------------------------"; }
 
 snapper_ready() {
-  [ -x /usr/bin/snapper ] || return 1
-  [ -f /etc/snapper/configs/root ] || return 1
+  command -v snapper >/dev/null 2>&1 || return 1
+  [ -f "${SNAPPER_CONF}" ] || return 1
   snapper -c root list >/dev/null 2>&1
 }
 
@@ -43,16 +50,35 @@ snapper_ready() {
 # On prefere le dernier instantane « pre »: il a ete pose juste AVANT une
 # transaction de paquets, et une transaction de paquets est de loin la premiere
 # cause d'un bureau qui ne demarre plus sur cette distribution (hook dpkg,
-# voir docs/rollback.md). A defaut, le plus recent quel qu'il soit.
+# voir docs/rollback.md). A defaut, le dernier instantane pose a la main ou a
+# l'installation, puis la derniere sauvegarde quotidienne.
+#
+# JAMAIS un instantane « boot » ni un « post » (panne du 2026-10-04): un
+# instantane de demarrage est pris PENDANT le demarrage en cours -- celui qui
+# echoue. « Le plus recent quel qu'il soit » restaurait donc l'etat en panne
+# lui-meme, a chaque tour.
 pick_snapshot() {
   csv=$(snapper -c root --csvout list --columns number,type,date,description 2>/dev/null) || return 1
   echo "${csv}" | awk -F',' '
     NR == 1 { next }
     $1 == 0 { next }
-    $2 == "pre" { pre = $1 }
-    { last = $1 }
-    END { if (pre != "") print pre; else if (last != "") print last }
+    $2 == "post" || $4 == "boot" { next }
+    $2 == "pre" { pre = $1; next }
+    $4 == "timeline" { daily = $1; next }
+    { other = $1 }
+    END {
+      if (pre != "") print pre
+      else if (other != "") print other
+      else if (daily != "") print daily
+    }
   '
+}
+
+# Numero restaure par la derniere restauration (ecrit par `auxi rollback` dans
+# le systeme restaure).
+last_restore() {
+  n=$(cat "${STATE_DIR}/last-restore" 2>/dev/null)
+  case "${n}" in ''|*[!0-9]*) echo "" ;; *) echo "${n}" ;; esac
 }
 
 # Mode de diagnostic: affiche l'instantane que la restauration automatique
@@ -131,6 +157,21 @@ rule
 say "Instantane propose : ${TARGET}" "Proposed snapshot: ${TARGET}"
 rule
 
+# VERROU ANTI-BOUCLE. Si ce systeme EST deja le resultat d'une restauration de
+# cet instantane et que le bureau echoue encore, le restaurer de nouveau ne
+# changerait rien et relancerait la boucle. Plus aucune action automatique:
+# le menu attend une decision, sans delai.
+DEJA=0
+if [ -n "$(last_restore)" ] && [ "$(last_restore)" = "${TARGET}" ]; then
+  DEJA=1
+  AUTO=0
+  say "L'instantane ${TARGET} a deja ete restaure et le bureau ne demarre toujours pas." \
+      "Snapshot ${TARGET} was already restored and the desktop still fails."
+  say "Aucune restauration automatique: choisissez un autre numero (option 2)." \
+      "No automatic restore: pick another number (option 2)."
+  rule
+fi
+
 if [ "${AUTO}" = "1" ]; then
   say "Troisieme echec consecutif : restauration AUTOMATIQUE." \
       "Third failure in a row: AUTOMATIC restore."
@@ -149,8 +190,12 @@ while :; do
 MENU
   printf 'Choix / Choice [1] : '
   # 120 s puis choix 1: personne ne doit rester bloque devant ce menu, et
-  # l'inaction ne doit pas laisser la machine inutilisable.
-  if ! read -r -t 120 choice; then
+  # l'inaction ne doit pas laisser la machine inutilisable. SAUF si cet
+  # instantane a deja ete restaure en vain (DEJA=1): on attend alors.
+  if [ "${DEJA}" = "1" ]; then
+    read -r choice || choice=3
+    [ -z "${choice:-}" ] && choice=2
+  elif ! read -r -t 120 choice; then
     echo
     say "Aucune reponse : restauration de l'instantane ${TARGET}." \
         "No answer: restoring snapshot ${TARGET}."

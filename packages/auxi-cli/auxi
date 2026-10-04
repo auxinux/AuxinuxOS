@@ -286,6 +286,27 @@ run_snapshot_list() {
 # L'operation est sure depuis un systeme en cours d'execution: renommer un
 # sous-volume monte n'affecte pas le montage courant, et c'est au prochain
 # demarrage que subvol=@ resout vers le sous-volume restaure.
+# Etat de la protection au demarrage DANS le systeme restaure.
+#
+# PANNE DU 2026-10-04 (rapportee par aporler): le compteur de demarrages rates
+# vit dans /var/lib/auxinux, donc DANS la racine -- il est restaure avec elle.
+# Un instantane pris pendant un demarrage (snapper-boot, une seconde apres
+# l'allumage) contient un compteur deja incremente: le restaurer faisait croire
+# a un bureau en panne au demarrage suivant, la console de secours restaurait a
+# son tour le dernier instantane... pris pendant ce demarrage rate, et ainsi de
+# suite, sans fin. Remettre le compteur a zero ICI, et non dans le systeme en
+# cours (qui est l'ancien), est ce qui casse la boucle.
+#
+# last-restore: numero restaure, lu par auxinux-rescue pour ne jamais
+# restaurer deux fois de suite automatiquement le meme instantane.
+reset_boot_state() {
+  local root="$1" number="$2"
+  local dir="${root}/var/lib/auxinux"
+  mkdir -p "${dir}" 2>/dev/null || return 0
+  printf '0\n' >"${dir}/boot-failures" 2>/dev/null || true
+  printf '%s\n' "${number}" >"${dir}/last-restore" 2>/dev/null || true
+}
+
 run_rollback() {
   require_snapshots
   require_root_for_config rollback "$@"
@@ -392,6 +413,8 @@ run_rollback() {
       "Rollback failed; the original system has been restored."
     exit 69
   fi
+
+  reset_boot_state "${BTRFS_TOPLEVEL_MNT}/@" "${number}"
 
   say \
     "Restauration prete. Redemarrez pour l'appliquer: sudo reboot" \

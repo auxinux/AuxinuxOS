@@ -47,9 +47,16 @@ log() { echo "auxinux-boot-sentinel: $*"; }
 
 # Le medium live n'est jamais concerne: il ouvre une session en autologin, n'a
 # pas d'instantane a restaurer, et son / est un squashfs en lecture seule.
+#
+# Meme chose pour un instantane demarre depuis le sous-menu de GRUB
+# (auxinux.snapshot=1): son / est une superposition en memoire, volatile, et
+# son compteur est celui du moment ou l'instantane a ete pris -- parfois deja
+# au seuil. Le juger ferait basculer en secours une machine qu'on est
+# justement en train de depanner.
 is_live() {
   [ -d "${LIVE_MARKER}" ] && return 0
   grep -qw 'boot=live' "${CMDLINE_FILE}" 2>/dev/null && return 0
+  grep -qw 'auxinux.snapshot=1' "${CMDLINE_FILE}" 2>/dev/null && return 0
   return 1
 }
 

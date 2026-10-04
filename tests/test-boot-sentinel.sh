@@ -128,6 +128,12 @@ reset_env
 mkdir -p "${AUXINUX_LIVE_MARKER}"
 "${SENTINEL}" arm >/dev/null
 check "medium live detecte aussi par /run/live/medium" "$(count)" "absent"
+reset_env
+echo "BOOT_IMAGE=/@snapshots/5/snapshot/boot/vmlinuz ro auxinux.snapshot=1" > "${AUXINUX_CMDLINE}"
+echo 2 > "${AUXINUX_STATE_DIR}/boot-failures"
+"${SENTINEL}" arm >/dev/null
+check "instantane demarre depuis GRUB: compteur non juge" "$(count)" "2"
+check "instantane demarre depuis GRUB: pas de mode secours" "$(rescue_flag)" "absent"
 
 echo "== 6. Cible par defaut non graphique: aucune protection =="
 reset_env
@@ -172,7 +178,9 @@ check "compteur conserve" "$(count)" "1"
 
 echo "== 9. Choix de l'instantane a restaurer =="
 # La regle: le dernier « pre » (pose juste AVANT une transaction de paquets,
-# premiere cause d'un bureau qui ne demarre plus), sinon le plus recent.
+# premiere cause d'un bureau qui ne demarre plus), sinon le dernier point pose a
+# la main ou a l'installation, sinon la derniere sauvegarde quotidienne; jamais
+# un « boot » ni un « post ».
 cat > "${STUBS}/snapper" <<'STUB'
 #!/bin/sh
 cat "${STUB_SNAPPER_CSV}"
@@ -196,13 +204,74 @@ number,type,date,description
 3,single,2026-09-01 08:00:00,Installation initiale
 9,single,2026-09-12 11:00:00,timeline
 CSV
-check "sans « pre », le plus recent" "$("${RESCUE}" --pick-snapshot)" "9"
+# Sans « pre », un point pose a la main ou a l'installation passe AVANT la
+# sauvegarde automatique: celle-ci peut avoir ete prise pendant un demarrage
+# rate (le minuteur quotidien rattrape au demarrage une sauvegarde manquee).
+check "sans « pre », l'installation avant la sauvegarde automatique" "$("${RESCUE}" --pick-snapshot)" "3"
 
 cat > "${STUB_SNAPPER_CSV}" <<'CSV'
 number,type,date,description
 0,single,,current
 CSV
 check "aucun instantane utilisable: rien, pas le 0" "$("${RESCUE}" --pick-snapshot)" ""
+
+# Panne du 2026-10-04: un instantane « boot » est pris PENDANT le demarrage qui
+# echoue. Le restaurer remettait la panne elle-meme, a chaque tour.
+cat > "${STUB_SNAPPER_CSV}" <<'CSV'
+number,type,date,description
+0,single,,current
+1,single,2026-10-04 13:10:50,Installation initiale AuxiNuxOS
+2,single,2026-10-04 13:32:49,boot
+3,single,2026-10-04 14:00:07,timeline
+4,single,2026-10-04 14:06:49,boot
+5,single,2026-10-04 14:07:26,boot
+CSV
+check "jamais un instantane de demarrage; l'installation avant la sauvegarde du jour" \
+  "$("${RESCUE}" --pick-snapshot)" "1"
+
+cat > "${STUB_SNAPPER_CSV}" <<'CSV'
+number,type,date,description
+0,single,,current
+3,single,2026-10-04 14:00:07,timeline
+5,single,2026-10-04 14:07:26,boot
+CSV
+check "a defaut, la derniere sauvegarde quotidienne" "$("${RESCUE}" --pick-snapshot)" "3"
+
+cat > "${STUB_SNAPPER_CSV}" <<'CSV'
+number,type,date,description
+0,single,,current
+7,pre,2026-09-11 10:15:00,auxi upgrade
+8,post,2026-09-11 10:18:00,
+CSV
+check "jamais un « post »" "$("${RESCUE}" --pick-snapshot)" "7"
+
+echo "== 10. Verrou anti-boucle: pas deux restaurations automatiques du meme instantane =="
+RSTATE="${WORK}/rescue-state"
+mkdir -p "${RSTATE}"
+: > "${WORK}/snapper-root"
+cat > "${STUBS}/auxi" <<'STUB'
+#!/bin/sh
+echo "$*" >> "${STUB_AUXI_LOG}"
+exit 0
+STUB
+for c in clear journalctl; do printf '#!/bin/sh\nexit 0\n' > "${STUBS}/${c}"; done
+chmod 755 "${STUBS}/auxi" "${STUBS}/clear" "${STUBS}/journalctl"
+export STUB_AUXI_LOG="${WORK}/auxi.log"
+run_rescue() {
+  : > "${STUB_AUXI_LOG}"
+  AUXINUX_STATE_DIR="${RSTATE}" AUXINUX_SNAPPER_CONF="${WORK}/snapper-root" \
+    AUXINUX_SENTINEL="${WORK}/absent" timeout 20 "${RESCUE}" --auto </dev/null >/dev/null 2>&1
+}
+printf '7\n' > "${RSTATE}/last-restore"
+run_rescue
+check "instantane deja restaure: aucune restauration automatique" "$(wc -l < "${STUB_AUXI_LOG}")" "0"
+rm -f "${RSTATE}/last-restore"
+# Sans restauration anterieure, le 3e echec restaure bien (sleep neutralise;
+# le stub systemctl absorbe le redemarrage).
+printf '#!/bin/sh\nexit 0\n' > "${STUBS}/sleep"; chmod 755 "${STUBS}/sleep"
+run_rescue
+check "premier essai: restauration automatique de l'instantane 7" "$(cat "${STUB_AUXI_LOG}")" "rollback 7 --yes"
+rm -f "${STUBS}/sleep"
 
 echo
 if [[ "${fail}" -eq 0 ]]; then echo "TOUS LES TESTS PASSENT"; else echo "DES TESTS ECHOUENT"; fi
