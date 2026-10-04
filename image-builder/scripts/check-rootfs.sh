@@ -214,6 +214,14 @@ need_file /etc/apt/apt.conf.d/80auxinux-snapshot "le hook ne serait jamais appel
 echo "-- Outils AuxiNux"
 need_exec /usr/bin/auxi "commande d'administration principale"
 need_exec /usr/bin/auxinux-center "centre de controle"
+need_package auxinux-office "pas d'AuxiNux Office, donc pas d'editeur de texte (AuxiText remplace Kate)"
+need_file /usr/share/applications/ca.auxinux.AuxiNuxOffice.Text.desktop \
+  "les fichiers texte seraient associes (mimeapps.list) a un lanceur absent"
+need_setting /etc/xdg/mimeapps.list '^text/plain=ca\.auxinux\.AuxiNuxOffice\.Text\.desktop$' \
+  "les fichiers texte ne s'ouvriraient pas avec AuxiText"
+need_file /etc/apt/sources.list.d/auxinuxos-apps.sources "AuxiNux Office ne recevrait aucune mise a jour"
+need_file /etc/apt/sources.list.d/auxinuxos-kernel-dev.sources.disabled \
+  "le depot des noyaux en essai ne serait pas propose dans le centre de controle"
 need_file /usr/share/applications/ca.auxinux.Center.desktop "le centre de controle n'apparaitrait dans aucun menu"
 # Executable: sinon Plasma demande s'il faut faire confiance au raccourci.
 need_exec "/etc/skel/Desktop/AuxiNux OS Center.desktop" "aucun raccourci du centre de controle sur le bureau des nouveaux comptes"

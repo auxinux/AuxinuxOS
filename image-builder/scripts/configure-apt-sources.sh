@@ -118,6 +118,39 @@ sudo tee "${ROOTFS}/etc/apt/sources.list.d/auxinuxos-kernel.list" >/dev/null <<'
 deb [signed-by=/usr/share/keyrings/auxinuxos-archive-keyring.gpg arch=amd64,arm64] https://dep.auxinux.ca/AUXINUXOS kernel main
 EOF
 
+# Applications AuxiNux (AuxiNux Office, dont AuxiText, l'editeur de texte de
+# l'image). Meme depot racine que le noyau, meme cle de signature: aucune cle
+# de plus a verifier. Actif: auxinux-office est installe dans l'image.
+sudo rm -f "${ROOTFS}/etc/apt/sources.list.d/auxinuxos-apps.sources.disabled"
+sudo tee "${ROOTFS}/etc/apt/sources.list.d/auxinuxos-apps.sources" >/dev/null <<'EOF'
+# Applications AuxiNux: AuxiNux Office (AuxiWriter, AuxiSheet, AuxiPresent,
+# AuxiPDF, AuxiText).
+Types: deb
+URIs: https://dep.auxinux.ca/AUXINUXOS/APPS
+Suites: apps
+Components: main
+Architectures: amd64
+Signed-By: /usr/share/keyrings/auxinuxos-archive-keyring.gpg
+EOF
+
+# Noyaux en essai (suite kernel-dev). Livre DESACTIVE: c'est un choix de ceux
+# qui veulent tester un noyau avant sa sortie, pas le cas general. Active, ses
+# noyaux plus recents seraient installes a la prochaine mise a jour. Le centre
+# de controle l'active d'un clic (page Sources): il renomme le fichier, comme
+# pour Brave.
+sudo rm -f "${ROOTFS}/etc/apt/sources.list.d/auxinuxos-kernel-dev.sources"
+sudo tee "${ROOTFS}/etc/apt/sources.list.d/auxinuxos-kernel-dev.sources.disabled" >/dev/null <<'EOF'
+# Noyaux AuxiNuxOS EN ESSAI. Pour l'activer: centre de controle, page Sources,
+# ou renommer ce fichier sans « .disabled ». En cas de probleme, choisir
+# l'ancien noyau dans le menu GRUB « Options avancees ».
+Types: deb
+URIs: https://dep.auxinux.ca/AUXINUXOS
+Suites: kernel-dev
+Components: main
+Architectures: amd64
+Signed-By: /usr/share/keyrings/auxinuxos-archive-keyring.gpg
+EOF
+
 # ----------------------------------------------------------------------------
 # Architecture i386 (couche jeu): elle vient desormais du miroir AuxiNux.
 #

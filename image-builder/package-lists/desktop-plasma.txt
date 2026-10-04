@@ -70,7 +70,9 @@ xdg-desktop-portal-gtk
 # --- Applications de base du bureau ---------------------------------------
 dolphin
 konsole
-kate
+# Editeur de texte: AuxiText, d'AuxiNux Office (depot AUXINUXOS/APPS), et non
+# plus Kate (decision d'aporler, 2026-10-04). Kate est dans hors-socle.txt.
+auxinux-office
 ark
 gwenview
 okular
