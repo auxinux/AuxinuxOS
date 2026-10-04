@@ -95,7 +95,7 @@ pub fn view(app: &App) -> Element<'_, Message> {
             .spacing(8)
             .push(widget::text::heading("Assistant de configuration"))
             .push(widget::text::caption(
-                "L'assistant du premier demarrage: navigateur, LibreOffice, lecteur \
+                "L'assistant du premier demarrage: navigateur, lecteur \
                  multimedia, applications selon votre profil, outils de vie privee. \
                  Le relancer n'enleve rien: il installe ce que vous ajoutez.",
             ))

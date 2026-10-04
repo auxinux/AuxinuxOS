@@ -5,9 +5,13 @@
 //! la respecte pas a 100 %: nous imposons plein de logiciels des le depart. »
 //! L'installation est un socle -- systeme, KDE Plasma, couche Windows -- et cet
 //! assistant demande, au premier demarrage, ce que la personne veut:
-//! navigateur, LibreOffice, lecteur multimedia, profil d'usage avec ses
-//! applications suggerees, outils de vie privee. Il se relance a tout moment
-//! depuis le centre de controle.
+//! navigateur, lecteur multimedia, profil d'usage avec ses applications
+//! suggerees, outils de vie privee. Il se relance a tout moment depuis le
+//! centre de controle.
+//!
+//! La bureautique n'est plus une question (2026-10-04): AuxiNux Office est
+//! inclus dans l'image. LibreOffice reste installable depuis la page
+//! Applications.
 //!
 //! Flatpak d'abord (arbitrage du meme jour): versions recentes, isolees,
 //! desinstallables sans toucher au systeme. Une seule exception, Brave, en
@@ -70,12 +74,6 @@ pub const NAVIGATEURS: [App; 5] = [
     flatpak("org.chromium.Chromium", "Chromium", "Version libre du moteur de Chrome"),
     flatpak("com.vivaldi.Vivaldi", "Vivaldi", "Navigateur tres personnalisable"),
 ];
-
-pub const LIBREOFFICE: App = flatpak(
-    "org.libreoffice.LibreOffice",
-    "LibreOffice",
-    "Traitement de texte, tableur, presentations",
-);
 
 /// VLC en tete: c'est le lecteur que le projet recommande.
 pub const LECTEURS: [App; 3] = [
@@ -164,7 +162,6 @@ impl Profil {
 pub struct Selection {
     /// Index dans NAVIGATEURS; `None` = aucun pour l'instant.
     pub navigateur: Option<usize>,
-    pub libreoffice: bool,
     /// Index dans LECTEURS; `None` = aucun.
     pub lecteur: Option<usize>,
     pub profil: Profil,
@@ -183,7 +180,6 @@ impl Default for Selection {
         let profil = Profil::Bureautique;
         Selection {
             navigateur: Some(0),
-            libreoffice: true,
             lecteur: Some(0),
             profil,
             suggestions: defaults_for(profil),
@@ -208,9 +204,6 @@ impl Selection {
         let mut apps = Vec::new();
         if let Some(app) = self.navigateur.and_then(|i| NAVIGATEURS.get(i)) {
             apps.push(*app);
-        }
-        if self.libreoffice {
-            apps.push(LIBREOFFICE);
         }
         if let Some(app) = self.lecteur.and_then(|i| LECTEURS.get(i)) {
             apps.push(*app);
@@ -395,12 +388,11 @@ mod tests {
     }
 
     #[test]
-    fn defaults_install_a_browser_libreoffice_vlc_privacy_tools_and_bottles() {
+    fn defaults_install_a_browser_vlc_privacy_tools_and_bottles() {
         let sel = Selection::default();
         let ids = ids(&sel);
         for expected in [
             "org.mozilla.firefox",
-            "org.libreoffice.LibreOffice",
             "org.videolan.VLC",
             "org.mozilla.Thunderbird",
             "org.keepassxc.KeePassXC",
@@ -410,13 +402,14 @@ mod tests {
         }
         // Proposee mais decochee.
         assert!(!ids.contains(&"com.github.xournalpp.xournalpp"));
+        // AuxiNux Office est dans l'image: plus de suite bureautique a installer.
+        assert!(!ids.contains(&"org.libreoffice.LibreOffice"));
     }
 
     #[test]
     fn bottles_is_installed_even_when_everything_is_declined() {
         let sel = Selection {
             navigateur: None,
-            libreoffice: false,
             lecteur: None,
             profil: Profil::Bureautique,
             suggestions: vec![false; 3],
@@ -473,7 +466,6 @@ mod tests {
         all.extend(LECTEURS);
         all.extend(VIE_PRIVEE);
         all.extend(TOUJOURS);
-        all.push(LIBREOFFICE);
         for p in Profil::TOUS {
             all.extend(p.suggestions().iter().map(|(a, _)| *a));
         }

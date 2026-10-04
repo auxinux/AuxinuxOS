@@ -142,7 +142,6 @@ pub enum Message {
     AssistantBack,
     AssistantSkip,
     AssistantBrowser(Option<usize>),
-    AssistantLibreOffice(bool),
     AssistantPlayer(Option<usize>),
     AssistantProfil(crate::assistant::Profil),
     AssistantSuggestion(usize, bool),
@@ -736,10 +735,6 @@ impl Application for App {
             }
             Message::AssistantBrowser(choice) => {
                 self.selection.navigateur = choice;
-                Task::none()
-            }
-            Message::AssistantLibreOffice(yes) => {
-                self.selection.libreoffice = yes;
                 Task::none()
             }
             Message::AssistantPlayer(choice) => {

@@ -4,7 +4,8 @@
 # (redemarrage) -> SDDM -> bureau. Usage: vm-install-now.sh NOM ISO
 #
 # Choix: francais, en ligne, Toronto, clavier Francais (Canada), disque entier
-# SANS chiffrement, Firefox seul (+ Bottles, toujours installe), profil
+# SANS chiffrement, Firefox seul (+ Bottles, toujours installe; AuxiNux Office
+# est dans l'image, il n'y a plus de question bureautique), profil
 # Bureautique sans suggestion, aucun outil de vie privee -- le plus court
 # chemin qui exerce TOUTES les etapes du moteur.
 set -u
@@ -25,7 +26,7 @@ k ret; sleep 8; k ret; sleep 6; k ret; sleep 6; shot e2   # reseau, fuseau, clav
 k ret; sleep 4                                # disque (sans chiffrement)
 $V type "$name" "Marie Tremblay"; k tab; k tab; k tab
 $V type "$name" "Quebec2026"; k tab; $V type "$name" "Quebec2026"; k ret; sleep 4
-k ret; k down; k ret; k down down down; k ret  # Firefox, pas de LibreOffice, pas de lecteur
+k ret; k down down down; k ret               # Firefox, pas de lecteur (AuxiNux Office est inclus)
 k spc; k down; k spc; k ret                   # profil: aucune suggestion
 for i in 1 2 3 4 5; do k spc; k down; done; k ret   # aucun outil de vie privee
 shot e3
