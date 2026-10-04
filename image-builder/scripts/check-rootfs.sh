@@ -219,7 +219,7 @@ need_file /usr/share/applications/ca.auxinux.AuxiNuxOffice.Text.desktop \
   "les fichiers texte seraient associes (mimeapps.list) a un lanceur absent"
 need_setting /etc/xdg/mimeapps.list '^text/plain=ca\.auxinux\.AuxiNuxOffice\.Text\.desktop$' \
   "les fichiers texte ne s'ouvriraient pas avec AuxiText"
-need_file /etc/apt/sources.list.d/auxinuxos-apps.sources "AuxiNux Office ne recevrait aucune mise a jour"
+need_file /etc/apt/sources.list.d/auxinux-apps.sources "AuxiNux Office ne recevrait aucune mise a jour"
 need_file /etc/apt/sources.list.d/auxinuxos-kernel-dev.sources.disabled \
   "le depot des noyaux en essai ne serait pas propose dans le centre de controle"
 need_file /usr/share/applications/ca.auxinux.Center.desktop "le centre de controle n'apparaitrait dans aucun menu"

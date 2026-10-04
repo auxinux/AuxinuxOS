@@ -119,15 +119,18 @@ deb [signed-by=/usr/share/keyrings/auxinuxos-archive-keyring.gpg arch=amd64,arm6
 EOF
 
 # Applications AuxiNux (AuxiNux Office, dont AuxiText, l'editeur de texte de
-# l'image). Meme depot racine que le noyau, meme cle de signature: aucune cle
-# de plus a verifier. Actif: auxinux-office est installe dans l'image.
-sudo rm -f "${ROOTFS}/etc/apt/sources.list.d/auxinuxos-apps.sources.disabled"
-sudo tee "${ROOTFS}/etc/apt/sources.list.d/auxinuxos-apps.sources" >/dev/null <<'EOF'
+# l'image). Meme depot racine que le noyau, meme cle de signature (AuxiNux
+# Repository <repo@auxinux.ca>, 0E27 7CCF 3E14 E496 3499 3BC9 A042 4AF5 37AB
+# 9980): aucune cle de plus a verifier. Actif: auxinux-office est installe dans
+# l'image. La suite s'ecrit APPS, en MAJUSCULES: APT respecte la casse.
+# Forme fixee par ceux qui publient le depot (2026-10-04).
+sudo rm -f "${ROOTFS}/etc/apt/sources.list.d/auxinux-apps.sources.disabled"
+sudo tee "${ROOTFS}/etc/apt/sources.list.d/auxinux-apps.sources" >/dev/null <<'EOF'
 # Applications AuxiNux: AuxiNux Office (AuxiWriter, AuxiSheet, AuxiPresent,
 # AuxiPDF, AuxiText).
 Types: deb
-URIs: https://dep.auxinux.ca/AUXINUXOS/APPS
-Suites: apps
+URIs: https://dep.auxinux.ca/AUXINUXOS
+Suites: APPS
 Components: main
 Architectures: amd64
 Signed-By: /usr/share/keyrings/auxinuxos-archive-keyring.gpg
@@ -140,7 +143,7 @@ EOF
 # pour Brave.
 sudo rm -f "${ROOTFS}/etc/apt/sources.list.d/auxinuxos-kernel-dev.sources"
 sudo tee "${ROOTFS}/etc/apt/sources.list.d/auxinuxos-kernel-dev.sources.disabled" >/dev/null <<'EOF'
-# Noyaux AuxiNuxOS EN ESSAI. Pour l'activer: centre de controle, page Sources,
+# Noyaux d'AuxiNuxOS en cours d'essai. Pour l'activer: centre de controle, page Sources,
 # ou renommer ce fichier sans « .disabled ». En cas de probleme, choisir
 # l'ancien noyau dans le menu GRUB « Options avancees ».
 Types: deb
