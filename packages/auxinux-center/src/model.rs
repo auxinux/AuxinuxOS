@@ -227,6 +227,9 @@ pub struct Snapshot {
     pub description: String,
     /// Vrai si l'instantane a ete pose automatiquement par `auxi`.
     pub from_auxi: bool,
+    /// Algorithme de nettoyage de snapper: "number", "timeline" ou vide.
+    #[serde(default)]
+    pub cleanup: String,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -235,6 +238,10 @@ pub struct RecoveryState {
     pub available: bool,
     pub reason: String,
     pub snapshots: Vec<Snapshot>,
+    /// Numero de l'instantane sur lequel la machine a demarre depuis le menu
+    /// GRUB (mode temporaire, racine en memoire), ou `None` en temps normal.
+    #[serde(default)]
+    pub demarre_sur: Option<u32>,
 }
 
 #[cfg(test)]

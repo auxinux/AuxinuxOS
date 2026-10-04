@@ -145,12 +145,16 @@ set_cfg FSTYPE "btrfs"
 set_cfg ALLOW_GROUPS "sudo"
 set_cfg SYNC_ACL "yes"
 
-# Instantanes horaires: filet de securite pour les degats qui ne viennent pas
-# d'une transaction de paquets (mauvaise manipulation, script tiers).
+# Sauvegarde automatique QUOTIDIENNE: filet de securite pour les degats qui ne
+# viennent pas d'une transaction de paquets (mauvaise manipulation, script
+# tiers). Plus d'instantanes horaires (2026-10-04): avec eux, la page
+# Restauration du centre affichait une trentaine de points -- illisible, et
+# inquietant pour qui ne sait pas lequel choisir. Le minuteur passe a un
+# declenchement par jour (voir plus bas) et l'on garde les cinq derniers jours.
 set_cfg TIMELINE_CREATE "yes"
 set_cfg TIMELINE_CLEANUP "yes"
-set_cfg TIMELINE_LIMIT_HOURLY "5"
-set_cfg TIMELINE_LIMIT_DAILY "7"
+set_cfg TIMELINE_LIMIT_HOURLY "0"
+set_cfg TIMELINE_LIMIT_DAILY "5"
 set_cfg TIMELINE_LIMIT_WEEKLY "0"
 set_cfg TIMELINE_LIMIT_MONTHLY "0"
 set_cfg TIMELINE_LIMIT_YEARLY "0"
@@ -235,6 +239,25 @@ for unit in snapper-timeline.timer snapper-cleanup.timer grub-btrfsd.service; do
     warn "activation de ${unit} echouee."
   fi
 done
+
+# Une sauvegarde automatique par JOUR et non par heure. Persistent: une
+# machine eteinte a minuit la rattrape a son prochain demarrage.
+TIMELINE_DROPIN="${prefix}/etc/systemd/system/snapper-timeline.timer.d"
+if mkdir -p "${TIMELINE_DROPIN}" 2>/dev/null; then
+  printf '%s\n' \
+    "# AuxiNuxOS: une sauvegarde automatique par jour (setup-btrfs-rollback.sh)." \
+    "[Timer]" "OnCalendar=" "OnCalendar=daily" "Persistent=true" \
+    >"${TIMELINE_DROPIN}/10-auxinux-quotidien.conf" \
+    || warn "minuteur quotidien des sauvegardes non ecrit."
+else
+  warn "repertoire ${TIMELINE_DROPIN} non cree."
+fi
+
+# Pas d'instantane a chaque demarrage (minuteur active d'office par Debian):
+# personne ne s'en sert -- la protection au demarrage restaure le dernier
+# instantane « pre » -- et, comptes dans NUMBER_LIMIT, ils evincaient les
+# instantanes poses avant les mises a jour, les seuls vraiment utiles.
+chroot "${TARGET_ROOT}" systemctl disable snapper-boot.timer >/dev/null 2>&1 || true
 
 # 7. Instantane de reference: l'etat exact de la sortie d'usine. C'est le point
 #    de retour ultime si tout le reste a ete nettoye par la retention.

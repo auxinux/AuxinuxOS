@@ -84,6 +84,12 @@ check "ancien systeme conserve" "$(cat "${BTRFS_TOPLEVEL_MNT}"/@.rollback-*/marq
 check "nouveau @ present" "$([[ -d "${BTRFS_TOPLEVEL_MNT}/@" ]] && echo oui)" "oui"
 check "@home intact" "$([[ -d "${BTRFS_TOPLEVEL_MNT}/@home" ]] && echo oui)" "oui"
 check "@snapshots preserve" "$([[ -d "${BTRFS_TOPLEVEL_MNT}/@snapshots/7/snapshot" ]] && echo oui)" "oui"
+# Panne du 2026-10-04: le compteur de demarrages rates est restaure avec la
+# racine. Il doit repartir de zero DANS le systeme restaure.
+check "compteur de demarrages remis a zero dans le systeme restaure" \
+  "$(cat "${BTRFS_TOPLEVEL_MNT}/@/var/lib/auxinux/boot-failures" 2>/dev/null)" "0"
+check "instantane restaure note pour le verrou anti-boucle" \
+  "$(cat "${BTRFS_TOPLEVEL_MNT}/@/var/lib/auxinux/last-restore" 2>/dev/null)" "7"
 
 echo "== 5. Echec btrfs -> restauration de l'original (cas critique) =="
 reset_fs

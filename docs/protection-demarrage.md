@@ -71,10 +71,38 @@ main.
 Le dernier instantané **`pre`**, c'est-à-dire celui posé juste avant une
 transaction de paquets. Une transaction de paquets est de loin la première cause
 d'un bureau qui ne démarre plus, et le hook dpkg garantit qu'un instantané
-existe avant chacune (voir [rollback](rollback.md)). À défaut, le plus récent,
-quel qu'il soit. L'instantané 0 (l'état courant) est toujours ignoré.
+existe avant chacune (voir [rollback](rollback.md)). À défaut, le dernier point
+posé à la main ou à l'installation, puis la dernière sauvegarde quotidienne.
+L'instantané 0 (l'état courant) est toujours ignoré, ainsi que les instantanés
+**`post`** et **`boot`**.
 
 `auxinux-rescue --pick-snapshot` affiche le choix sans rien modifier.
+
+## Boucle de restauration du 2026-10-04 (corrigée)
+
+Rapportée sur une installation en VM : une restauration depuis le centre, puis
+une restauration automatique **à chaque démarrage**, sans fin. Trois défauts
+s'additionnaient :
+
+1. **Le compteur était restauré avec le système.** `/var/lib/auxinux` est dans
+   la racine. Un instantané pris pendant un démarrage (`snapper-boot`, une
+   seconde après l'allumage) contient un compteur déjà incrémenté : le
+   restaurer faisait croire à un bureau en panne. La remise à zéro faite par la
+   console touchait l'**ancien** système, pas le restauré. Désormais
+   `auxi rollback` remet le compteur à zéro **dans le système restauré**.
+2. **Le choix tombait sur l'instantané du démarrage en cours.** « Le plus
+   récent quel qu'il soit » était l'instantané `boot` du démarrage qui échouait.
+   Les `boot` et les `post` sont désormais exclus, et `snapper-boot` n'est plus
+   activé à l'installation.
+3. **Le menu n'attendait pas.** La console était un script `sh`, donc lancée
+   par dash, qui ne connaît pas `read -t` : le délai de 120 s échouait aussitôt
+   et la console restaurait sans attendre de réponse. Elle tourne sous bash.
+
+Verrou supplémentaire : `auxi rollback` note le numéro restauré
+(`/var/lib/auxinux/last-restore`). Si le bureau échoue encore et que la console
+choisirait **le même** instantané, elle ne restaure plus rien d'elle-même et
+attend une décision. Un instantané démarré depuis le sous-menu de GRUB
+(`auxinux.snapshot=1`) n'est plus jugé par la protection.
 
 ## Ce que ça ne couvre pas
 

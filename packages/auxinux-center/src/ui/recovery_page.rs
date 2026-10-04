@@ -7,8 +7,12 @@
 
 use cosmic::{iced, widget, Element};
 
-use crate::model::Snapshot;
+use crate::recovery::{Origine, Point};
 use crate::ui::{widgets, App, Loading, Message};
+
+/// Points montres d'emblee. Au-dela, « Afficher les autres »: une longue
+/// liste de retours en arriere possibles inquiete plus qu'elle ne rassure.
+const VISIBLES: usize = 5;
 
 pub fn view(app: &App) -> Element<'_, Message> {
     let header = widgets::header(
@@ -41,9 +45,28 @@ pub fn view(app: &App) -> Element<'_, Message> {
              si une mise a jour tourne mal.",
         ),
         Loading::Ready(state) => {
-            let mut col = widget::Column::new().spacing(8);
-            for snapshot in &state.snapshots {
-                col = col.push(snapshot_card(app, snapshot));
+            let points = crate::recovery::points(&state.snapshots);
+            let mut col = widget::Column::new().spacing(8).push(widget::text::caption(
+                "En cas de probleme, choisissez le point le plus recent d'AVANT le \
+                 probleme. Vos fichiers personnels ne sont jamais touches.",
+            ));
+            let caches = points.len().saturating_sub(VISIBLES);
+            for (i, point) in points.into_iter().enumerate() {
+                // L'etat d'origine reste toujours visible: c'est le retour
+                // ultime, celui qu'on cherche quand tout le reste a echoue.
+                if app.recovery_show_all || i < VISIBLES || point.origine == Origine::Installation {
+                    col = col.push(point_card(app, point));
+                }
+            }
+            if caches > 0 {
+                col = col.push(
+                    widget::button::text(if app.recovery_show_all {
+                        "Afficher seulement les plus recents".to_string()
+                    } else {
+                        format!("Afficher les {caches} autres points")
+                    })
+                    .on_press(Message::ToggleAllSnapshots),
+                );
             }
             widget::scrollable(col).height(iced::Length::Fill).into()
         }
@@ -57,11 +80,65 @@ pub fn view(app: &App) -> Element<'_, Message> {
 
     let mut column = widget::Column::new().spacing(16).push(header);
 
-    if available {
+    let demarre_sur = app.recovery.ready().and_then(|s| s.demarre_sur);
+    if let Some(n) = demarre_sur {
+        column = column.push(temporary_card(app, n));
+    } else if available {
         column = column.push(create_card(app));
     }
 
     column.push(body).into()
+}
+
+/// Demarrage sur un instantane depuis GRUB: dire ou l'on est, que c'est
+/// temporaire, et comment le rendre definitif.
+fn temporary_card(app: &App, number: u32) -> Element<'_, Message> {
+    let titre = app
+        .recovery
+        .ready()
+        .and_then(|s| {
+            crate::recovery::points(&s.snapshots)
+                .into_iter()
+                .find(|p| p.number == number)
+                .map(|p| format!("« {} » du {}", p.titre, p.date))
+        })
+        .unwrap_or_else(|| format!("n° {number}"));
+
+    let action: Element<Message> = if app.pending_rollback == Some(number) {
+        widget::Row::new()
+            .spacing(8)
+            .push(
+                widget::button::destructive("Confirmer: garder cet etat")
+                    .on_press(Message::Rollback(number)),
+            )
+            .push(widget::button::standard("Annuler").on_press(Message::ConfirmRollback(None)))
+            .into()
+    } else {
+        widget::button::suggested("Garder cet etat definitivement")
+            .on_press(Message::ConfirmRollback(Some(number)))
+            .into()
+    };
+
+    widget::container(
+        widget::Column::new()
+            .spacing(8)
+            .push(widget::text::heading("Vous utilisez un point de restauration, temporairement"))
+            .push(widget::text::body(format!(
+                "Le systeme a demarre sur le point {titre}, choisi dans le menu de \
+                 demarrage. Rien n'est encore restaure: ce que vous faites maintenant \
+                 sera perdu au prochain redemarrage."
+            )))
+            .push(widget::text::caption(
+                "Si tout fonctionne, gardez cet etat: il remplacera le systeme au \
+                 prochain redemarrage (l'ancien est conserve, et vos fichiers \
+                 personnels ne sont pas touches). Sinon, redemarrez normalement.",
+            ))
+            .push(action),
+    )
+    .class(cosmic::theme::Container::Card)
+    .padding(14)
+    .width(iced::Length::Fill)
+    .into()
 }
 
 fn create_card(app: &App) -> Element<'_, Message> {
@@ -98,32 +175,24 @@ fn create_card(app: &App) -> Element<'_, Message> {
     .into()
 }
 
-fn snapshot_card<'a>(app: &'a App, snapshot: &'a Snapshot) -> Element<'a, Message> {
-    let description = if snapshot.description.is_empty() {
-        format!("Instantane {}", snapshot.number)
-    } else {
-        snapshot.description.clone()
-    };
-
-    let origin = if snapshot.from_auxi {
-        "Cree automatiquement avant une operation de paquets"
-    } else {
-        "Cree manuellement ou par la planification horaire"
+fn point_card(app: &App, point: Point) -> Element<'_, Message> {
+    let origine = match point.origine {
+        Origine::Installation => "Le systeme tel qu'il etait juste apres l'installation",
+        Origine::AvantModification => "Pose automatiquement avant une modification des logiciels",
+        Origine::Quotidien => "Sauvegarde automatique, une par jour",
+        Origine::Manuel => "Cree par vous",
     };
 
     let info = widget::Column::new()
         .spacing(2)
         .width(iced::Length::Fill)
-        .push(widget::text::heading(description))
-        .push(widget::text::caption(format!(
-            "N° {} · {} · {}",
-            snapshot.number, snapshot.date, snapshot.kind
-        )))
-        .push(widget::text::caption(origin));
+        .push(widget::text::heading(point.titre))
+        .push(widget::text::caption(point.date))
+        .push(widget::text::caption(origine));
 
     // Confirmation en deux temps sur la fiche concernee: pas de boite de
     // dialogue modale qui masquerait la date a laquelle on revient.
-    let action: Element<Message> = if app.pending_rollback == Some(snapshot.number) {
+    let action: Element<Message> = if app.pending_rollback == Some(point.number) {
         widget::Column::new()
             .spacing(6)
             .push(widget::text::caption(
@@ -135,7 +204,7 @@ fn snapshot_card<'a>(app: &'a App, snapshot: &'a Snapshot) -> Element<'a, Messag
                     .spacing(8)
                     .push(
                         widget::button::destructive("Restaurer et redemarrer plus tard")
-                            .on_press(Message::Rollback(snapshot.number)),
+                            .on_press(Message::Rollback(point.number)),
                     )
                     .push(
                         widget::button::standard("Annuler")
@@ -145,17 +214,24 @@ fn snapshot_card<'a>(app: &'a App, snapshot: &'a Snapshot) -> Element<'a, Messag
             .into()
     } else {
         widget::button::standard("Restaurer")
-            .on_press(Message::ConfirmRollback(Some(snapshot.number)))
+            .on_press(Message::ConfirmRollback(Some(point.number)))
             .into()
     };
 
-    widget::container(
+    // En attente de confirmation, la question passe SOUS la fiche: a cote, elle
+    // ecrasait le titre et la date en une colonne de quelques lettres.
+    let content: Element<Message> = if app.pending_rollback == Some(point.number) {
+        widget::Column::new().spacing(10).push(info).push(action).into()
+    } else {
         widget::Row::new()
             .spacing(12)
             .align_y(iced::Alignment::Center)
             .push(info)
-            .push(action),
-    )
+            .push(action)
+            .into()
+    };
+
+    widget::container(content)
     .class(cosmic::theme::Container::Card)
     .padding(12)
     .width(iced::Length::Fill)
