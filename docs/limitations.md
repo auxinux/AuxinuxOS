@@ -66,6 +66,16 @@ en VM par une installation complète sans intervention (UEFI, en ligne, sans
 chiffrement, Firefox + Bottles) jusqu'au bureau du système installé.
 L'ISO 20261003 a été retirée.
 
+**Remplacée le 2026-10-04 par `auxinuxos-0.2.0-20261004-amd64.iso`**
+(commit `d15a505`, sha256 `17aa3609…95fea70b`, 2,53 Go) : **AuxiNux Office**
+inclus (dépôt `AUXINUXOS` suite `APPS`, actif) ; **AuxiText** remplace Kate
+comme éditeur de texte ; plus de question « bureautique » dans l'assistant ni
+dans l'installateur ; dépôt des noyaux en essai (`kernel-dev`) livré
+**désactivé**, activable dans le centre, page Sources. Validée en VM par une
+installation complète (Install NOW) : un `.txt` s'ouvre dans AuxiText, Kate
+est absent, la page Sources montre APPS actif et kernel-dev désactivé.
+L'ISO 20261003-2 a été retirée.
+
 Reste à valider : le démarrage par le chemin UEFI de secours (`EFI/BOOT`, le
 micrologiciel l'a bien choisi après suppression de l'entrée NVRAM, mais l'écran
 obtenu n'a pas pu être capturé), le démarrage sur un instantané depuis le
