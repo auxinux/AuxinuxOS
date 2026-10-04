@@ -349,8 +349,15 @@ check "configuration snapper ecrite" \
   "$([[ -f "${TARGET}/etc/snapper/configs/root" ]] && echo oui)" "oui"
 check "sous-volume racine declare" \
   "$(grep -c '^SUBVOLUME="/"$' "${TARGET}/etc/snapper/configs/root")" "1"
-check "instantanes horaires actives" \
+check "sauvegardes automatiques actives" \
   "$(grep -c '^TIMELINE_CREATE="yes"$' "${TARGET}/etc/snapper/configs/root")" "1"
+check "plus d'instantanes horaires" \
+  "$(grep -c '^TIMELINE_LIMIT_HOURLY="0"$' "${TARGET}/etc/snapper/configs/root")" "1"
+check "cinq jours de sauvegardes" \
+  "$(grep -c '^TIMELINE_LIMIT_DAILY="5"$' "${TARGET}/etc/snapper/configs/root")" "1"
+check "minuteur quotidien" \
+  "$(grep -c '^OnCalendar=daily$' "${TARGET}/etc/systemd/system/snapper-timeline.timer.d/10-auxinux-quotidien.conf" 2>/dev/null)" "1"
+check "instantane au demarrage coupe" "$(grep -c 'disable snapper-boot.timer' "${CHROOT_LOG}")" "1"
 check "config declaree aux services" \
   "$(grep -c 'SNAPPER_CONFIGS="root"' "${TARGET}/etc/default/snapper")" "1"
 check "quotas BTRFS demandes" "$(grep -c 'setup-quota' "${CHROOT_LOG}")" "1"

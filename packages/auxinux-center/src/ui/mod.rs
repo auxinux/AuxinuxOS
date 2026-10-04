@@ -116,6 +116,7 @@ pub enum Message {
     SnapshotDescription(String),
     CreateSnapshot,
     ConfirmRollback(Option<u32>),
+    ToggleAllSnapshots,
     Rollback(u32),
 
     // Sources
@@ -194,6 +195,8 @@ pub struct App {
     snapshot_description: String,
     /// Instantane dont la restauration attend confirmation.
     pending_rollback: Option<u32>,
+    /// Montrer tous les points, et non les plus recents seulement.
+    recovery_show_all: bool,
 
     // Sources
     apt_sources: Loading<Vec<AptSource>>,
@@ -402,6 +405,7 @@ impl Application for App {
             recovery: Loading::Idle,
             snapshot_description: String::new(),
             pending_rollback: None,
+            recovery_show_all: false,
             apt_sources: Loading::Idle,
             presets: Vec::new(),
             remotes: Vec::new(),
@@ -613,6 +617,10 @@ impl Application for App {
                 // Une restauration ne doit jamais partir d'un seul clic: elle
                 // remplace la racine du systeme.
                 self.pending_rollback = number;
+                Task::none()
+            }
+            Message::ToggleAllSnapshots => {
+                self.recovery_show_all = !self.recovery_show_all;
                 Task::none()
             }
             Message::Rollback(number) => {

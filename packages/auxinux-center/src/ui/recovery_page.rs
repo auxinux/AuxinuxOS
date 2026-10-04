@@ -7,8 +7,12 @@
 
 use cosmic::{iced, widget, Element};
 
-use crate::model::Snapshot;
+use crate::recovery::{Origine, Point};
 use crate::ui::{widgets, App, Loading, Message};
+
+/// Points montres d'emblee. Au-dela, « Afficher les autres »: une longue
+/// liste de retours en arriere possibles inquiete plus qu'elle ne rassure.
+const VISIBLES: usize = 5;
 
 pub fn view(app: &App) -> Element<'_, Message> {
     let header = widgets::header(
@@ -41,9 +45,28 @@ pub fn view(app: &App) -> Element<'_, Message> {
              si une mise a jour tourne mal.",
         ),
         Loading::Ready(state) => {
-            let mut col = widget::Column::new().spacing(8);
-            for snapshot in &state.snapshots {
-                col = col.push(snapshot_card(app, snapshot));
+            let points = crate::recovery::points(&state.snapshots);
+            let mut col = widget::Column::new().spacing(8).push(widget::text::caption(
+                "En cas de probleme, choisissez le point le plus recent d'AVANT le \
+                 probleme. Vos fichiers personnels ne sont jamais touches.",
+            ));
+            let caches = points.len().saturating_sub(VISIBLES);
+            for (i, point) in points.into_iter().enumerate() {
+                // L'etat d'origine reste toujours visible: c'est le retour
+                // ultime, celui qu'on cherche quand tout le reste a echoue.
+                if app.recovery_show_all || i < VISIBLES || point.origine == Origine::Installation {
+                    col = col.push(point_card(app, point));
+                }
+            }
+            if caches > 0 {
+                col = col.push(
+                    widget::button::text(if app.recovery_show_all {
+                        "Afficher seulement les plus recents".to_string()
+                    } else {
+                        format!("Afficher les {caches} autres points")
+                    })
+                    .on_press(Message::ToggleAllSnapshots),
+                );
             }
             widget::scrollable(col).height(iced::Length::Fill).into()
         }
@@ -98,32 +121,24 @@ fn create_card(app: &App) -> Element<'_, Message> {
     .into()
 }
 
-fn snapshot_card<'a>(app: &'a App, snapshot: &'a Snapshot) -> Element<'a, Message> {
-    let description = if snapshot.description.is_empty() {
-        format!("Instantane {}", snapshot.number)
-    } else {
-        snapshot.description.clone()
-    };
-
-    let origin = if snapshot.from_auxi {
-        "Cree automatiquement avant une operation de paquets"
-    } else {
-        "Cree manuellement ou par la planification horaire"
+fn point_card(app: &App, point: Point) -> Element<'_, Message> {
+    let origine = match point.origine {
+        Origine::Installation => "Le systeme tel qu'il etait juste apres l'installation",
+        Origine::AvantModification => "Pose automatiquement avant une modification des logiciels",
+        Origine::Quotidien => "Sauvegarde automatique, une par jour",
+        Origine::Manuel => "Cree par vous",
     };
 
     let info = widget::Column::new()
         .spacing(2)
         .width(iced::Length::Fill)
-        .push(widget::text::heading(description))
-        .push(widget::text::caption(format!(
-            "N° {} · {} · {}",
-            snapshot.number, snapshot.date, snapshot.kind
-        )))
-        .push(widget::text::caption(origin));
+        .push(widget::text::heading(point.titre))
+        .push(widget::text::caption(point.date))
+        .push(widget::text::caption(origine));
 
     // Confirmation en deux temps sur la fiche concernee: pas de boite de
     // dialogue modale qui masquerait la date a laquelle on revient.
-    let action: Element<Message> = if app.pending_rollback == Some(snapshot.number) {
+    let action: Element<Message> = if app.pending_rollback == Some(point.number) {
         widget::Column::new()
             .spacing(6)
             .push(widget::text::caption(
@@ -135,7 +150,7 @@ fn snapshot_card<'a>(app: &'a App, snapshot: &'a Snapshot) -> Element<'a, Messag
                     .spacing(8)
                     .push(
                         widget::button::destructive("Restaurer et redemarrer plus tard")
-                            .on_press(Message::Rollback(snapshot.number)),
+                            .on_press(Message::Rollback(point.number)),
                     )
                     .push(
                         widget::button::standard("Annuler")
@@ -145,7 +160,7 @@ fn snapshot_card<'a>(app: &'a App, snapshot: &'a Snapshot) -> Element<'a, Messag
             .into()
     } else {
         widget::button::standard("Restaurer")
-            .on_press(Message::ConfirmRollback(Some(snapshot.number)))
+            .on_press(Message::ConfirmRollback(Some(point.number)))
             .into()
     };
 

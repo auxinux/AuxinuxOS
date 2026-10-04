@@ -227,6 +227,9 @@ pub struct Snapshot {
     pub description: String,
     /// Vrai si l'instantane a ete pose automatiquement par `auxi`.
     pub from_auxi: bool,
+    /// Algorithme de nettoyage de snapper: "number", "timeline" ou vide.
+    #[serde(default)]
+    pub cleanup: String,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
