@@ -2,3 +2,13 @@
 application/x-ms-dos-executable=auxinux-windows-wizard.desktop
 application/x-msi=auxinux-windows-wizard.desktop
 application/x-ms-shortcut=auxinux-windows-wizard.desktop
+# Editeur de texte: AuxiText (AuxiNux Office), et non plus Kate.
+text/plain=ca.auxinux.AuxiNuxOffice.Text.desktop
+text/x-log=ca.auxinux.AuxiNuxOffice.Text.desktop
+text/markdown=ca.auxinux.AuxiNuxOffice.Text.desktop
+application/json=ca.auxinux.AuxiNuxOffice.Text.desktop
+application/xml=ca.auxinux.AuxiNuxOffice.Text.desktop
+text/xml=ca.auxinux.AuxiNuxOffice.Text.desktop
+application/yaml=ca.auxinux.AuxiNuxOffice.Text.desktop
+application/x-yaml=ca.auxinux.AuxiNuxOffice.Text.desktop
+text/x-yaml=ca.auxinux.AuxiNuxOffice.Text.desktop

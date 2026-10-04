@@ -19,7 +19,7 @@ scripts : `post-install-cleanup.sh`, `setup-btrfs-rollback.sh`,
   Bilingue : langue, connexion Internet (choix d’un réseau Wi-Fi si une carte
   est détectée), fuseau, clavier (appliqué tout de suite à la console), disque
   entier et chiffrement LUKS optionnel, compte administrateur, puis — en ligne
-  seulement — les questions de l’assistant (navigateur, LibreOffice, lecteur,
+  seulement — les questions de l’assistant (navigateur, lecteur multimédia,
   profil et applications, vie privée). Résumé avec confirmation tapée
   (`OUI`/`YES`), barre de progression globale, diapositives, journal (`J`).
 - **Moteur** : `auxinux-install-engine` (bash, root). Lit un fichier

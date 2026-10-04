@@ -18,7 +18,7 @@ use ratatui::text::{Line, Span, Text};
 use ratatui::widgets::{Block, Borders, Gauge, List, ListItem, ListState, Paragraph, Wrap};
 use ratatui::{DefaultTerminal, Frame};
 
-use crate::assistant::{Profil, Selection, LECTEURS, LIBREOFFICE, NAVIGATEURS, VIE_PRIVEE};
+use crate::assistant::{Profil, Selection, LECTEURS, NAVIGATEURS, VIE_PRIVEE};
 use crate::progress::{self, Parsed};
 use crate::systeme::{self, tr, Clavier, Configuration, Disque, Langue, Wifi, CLAVIERS};
 
@@ -36,7 +36,6 @@ enum Ecran {
     Chiffrement,
     Compte,
     Navigateur,
-    Bureautique,
     Lecteur,
     Profil,
     ViePrivee,
@@ -210,8 +209,7 @@ impl App {
             Disque | Chiffrement => Compte,
             Compte if self.en_ligne => Navigateur,
             Compte => Profil,
-            Navigateur => Bureautique,
-            Bureautique => Lecteur,
+            Navigateur => Lecteur,
             Lecteur => Profil,
             Profil if self.en_ligne => ViePrivee,
             Profil | ViePrivee => Resume,
@@ -231,8 +229,7 @@ impl App {
             Compte if self.chiffrer => Chiffrement,
             Compte => Disque,
             Navigateur => Compte,
-            Bureautique => Navigateur,
-            Lecteur => Bureautique,
+            Lecteur => Navigateur,
             Profil if self.en_ligne => Lecteur,
             Profil => Compte,
             ViePrivee => Profil,
@@ -288,10 +285,6 @@ impl App {
             Ecran::Compte => self.touche_compte(k),
             Ecran::Navigateur => self.liste(k, NAVIGATEURS.len() + 1, |a, i| {
                 a.selection.navigateur = (i < NAVIGATEURS.len()).then_some(i);
-                true
-            }),
-            Ecran::Bureautique => self.liste(k, 2, |a, i| {
-                a.selection.libreoffice = i == 0;
                 true
             }),
             Ecran::Lecteur => self.liste(k, LECTEURS.len() + 1, |a, i| {
@@ -880,15 +873,6 @@ impl App {
                 items.push(self.t("Aucun pour l'instant", "None for now").into());
                 self.dessiner_liste(f, corps, self.t("Quel navigateur voulez-vous ?", "Which web browser do you want?"), items)
             }
-            Ecran::Bureautique => self.dessiner_liste(
-                f,
-                corps,
-                self.t("Voulez-vous LibreOffice (texte, tableur, présentations) ?", "Do you want LibreOffice (documents, spreadsheets, slides)?"),
-                vec![
-                    format!("{} {}", self.t("Oui, installer", "Yes, install"), LIBREOFFICE.name),
-                    self.t("Non merci", "No thanks").into(),
-                ],
-            ),
             Ecran::Lecteur => {
                 let mut items: Vec<String> = LECTEURS.iter().map(|a| format!("{}  —  {}", a.name, a.summary)).collect();
                 items.push(self.t("Aucun", "None").into());
@@ -947,7 +931,6 @@ impl App {
             Ecran::Chiffrement => self.t("Chiffrement", "Encryption"),
             Ecran::Compte => self.t("Compte", "Account"),
             Ecran::Navigateur => self.t("Navigateur", "Web browser"),
-            Ecran::Bureautique => self.t("Bureautique", "Office suite"),
             Ecran::Lecteur => self.t("Multimédia", "Media"),
             Ecran::Profil => self.t("Profil d'usage", "Usage profile"),
             Ecran::ViePrivee => self.t("Vie privée", "Privacy"),

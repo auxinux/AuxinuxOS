@@ -1,7 +1,7 @@
 //! Page ASSISTANT: le choix des applications au premier demarrage.
 //!
-//! Sept etapes, une question par ecran: bienvenue, navigateur, LibreOffice,
-//! lecteur multimedia, profil d'usage (avec ses applications suggerees), vie
+//! Six etapes, une question par ecran: bienvenue, navigateur, lecteur
+//! multimedia, profil d'usage (avec ses applications suggerees), vie
 //! privee, recapitulatif. Rien n'est installe avant le dernier ecran, et le
 //! recapitulatif montre exactement ce qui le sera. Une fois l'installation
 //! finie, une page de bilan le remplace: ce qui est installe, ce qui a echoue. Le catalogue et le calcul de
@@ -12,7 +12,7 @@ use cosmic::{iced, widget, Element};
 use crate::assistant::{self, App as Entry, Profil, LECTEURS, NAVIGATEURS, VIE_PRIVEE};
 use crate::ui::{widgets, App, Message};
 
-pub const STEPS: usize = 7;
+pub const STEPS: usize = 6;
 /// Valeur de bouton radio pour « aucun ».
 const AUCUN: usize = usize::MAX;
 
@@ -38,22 +38,13 @@ pub fn view(app: &App) -> Element<'_, Message> {
             radios(&NAVIGATEURS, sel.navigateur, Message::AssistantBrowser, "Aucun pour l'instant"),
         ),
         2 => question(
-            "Voulez-vous LibreOffice ?",
-            "Traitement de texte, tableur et presentations, compatibles avec les \
-             documents Microsoft Office.",
-            widget::Column::new()
-                .spacing(8)
-                .push(radio_yes_no(sel.libreoffice))
-                .into(),
-        ),
-        3 => question(
             "Quel lecteur multimedia voulez-vous ?",
             "Pour vos videos et votre musique. Les codecs sont deja installes: \
              tout lecteur saura lire les formats courants.",
             radios(&LECTEURS, sel.lecteur, Message::AssistantPlayer, "Aucun"),
         ),
-        4 => profil(sel),
-        5 => question(
+        3 => profil(sel),
+        4 => question(
             "Outils de vie privee",
             "Proposes par AuxiNux, coches d'avance. Decochez ceux dont vous ne \
              voulez pas.",
@@ -133,14 +124,15 @@ fn intro<'a>() -> Element<'a, Message> {
             .push(widget::text::title3("Bienvenue dans AuxiNux OS"))
             .push(widget::text::body(
                 "Votre systeme est installe avec le strict necessaire: le bureau KDE \
-                 Plasma, ses outils de base, et de quoi faire tourner les \
-                 applications Windows (Wine et Bottles).",
+                 Plasma, ses outils de base, la suite AuxiNux Office (texte, \
+                 tableur, presentations, PDF et AuxiText) et de quoi faire \
+                 tourner les applications Windows (Wine et Bottles).",
             ))
             .push(widget::text::body(
                 "Aucune autre application n'a ete choisie a votre place. Cet \
                  assistant vous demande ce que vous voulez: navigateur, \
-                 bureautique, lecteur multimedia, et des applications selon \
-                 l'usage que vous faites de votre ordinateur.",
+                 lecteur multimedia, et des applications selon l'usage que \
+                 vous faites de votre ordinateur.",
             ))
             .push(widget::text::caption(
                 "Rien n'est installe avant le dernier ecran, qui recapitule vos \
@@ -179,15 +171,6 @@ fn radios<'a>(
         move |_| on_pick(None),
     ))
     .into()
-}
-
-fn radio_yes_no<'a>(yes: bool) -> Element<'a, Message> {
-    let selected = Some(yes);
-    widget::Column::new()
-        .spacing(10)
-        .push(widget::radio(widget::text::body("Oui, installer LibreOffice"), true, selected, Message::AssistantLibreOffice))
-        .push(widget::radio(widget::text::body("Non merci"), false, selected, Message::AssistantLibreOffice))
-        .into()
 }
 
 fn checkboxes<'a>(
