@@ -238,6 +238,10 @@ pub struct RecoveryState {
     pub available: bool,
     pub reason: String,
     pub snapshots: Vec<Snapshot>,
+    /// Numero de l'instantane sur lequel la machine a demarre depuis le menu
+    /// GRUB (mode temporaire, racine en memoire), ou `None` en temps normal.
+    #[serde(default)]
+    pub demarre_sur: Option<u32>,
 }
 
 #[cfg(test)]

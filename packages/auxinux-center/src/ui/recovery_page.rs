@@ -80,11 +80,65 @@ pub fn view(app: &App) -> Element<'_, Message> {
 
     let mut column = widget::Column::new().spacing(16).push(header);
 
-    if available {
+    let demarre_sur = app.recovery.ready().and_then(|s| s.demarre_sur);
+    if let Some(n) = demarre_sur {
+        column = column.push(temporary_card(app, n));
+    } else if available {
         column = column.push(create_card(app));
     }
 
     column.push(body).into()
+}
+
+/// Demarrage sur un instantane depuis GRUB: dire ou l'on est, que c'est
+/// temporaire, et comment le rendre definitif.
+fn temporary_card(app: &App, number: u32) -> Element<'_, Message> {
+    let titre = app
+        .recovery
+        .ready()
+        .and_then(|s| {
+            crate::recovery::points(&s.snapshots)
+                .into_iter()
+                .find(|p| p.number == number)
+                .map(|p| format!("« {} » du {}", p.titre, p.date))
+        })
+        .unwrap_or_else(|| format!("n° {number}"));
+
+    let action: Element<Message> = if app.pending_rollback == Some(number) {
+        widget::Row::new()
+            .spacing(8)
+            .push(
+                widget::button::destructive("Confirmer: garder cet etat")
+                    .on_press(Message::Rollback(number)),
+            )
+            .push(widget::button::standard("Annuler").on_press(Message::ConfirmRollback(None)))
+            .into()
+    } else {
+        widget::button::suggested("Garder cet etat definitivement")
+            .on_press(Message::ConfirmRollback(Some(number)))
+            .into()
+    };
+
+    widget::container(
+        widget::Column::new()
+            .spacing(8)
+            .push(widget::text::heading("Vous utilisez un point de restauration, temporairement"))
+            .push(widget::text::body(format!(
+                "Le systeme a demarre sur le point {titre}, choisi dans le menu de \
+                 demarrage. Rien n'est encore restaure: ce que vous faites maintenant \
+                 sera perdu au prochain redemarrage."
+            )))
+            .push(widget::text::caption(
+                "Si tout fonctionne, gardez cet etat: il remplacera le systeme au \
+                 prochain redemarrage (l'ancien est conserve, et vos fichiers \
+                 personnels ne sont pas touches). Sinon, redemarrez normalement.",
+            ))
+            .push(action),
+    )
+    .class(cosmic::theme::Container::Card)
+    .padding(14)
+    .width(iced::Length::Fill)
+    .into()
 }
 
 fn create_card(app: &App) -> Element<'_, Message> {
@@ -164,13 +218,20 @@ fn point_card(app: &App, point: Point) -> Element<'_, Message> {
             .into()
     };
 
-    widget::container(
+    // En attente de confirmation, la question passe SOUS la fiche: a cote, elle
+    // ecrasait le titre et la date en une colonne de quelques lettres.
+    let content: Element<Message> = if app.pending_rollback == Some(point.number) {
+        widget::Column::new().spacing(10).push(info).push(action).into()
+    } else {
         widget::Row::new()
             .spacing(12)
             .align_y(iced::Alignment::Center)
             .push(info)
-            .push(action),
-    )
+            .push(action)
+            .into()
+    };
+
+    widget::container(content)
     .class(cosmic::theme::Container::Card)
     .padding(12)
     .width(iced::Length::Fill)

@@ -12,12 +12,44 @@ use crate::util::{run, run_pkexec};
 
 const SNAPPER_CONFIG: &str = "root";
 
+/// Couche basse de la racine quand on a demarre sur un instantane depuis GRUB
+/// (hook initramfs auxinux-snapshot-overlay): c'est la qu'est le vrai BTRFS.
+const SNAPSHOT_OVERLAY_LOWER: &str = "/run/auxinux-snapshot/lower";
+
+/// Numero de l'instantane demarre depuis le sous-menu GRUB, lu sur la ligne de
+/// commande du noyau (`auxinux.snapshot=1` et `...@snapshots/N/snapshot...`).
+///
+/// Sans cette detection, la page affichait « la racine est en overlay et non
+/// en BTRFS » puis parlait d'une installation ext4 -- faux, et inquietant au
+/// moment precis ou l'on depanne sa machine (constate le 2026-10-04).
+pub fn snapshot_boot(cmdline: &str) -> Option<u32> {
+    if !cmdline.split_whitespace().any(|w| w == "auxinux.snapshot=1") {
+        return None;
+    }
+    for marker in ["@snapshots/", ".snapshots/"] {
+        let mut rest = cmdline;
+        while let Some(i) = rest.find(marker) {
+            rest = &rest[i + marker.len()..];
+            let digits: String = rest.chars().take_while(|c| c.is_ascii_digit()).collect();
+            if !digits.is_empty() && rest[digits.len()..].starts_with("/snapshot") {
+                return digits.parse().ok();
+            }
+        }
+    }
+    None
+}
+
+fn snapshot_boot_now() -> Option<u32> {
+    snapshot_boot(&std::fs::read_to_string("/proc/cmdline").unwrap_or_default())
+}
+
 /// Vrai si la racine est un BTRFS avec une configuration snapper "root".
 fn configured() -> Result<(), String> {
     if !std::path::Path::new("/etc/snapper/configs/root").exists() {
         return Err("snapper n'est pas configure sur ce systeme".into());
     }
-    let fs = run("findmnt", &["-no", "FSTYPE", "/"]);
+    let racine = if snapshot_boot_now().is_some() { SNAPSHOT_OVERLAY_LOWER } else { "/" };
+    let fs = run("findmnt", &["-no", "FSTYPE", racine]);
     if fs.stdout.trim() != "btrfs" {
         return Err(format!(
             "la racine est en {} et non en BTRFS",
@@ -29,7 +61,7 @@ fn configured() -> Result<(), String> {
 
 pub fn state() -> RecoveryState {
     if let Err(reason) = configured() {
-        return RecoveryState { available: false, reason, snapshots: Vec::new() };
+        return RecoveryState { available: false, reason, snapshots: Vec::new(), demarre_sur: None };
     }
 
     let out = run(
@@ -41,10 +73,16 @@ pub fn state() -> RecoveryState {
             available: false,
             reason: "lecture des instantanes impossible (droits insuffisants ?)".into(),
             snapshots: Vec::new(),
+            demarre_sur: snapshot_boot_now(),
         };
     }
 
-    RecoveryState { available: true, reason: String::new(), snapshots: parse_csv(&out.stdout) }
+    RecoveryState {
+        available: true,
+        reason: String::new(),
+        snapshots: parse_csv(&out.stdout),
+        demarre_sur: snapshot_boot_now(),
+    }
 }
 
 /// Analyse la sortie CSV de snapper EN S'APPUYANT SUR L'EN-TETE, jamais sur
@@ -170,7 +208,10 @@ pub fn points(snapshots: &[Snapshot]) -> Vec<Point> {
 fn origine(s: &Snapshot) -> Origine {
     if s.description.starts_with("Installation initiale") {
         Origine::Installation
-    } else if s.from_auxi {
+    } else if s.kind == "pre" {
+        // Le type, et non la marque auxi=1: `auxi snapshot` -- donc le bouton
+        // « Creer » du centre -- pose aussi cette marque sur les points faits
+        // a la main, qui s'affichaient alors « Avant une modification ».
         Origine::AvantModification
     } else if s.cleanup == "timeline" || s.description == "timeline" {
         Origine::Quotidien
@@ -367,6 +408,14 @@ mod tests {
     }
 
     #[test]
+    fn a_manual_point_made_through_auxi_keeps_its_name() {
+        let snaps = vec![snap(2, "single", "2026-10-04 16:47:00", "avant essai pilote", true, "number")];
+        let p = points(&snaps);
+        assert_eq!(p[0].origine, Origine::Manuel);
+        assert_eq!(p[0].titre, "avant essai pilote");
+    }
+
+    #[test]
     fn transaction_titles_say_what_was_about_to_happen() {
         assert_eq!(avant("apt-get -y upgrade"), "Avant la mise a jour du systeme");
         assert_eq!(avant("/usr/bin/apt-get -y -o Dpkg::Options::=--force-confold full-upgrade"), "Avant la mise a jour du systeme");
@@ -381,5 +430,20 @@ mod tests {
         assert_eq!(date_lisible("2026-12-25 07:05:00"), "25 decembre 2026 a 7 h 05");
         assert_eq!(date_lisible("hier"), "hier");
         assert_eq!(date_lisible("2026-13-01 10:00:00"), "2026-13-01 10:00:00");
+    }
+
+    #[test]
+    fn snapshot_boot_is_read_from_the_grub_btrfs_command_line() {
+        let grub = "BOOT_IMAGE=/@snapshots/5/snapshot/boot/vmlinuz-7.2.5 root=UUID=ab \
+                    rootflags=subvol=@snapshots/5/snapshot quiet auxinux.snapshot=1";
+        assert_eq!(snapshot_boot(grub), Some(5));
+        // Disposition imbriquee des anciennes installations.
+        assert_eq!(
+            snapshot_boot("rootflags=subvol=@/.snapshots/12/snapshot auxinux.snapshot=1"),
+            Some(12)
+        );
+        // Demarrage normal: pas de marqueur, pas de mode temporaire.
+        assert_eq!(snapshot_boot("BOOT_IMAGE=/@/boot/vmlinuz rootflags=subvol=@ quiet"), None);
+        assert_eq!(snapshot_boot("auxinux.snapshot=1"), None);
     }
 }
