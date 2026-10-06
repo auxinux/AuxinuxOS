@@ -1,5 +1,5 @@
-//! Page REGLAGES: assistant de configuration, politique APT maison, profil
-//! d'usage et acces aux reglages du bureau.
+//! Page REGLAGES: assistant de configuration, applications DEB, politique APT
+//! maison, profil d'usage et acces aux reglages du bureau.
 //!
 //! Le Center ne reimplemente pas les reglages du bureau: il y renvoie.
 //! Dupliquer les panneaux du bureau produirait deux endroits pour changer la
@@ -41,6 +41,38 @@ pub fn view(app: &App) -> Element<'_, Message> {
                     .push(
                         widget::toggler(app.apt_direct).on_toggle(Message::ToggleAptPolicy),
                     ),
+            ),
+    )
+    .class(cosmic::theme::Container::Card)
+    .padding(14)
+    .width(iced::Length::Fill);
+
+    // Distinct d'APT direct: on peut vouloir des applications DEB dans le
+    // centre tout en gardant apt/apt-get renvoyes vers auxi.
+    let deb = widget::container(
+        widget::Column::new()
+            .spacing(8)
+            .push(widget::text::heading("Applications DEB"))
+            .push(widget::text::caption(
+                "Par defaut, les applications s'installent depuis Flatpak \
+                 (Flathub), isolees du systeme. Activer l'installation DEB ajoute \
+                 une liste deroulante Flatpak / DEB a la page Applications. Flatpak \
+                 reste prioritaire: « auxi install » ne prend le paquet DEB que si \
+                 aucun Flatpak n'existe.",
+            ))
+            .push(
+                widget::Row::new()
+                    .spacing(12)
+                    .align_y(iced::Alignment::Center)
+                    .push(
+                        widget::text::body(if app.deb_apps {
+                            "Installation DEB: active"
+                        } else {
+                            "Installation DEB: desactivee (recommande)"
+                        })
+                        .width(iced::Length::Fill),
+                    )
+                    .push(widget::toggler(app.deb_apps).on_toggle(Message::ToggleDebApps)),
             ),
     )
     .class(cosmic::theme::Container::Card)
@@ -136,7 +168,7 @@ pub fn view(app: &App) -> Element<'_, Message> {
             ))
             .push(
                 widget::button::text("Site du projet")
-                    .on_press(Message::OpenUrl("https://auxinux.ca/".into())),
+                    .on_press(Message::OpenUrl("https://os.auxinux.ca/auxinuxos".into())),
             ),
     )
     .class(cosmic::theme::Container::Card)
@@ -151,6 +183,7 @@ pub fn view(app: &App) -> Element<'_, Message> {
                 widget::Column::new()
                     .spacing(12)
                     .push(assistant)
+                    .push(deb)
                     .push(apt)
                     .push(profile)
                     .push(desktop)

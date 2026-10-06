@@ -4,7 +4,7 @@ version = "0.2.0"
 edition = "2021"
 description = "AuxiNux OS Center — centre de controle: applications, mises a jour, sante, sources, reglages, restauration"
 license = "GPL-3.0-or-later"
-repository = "https://auxinux.ca/"
+repository = "https://os.auxinux.ca/auxinuxos"
 
 [[bin]]
 name = "auxinux-center"

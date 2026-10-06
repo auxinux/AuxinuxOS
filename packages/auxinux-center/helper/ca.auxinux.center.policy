@@ -4,7 +4,7 @@
  "http://www.freedesktop.org/standards/PolicyKit/1.0/policyconfig.dtd">
 <policyconfig>
   <vendor>AuxiNux OS</vendor>
-  <vendor_url>https://auxinux.ca/</vendor_url>
+  <vendor_url>https://os.auxinux.ca/auxinuxos</vendor_url>
 
   <!--
     Action dediee a l'ajout d'un depot APT depuis le centre de controle.

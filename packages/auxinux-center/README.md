@@ -27,9 +27,11 @@ Go n'offre pas de binding GUI qui s'intègre au bureau.
 
 ## Sections
 
-- **Applications** — recherche, installation, désinstallation. Source par défaut
-  **Flathub**, bascule possible vers **AuxiNux (DEB)**. La fiche affiche
-  toujours l'identifiant réellement visé pour la source choisie.
+- **Applications** — recherche, installation, désinstallation. **Flatpak
+  (Flathub) seulement**, sauf si l'installation DEB est activée dans les
+  Réglages (`auxi set deb=true`) : une liste déroulante Flatpak / DEB, sous les
+  boutons de vue, bascule alors toute la page. La fiche affiche toujours
+  l'identifiant réellement visé pour la source affichée.
 - **Mises à jour** — applications Flatpak, paquets DEB et système, avec le
   rappel qu'un point de restauration est créé automatiquement avant.
 - **Santé du système** — espace disque, mémoire, services en échec, mises à

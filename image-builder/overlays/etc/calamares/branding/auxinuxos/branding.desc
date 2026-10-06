@@ -19,9 +19,9 @@ strings:
     versionedName:       AuxiNux OS 0.2.0
     shortVersionedName:  AuxiNux OS 0.2.0
     bootloaderEntryName: AuxiNuxOS
-    productUrl:          https://auxinux.ca/
-    supportUrl:          https://auxinux.ca/
-    releaseNotesUrl:     https://auxinux.ca/
+    productUrl:          https://os.auxinux.ca/auxinuxos
+    supportUrl:          https://os.auxinux.ca/auxinuxos
+    releaseNotesUrl:     https://os.auxinux.ca/auxinuxos
 
 # productWelcome = bandeau affiche en haut de la page d'accueil (pas de fond).
 # productWallpaper VOLONTAIREMENT absent: sinon l'image remplit l'arriere-plan

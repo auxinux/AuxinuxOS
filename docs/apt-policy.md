@@ -14,9 +14,38 @@ Exemples:
 auxi update
 auxi upgrade
 auxi search firefox
+auxi install gimp                 # Flatpak org.gimp.GIMP
 auxi install org.mozilla.firefox
-auxi install --deb nom-du-paquet
+sudo auxi install --deb nom-du-paquet   # seulement si deb=true (voir plus bas)
 ```
+
+## Applications: Flatpak d'abord
+
+Les applications s'installent depuis **Flatpak (Flathub)**. `auxi install NOM`
+reconnaît l'identifiant complet (`org.gimp.GIMP`), son dernier composant
+(`gimp`) ou le nom affiché (`obs-studio` pour « OBS Studio »), sans tenir
+compte de la casse ni des tirets. Rien n'est deviné au-delà : sans
+correspondance exacte, `auxi` affiche les applications proches au lieu d'en
+choisir une.
+
+L'installation **DEB** d'applications est désactivée par défaut :
+
+```bash
+sudo auxi set deb=true    # aussi: Réglages du centre, « Applications DEB »
+sudo auxi set deb=false
+```
+
+Une fois activée, Flatpak reste **toujours** prioritaire : `auxi install NOM`
+ne prend le paquet DEB que si aucun Flatpak ne correspond. Le centre ajoute
+alors une liste déroulante Flatpak / DEB à la page Applications, et
+`auxi search` liste aussi les paquets DEB.
+
+Désactivée, `auxi install --deb` refuse un paquet **nouveau**, mais met
+toujours à jour un paquet déjà installé (le centre s'en sert pour AuxiNux
+Office). Les mises à jour du système (`auxi update`, `auxi upgrade`) ne
+dépendent pas de ce réglage. Le réglage vit dans `/etc/auxinux/apps.conf`
+(`DEB_APPS=0|1`), distinct d'`apt.conf` : on peut vouloir des applications DEB
+tout en gardant `apt` et `apt-get` renvoyés vers `auxi`.
 
 ## Reactivation explicite
 

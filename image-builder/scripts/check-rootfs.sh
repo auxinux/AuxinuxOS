@@ -230,6 +230,8 @@ need_file /usr/share/polkit-1/actions/ca.auxinux.center.policy "l'assistant priv
 need_exec /usr/lib/auxinux/post-install-cleanup.sh "les artefacts du live resteraient sur le systeme installe"
 need_exec /usr/lib/auxinux/verify-installed-boot.sh "une installation produisant un noyau illisible s'annoncerait reussie"
 need_exec /usr/lib/auxinux/wrappers/apt-wrapper "la politique APT ne serait pas appliquee"
+need_setting /etc/auxinux/apps.conf '^DEB_APPS=0$' \
+  "les applications doivent s'installer depuis Flatpak par defaut (auxi set deb=true pour le DEB)"
 
 echo "-- Installateur console « Install NOW »"
 need_exec /usr/bin/auxinux-installer "l'entree GRUB par defaut menerait a une console vide"

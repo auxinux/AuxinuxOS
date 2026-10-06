@@ -32,7 +32,7 @@
   <provides>
     <binary>auxinux-center</binary>
   </provides>
-  <url type="homepage">https://auxinux.ca/</url>
+  <url type="homepage">https://os.auxinux.ca/auxinuxos</url>
   <developer id="ca.auxinux">
     <name>AuxiNux</name>
   </developer>

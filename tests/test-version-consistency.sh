@@ -85,6 +85,18 @@ hits="$(cd "${ROOT}" && git ls-files \
   | xargs grep -lIE 'AuxiNux ?OS EN|Edition-Normal|[EÉ]dition normale' 2>/dev/null)"
 check "aucune mention d'edition" "$([[ -z ${hits} ]] && echo aucune || echo "${hits}")" "aucune"
 
+echo "== adresse du projet =="
+# Le site du projet est https://os.auxinux.ca/auxinuxos (aporler, 2026-10-06).
+# https://auxinux.ca/ etait affiche partout: os-release, Calamares, centre.
+# dep., git. et repo@ sont d'autres services, legitimes.
+hits="$(cd "${ROOT}" && git ls-files \
+  | grep -vFx 'tests/test-version-consistency.sh' \
+  | xargs grep -lIE 'https?://(www\.)?auxinux\.ca' 2>/dev/null)"
+check "aucun lien vers auxinux.ca au lieu de os.auxinux.ca/auxinuxos" \
+  "$([[ -z ${hits} ]] && echo aucun || echo "${hits}")" "aucun"
+check "os-release: HOME_URL" \
+  "$(grep -c '^HOME_URL="https://os.auxinux.ca/auxinuxos"$' "${ROOT}/image-builder/overlays/usr/lib/os-release")" "1"
+
 echo
 if [[ "${fail}" -eq 0 ]]; then echo "TOUS LES TESTS PASSENT"; else echo "DES TESTS ECHOUENT"; fi
 exit "${fail}"

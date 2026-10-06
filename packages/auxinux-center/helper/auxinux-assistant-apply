@@ -102,9 +102,12 @@ if [[ "${#DEBS[@]}" -gt 0 ]]; then
   fi
   # Les index sont rafraichis AVANT: ceux de l'image datent de sa construction,
   # et le depot Brave vient peut-etre d'etre active.
+  # AUXI_DEB_SYSTEME: ces paquets sont choisis par l'assistant (Brave vient de
+  # son depot), pas par une recherche d'application -- ils s'installent meme
+  # quand l'installation DEB d'applications est desactivee (auxi set deb).
   if [[ "${deb_ok}" -eq 1 ]]; then
     "${AUXI}" --yes --progress update --deb && \
-      "${AUXI}" --yes --progress install --deb "${DEBS[@]}" || deb_ok=0
+      AUXI_DEB_SYSTEME=1 "${AUXI}" --yes --progress install --deb "${DEBS[@]}" || deb_ok=0
   fi
   [[ "${deb_ok}" -eq 1 ]] || FAILED+=("${DEBS[@]}")
 fi
