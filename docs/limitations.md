@@ -99,6 +99,18 @@ raison précise d'un échec. Validée en VM avec une horloge au 2026-01-01 :
 installation Install NOW en ligne complète jusqu'au bureau. L'ISO 20261004-2 a
 été retirée.
 
+**Remplacée le même jour par `auxinuxos-0.2.0-20261006-2-amd64.iso`**
+(commit `92e6d89`, sha256 `09fbf5a2…8164204a`) : **Flatpak d'abord**.
+`auxi install gimp` installe le Flatpak `org.gimp.GIMP` (il prenait le DEB) ;
+l'installation d'applications DEB devient un réglage explicite (`auxi set
+deb=true`, carte « Applications DEB » des Réglages), désactivé par défaut, et
+même active Flatpak reste prioritaire. La page Applications du centre n'affiche
+que Flatpak, avec une liste déroulante Flatpak / DEB quand le DEB est activé.
+L'adresse du projet devient https://os.auxinux.ca/auxinuxos partout
+(os-release, Calamares, centre). Tests automatiques et compilation validés ;
+cette ISO n'a pas été démarrée en VM avant publication. L'ISO 20261006 a été
+retirée.
+
 Reste à valider : le démarrage par le chemin UEFI de secours (`EFI/BOOT`, le
 micrologiciel l'a bien choisi après suppression de l'entrée NVRAM, mais l'écran
 obtenu n'a pas pu être capturé), le démarrage sur un instantané depuis le
