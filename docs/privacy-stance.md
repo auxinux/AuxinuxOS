@@ -59,14 +59,25 @@ controle STATIQUE: il ne regarde aucun trafic reseau.
   Wallet, VPN et le service de conversation intégré. A confirmer: clef exacte de desactivation P3A selon
   la liste de politiques Brave en vigueur.
 
+- Heure (NTP), decision du 2026-10-05: `systemd-timesyncd` interroge les
+  serveurs du Conseil national de recherches du Canada (`time.nrc.ca`,
+  `time.chu.nrc.ca`), organisme public qui tient l'heure officielle du Canada;
+  le pool Debian ne sert qu'en secours. Une synchronisation est indispensable:
+  sans heure juste, aucun certificat HTTPS ne se verifie (installateur, apt,
+  Flatpak), ce qu'a montre la premiere installation sur une vraie machine.
+  L'installateur console peut aussi lire l'en-tete `Date` de dep.auxinux.ca
+  quand NTP est filtre. Fichier: `/etc/systemd/timesyncd.conf.d/50-auxinux.conf`,
+  verifie par `tests/test-no-telemetry.sh`.
+
 ## Points a auditer
 
 - **Audit reseau reel**: demarrer l'image en VM avec capture du trafic et
   refuser toute destination hors liste blanche. C'est la seule verification qui
   transformerait la promesse en preuve; `tests/test-no-telemetry.sh` n'en est
   que la moitie statique.
-- A decider explicitement, destination par destination: NTP, verification de
-  connectivite de NetworkManager, requetes Flathub du centre de controle.
+- A decider explicitement, destination par destination: verification de
+  connectivite de NetworkManager, requetes Flathub du centre de controle (NTP:
+  decide, voir plus haut).
 - Steam (profil Jeu) collecte pour son compte: son installation en Flatpak, a la
   demande, doit etre un acte explicite de l'utilisateur -- jamais une case
   pre-cochee. Respecte par l'assistant de premier demarrage (Steam propose,
