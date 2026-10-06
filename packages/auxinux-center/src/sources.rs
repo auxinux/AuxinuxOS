@@ -350,9 +350,41 @@ pub fn set_apt_wrapper(enabled: bool) -> ActionResult {
     }
 }
 
+/// Vrai quand l'installation d'APPLICATIONS en DEB est activee
+/// (`auxi set deb=true`). Sans elle, le centre n'affiche que Flatpak.
+pub fn deb_apps_enabled() -> bool {
+    deb_apps_in(&fs::read_to_string("/etc/auxinux/apps.conf").unwrap_or_default())
+}
+
+fn deb_apps_in(conf: &str) -> bool {
+    conf.lines().any(|l| l.trim() == "DEB_APPS=1")
+}
+
+pub fn set_deb_apps(enabled: bool) -> ActionResult {
+    let val = if enabled { "deb=true" } else { "deb=false" };
+    let out = run_pkexec(&["auxi", "set", val]);
+    if out.ok {
+        ActionResult::ok(if enabled {
+            "Installation DEB activee (Flatpak reste prioritaire)"
+        } else {
+            "Installation DEB desactivee: Flatpak seulement"
+        })
+    } else {
+        ActionResult::err(out.stderr)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn deb_apps_needs_the_explicit_line() {
+        assert!(deb_apps_in("DEB_APPS=1\n"));
+        assert!(!deb_apps_in("DEB_APPS=0\n"));
+        assert!(!deb_apps_in(""), "fichier absent: Flatpak seulement");
+        assert!(!deb_apps_in("#DEB_APPS=1\n"));
+    }
 
     #[test]
     fn key_urls_must_be_https_and_shell_safe() {

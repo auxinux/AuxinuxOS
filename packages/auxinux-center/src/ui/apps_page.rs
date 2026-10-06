@@ -1,14 +1,18 @@
 //! Page APPLICATIONS: recherche, mise en avant, installation, desinstallation.
 //!
-//! La bascule Flathub/DEB est explicite sur chaque fiche, avec le nom du
-//! paquet reellement vise. C'est ce que l'ancienne interface ne montrait pas:
-//! l'utilisateur choisissait « DEB » sans savoir quel paquet allait etre
-//! installe -- et ce n'etait pas toujours le bon.
+//! Flatpak (Flathub) seulement, sauf si l'installation DEB est activee dans
+//! les Reglages (`auxi set deb=true`): une liste deroulante, sous les boutons
+//! de vue, bascule alors TOUTE la page entre Flatpak et DEB. Une fiche dit
+//! toujours le nom reellement vise: sur une fiche Flathub affichee en DEB,
+//! l'identifiant Flatpak et le nom du paquet different.
 
 use cosmic::{iced, widget, Element};
 
-use crate::model::{AppEntry, SOURCE_DEB, SOURCE_FLATHUB};
-use crate::ui::{widgets, App, AppsView, Loading, Message};
+use crate::model::AppEntry;
+use crate::ui::{widgets, App, AppsView, Loading, Message, APPS_SOURCES};
+
+/// Libelles de la liste deroulante, dans l'ordre de APPS_SOURCES.
+const SOURCE_LABELS: &[&str] = &["Flatpak (Flathub)", "DEB (AuxiNux)"];
 
 pub fn view(app: &App) -> Element<'_, Message> {
     let search = widget::search_input("Rechercher une application…", &app.query)
@@ -18,7 +22,11 @@ pub fn view(app: &App) -> Element<'_, Message> {
 
     let header = widgets::header(
         "Applications",
-        "Flathub en priorite, paquets DEB disponibles en alternative",
+        if app.deb_apps {
+            "Flatpak par defaut; paquets DEB au choix dans la liste"
+        } else {
+            "Applications Flatpak (Flathub)"
+        },
         vec![
             widget::button::standard("Suggestions")
                 .on_press(Message::ShowFeatured)
@@ -44,20 +52,43 @@ pub fn view(app: &App) -> Element<'_, Message> {
             "Essayez un autre terme, ou parcourez les suggestions.",
         ),
         Loading::Ready(list) => {
+            // Seules les fiches de la source affichee; l'index reste celui de
+            // la liste complete, que Install/Remove relisent.
+            let source = app.apps_source();
             let mut col = widget::Column::new().spacing(8);
+            let mut shown = 0usize;
             for (index, entry) in list.iter().enumerate() {
-                col = col.push(card(app, index, entry));
+                if entry.has_source(source) {
+                    col = col.push(card(app, index, entry));
+                    shown += 1;
+                }
             }
-            widget::scrollable(col).height(iced::Length::Fill).into()
+            if shown == 0 {
+                widgets::empty(
+                    "Aucune application trouvee dans cette source",
+                    "Essayez un autre terme, ou l'autre source de la liste.",
+                )
+            } else {
+                widget::scrollable(col).height(iced::Length::Fill).into()
+            }
         }
     };
 
-    widget::Column::new()
-        .spacing(16)
-        .push(header)
-        .push(search)
-        .push(body)
-        .into()
+    let mut page = widget::Column::new().spacing(16).push(header);
+    // La liste deroulante n'existe que si l'installation DEB est activee:
+    // sinon il n'y a rien a choisir.
+    if app.deb_apps {
+        let selected = APPS_SOURCES.iter().position(|s| *s == app.apps_source());
+        page = page.push(
+            widget::Row::new()
+                .spacing(8)
+                .align_y(iced::Alignment::Center)
+                .push(widget::Space::new().width(iced::Length::Fill))
+                .push(widget::text::body("Source"))
+                .push(widget::dropdown(SOURCE_LABELS, selected, Message::AppsSource)),
+        );
+    }
+    page.push(search).push(body).into()
 }
 
 fn card<'a>(app: &'a App, index: usize, entry: &'a AppEntry) -> Element<'a, Message> {
@@ -89,23 +120,6 @@ fn card<'a>(app: &'a App, index: usize, entry: &'a AppEntry) -> Element<'a, Mess
     let mut actions = widget::Row::new().spacing(8).align_y(iced::Alignment::Center);
     // Inactifs pendant une autre installation: voir App::op_running.
     let idle = !app.op_running();
-
-    // La bascule n'apparait que si l'application existe reellement dans les
-    // deux sources.
-    if entry.has_source(SOURCE_FLATHUB) && entry.has_source(SOURCE_DEB) {
-        for candidate in [SOURCE_FLATHUB, SOURCE_DEB] {
-            let selected = source == candidate;
-            let label = widgets::source_label(candidate);
-            let button = if selected {
-                widget::button::suggested(label)
-            } else {
-                widget::button::standard(label)
-            };
-            actions = actions.push(
-                button.on_press(Message::SelectSource(index, candidate.to_string())),
-            );
-        }
-    }
 
     // Un seul bouton, celui qui a un sens. Afficher « Installer » ET
     // « Desinstaller » sur toutes les fiches laissait l'utilisateur deviner ce

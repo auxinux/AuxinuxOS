@@ -42,8 +42,16 @@ STUB
 chmod +x "${WORK}/apt-get"
 
 FLATPAK_RC=0
+# Sorties simulees de `flatpak search` et `flatpak remote-ls` (colonnes
+# separees par des tabulations, comme hors terminal).
+FLATPAK_SEARCH_OUT=""
+FLATPAK_REMOTE_OUT=""
 flatpak() {
   echo "flatpak $*" >>"${CALLS}"
+  case "$1" in
+    search) [[ -n "${FLATPAK_SEARCH_OUT}" ]] && printf '%s\n' "${FLATPAK_SEARCH_OUT}" ;;
+    remote-ls) [[ -n "${FLATPAK_REMOTE_OUT}" ]] && printf '%s\n' "${FLATPAK_REMOTE_OUT}" ;;
+  esac
   return "${FLATPAK_RC}"
 }
 
@@ -55,6 +63,9 @@ source "${AUXI_BIN}" >/dev/null
 set +e
 apt_real() { echo "${WORK}/apt-get"; }
 require_root_for_deb() { return 0; }
+# Installation DEB activee pour les cas 1 a 7; le cas 8 la coupe.
+APPS_CONF="${WORK}/apps.conf"
+printf 'DEB_APPS=1\n' >"${APPS_CONF}"
 
 fail=0
 check() {
@@ -132,6 +143,64 @@ check "sans option" "$(parse)" "00 "
 # `auxi rollback N --yes` confirme une restauration: ce --yes-la ne doit PAS
 # etre lu comme l'option globale.
 check "--yes apres la commande ignore" "$(parse help --yes)" "00 "
+
+echo "== 8. Flatpak d'abord, DEB seulement si active et sans Flatpak =="
+# PANNE (2026-10-06): `auxi install gimp` installait le DEB, parce que seul
+# l'identifiant exact org.gimp.GIMP etait reconnu comme Flatpak.
+GIMP_SEARCH=$'org.gimp.GIMP.Manual\tGIMP User Manual\tflathub\norg.gimp.GIMP\tGNU Image Manipulation Program\tflathub\norg.gimp.GIMP.Plugin.Resynthesizer\tResynthesizer\tflathub'
+ASSUME_YES=1 PROGRESS=0
+FLATPAK_SEARCH_OUT="${GIMP_SEARCH}"
+for etat in 0 1; do
+  printf 'DEB_APPS=%s\n' "${etat}" >"${APPS_CONF}"
+  : >"${CALLS}"
+  ( set -e; run_install gimp ) </dev/null >/dev/null 2>&1
+  check "gimp (DEB_APPS=${etat}): reussit" "$?" "0"
+  has "gimp (DEB_APPS=${etat}): le Flatpak org.gimp.GIMP, pas un greffon" "flatpak install -y --noninteractive flathub -- org.gimp.GIMP"
+  lacks "gimp (DEB_APPS=${etat}): aucun apt-get" "apt-get"
+done
+check "nom affiche: OBS Studio" "$(pick_flatpak_id obs-studio <<<$'com.obsproject.Studio\tOBS Studio\tflathub')" "com.obsproject.Studio"
+check "identifiant complet, casse ignoree" "$(pick_flatpak_id org.videolan.vlc <<<$'org.videolan.VLC\tVLC\tflathub')" "org.videolan.VLC"
+check "une autre remote que flathub ne compte pas" "$(pick_flatpak_id vlc <<<$'org.videolan.VLC\tVLC\tautre' || echo aucun)" "aucun"
+check "aucune correspondance approximative" "$(pick_flatpak_id gim <<<"${GIMP_SEARCH}" || echo aucun)" "aucun"
+
+# Aucun Flatpak: DEB desactive -> refus avec suggestions; active -> DEB.
+FLATPAK_SEARCH_OUT=$'org.example.Htop2\tHtop Deux\tflathub'
+printf 'DEB_APPS=0\n' >"${APPS_CONF}"
+: >"${CALLS}"
+out="$( (set -e; run_install htop) </dev/null 2>&1)"
+check "sans Flatpak, DEB desactive: refus" "$?" "1"
+lacks "sans Flatpak, DEB desactive: aucun apt-get" "apt-get"
+check "la suggestion est affichee" "$(grep -c 'org.example.Htop2' <<<"${out}")" "1"
+check "la facon d'activer le DEB est dite" "$(grep -c 'auxi set deb=true' <<<"${out}")" "1"
+printf 'DEB_APPS=1\n' >"${APPS_CONF}"
+: >"${CALLS}"
+( set -e; run_install htop ) </dev/null >/dev/null 2>&1
+check "sans Flatpak, DEB active: reussit" "$?" "0"
+has "sans Flatpak, DEB active: apt-get install htop" "install -- htop"
+
+# --deb explicite, DEB desactive: nouveau paquet refuse, paquet installe mis a
+# jour (chemin du centre), paquets de l'assistant acceptes.
+printf 'DEB_APPS=0\n' >"${APPS_CONF}"
+deb_installed() { [[ "$1" == "auxinux-office" ]]; }
+: >"${CALLS}"
+( set -e; run_install --deb vlc ) </dev/null >/dev/null 2>&1
+check "--deb d'un paquet nouveau, DEB desactive: refus" "$?" "1"
+lacks "--deb refuse: aucun apt-get" "apt-get"
+( set -e; run_install --deb auxinux-office ) </dev/null >/dev/null 2>&1
+check "--deb d'un paquet installe (mise a jour): accepte" "$?" "0"
+: >"${CALLS}"
+( set -e; AUXI_DEB_SYSTEME=1 run_install --deb brave-browser ) </dev/null >/dev/null 2>&1
+check "--deb de l'assistant: accepte" "$?" "0"
+has "--deb de l'assistant: apt-get install" "install -- brave-browser"
+
+# La recherche ne liste les DEB que si leur installation est activee.
+: >"${CALLS}"
+( set -e; run_search gimp ) </dev/null >/dev/null 2>&1
+lacks "recherche, DEB desactive: pas d'apt-cache" "apt-get search"
+printf 'DEB_APPS=1\n' >"${APPS_CONF}"
+: >"${CALLS}"
+( set -e; run_search gimp ) </dev/null >/dev/null 2>&1
+has "recherche, DEB active: apt-cache aussi" "apt-get search -- gimp"
 
 if [[ "${fail}" -eq 0 ]]; then
   echo "test-auxi-noninteractive: OK"

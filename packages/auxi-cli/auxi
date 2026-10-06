@@ -2,6 +2,10 @@
 set -euo pipefail
 
 APT_CONF="/etc/auxinux/apt.conf"
+# Installation d'APPLICATIONS en DEB (Center et `auxi install` sans option).
+# Distinct d'APT_CONF: on peut vouloir des applications DEB tout en gardant
+# apt/apt-get renvoyes vers auxi et son point de restauration.
+APPS_CONF="/etc/auxinux/apps.conf"
 APT_REAL_DIR="/usr/lib/auxinux/apt-real"
 SNAPPER_CONFIG="root"
 BTRFS_TOPLEVEL_MNT="/run/auxinux-btrfs-toplevel"
@@ -52,7 +56,12 @@ Usage:
   auxi rollback [NUMBER] [--yes]
   auxi rollback-cleanup [--yes]
   auxi set apt=true|false
+  auxi set deb=true|false
   auxi status
+
+Applications are installed from Flatpak (Flathub). DEB installation is only
+used when enabled (auxi set deb=true), and even then only when no Flatpak
+exists for the requested application.
 
 Global options (before the command):
   --yes       answer yes to every question, keep modified configuration files
@@ -77,7 +86,12 @@ Usage:
   auxi rollback [NUMERO] [--yes]
   auxi rollback-cleanup [--yes]
   auxi set apt=true|false
+  auxi set deb=true|false
   auxi status
+
+Les applications s'installent depuis Flatpak (Flathub). L'installation DEB
+n'est utilisee que si elle est activee (auxi set deb=true), et meme alors
+seulement quand aucun Flatpak n'existe pour l'application demandee.
 
 Options globales (avant la commande):
   --yes       repond oui a toutes les questions, garde les fichiers de
@@ -173,6 +187,107 @@ flatpak_opts() {
 
 apt_enabled() {
   [[ -r "${APT_CONF}" ]] && grep -Eq '^APT_ENABLED=1$' "${APT_CONF}"
+}
+
+deb_apps_enabled() {
+  [[ -r "${APPS_CONF}" ]] && grep -Eq '^DEB_APPS=1$' "${APPS_CONF}"
+}
+
+set_deb_apps() {
+  require_root_for_config set "deb=$1"
+  install -d -m 0755 /etc/auxinux
+  case "$1" in
+    true|1|yes)
+      printf 'DEB_APPS=1\n' >"${APPS_CONF}"
+      say \
+        "Installation DEB activee. Flatpak reste prioritaire: le DEB ne sert que si aucun Flatpak n'existe." \
+        "DEB installation enabled. Flatpak stays first: DEB is used only when no Flatpak exists."
+      ;;
+    false|0|no)
+      printf 'DEB_APPS=0\n' >"${APPS_CONF}"
+      say \
+        "Installation DEB desactivee: les applications s'installent depuis Flatpak." \
+        "DEB installation disabled: applications are installed from Flatpak."
+      ;;
+    *)
+      say_err "Valeur invalide: deb=$1" "Invalid value: deb=$1"
+      exit 64
+      ;;
+  esac
+}
+
+deb_installed() {
+  dpkg-query -W -f='${Status}' -- "$1" 2>/dev/null | grep -q 'install ok installed'
+}
+
+deb_disabled_hint() {
+  say_err \
+    "L'installation DEB est desactivee. Pour l'activer: sudo auxi set deb=true (ou Reglages du centre AuxiNux)." \
+    "DEB installation is disabled. To enable it: sudo auxi set deb=true (or the AuxiNux Center settings)."
+}
+
+# Forme comparable d'un nom: minuscules, lettres et chiffres seulement.
+# « OBS Studio », « obs-studio » et « obsstudio » se rejoignent.
+normalize_name() {
+  local s="${1,,}"
+  printf '%s' "${s//[^a-z0-9]/}"
+}
+
+# Identifiant Flathub d'une application demandee par son nom.
+#
+# `auxi install gimp` installait le DEB: seul un identifiant EXACT
+# (org.gimp.GIMP) etait reconnu comme Flatpak. On accepte desormais, sans
+# tenir compte de la casse ni des tirets: l'identifiant complet, son dernier
+# composant (org.gimp.GIMP -> gimp) ou le nom affiche (« OBS Studio »). Les
+# greffons (org.gimp.GIMP.Plugin.*) et manuels ne correspondent pas: leur
+# dernier composant et leur nom different. Rien n'est devine au-dela: sans
+# correspondance exacte, aucune application n'est choisie a la place de
+# l'utilisateur.
+#
+# $1: terme demande; lit la sortie de `flatpak search --columns=
+# application,name,remotes` sur l'entree standard.
+pick_flatpak_id() {
+  local want id name remotes tail
+  want="$(normalize_name "$1")"
+  [[ -n "${want}" ]] || return 1
+  while IFS=$'\t' read -r id name remotes; do
+    [[ "${id}" == *.* ]] || continue
+    [[ ",${remotes// /}," == *,flathub,* ]] || continue
+    tail="${id##*.}"
+    if [[ "$(normalize_name "${id}")" == "${want}" \
+          || "$(normalize_name "${tail}")" == "${want}" \
+          || "$(normalize_name "${name}")" == "${want}" ]]; then
+      printf '%s\n' "${id}"
+      return 0
+    fi
+  done
+  return 1
+}
+
+resolve_flatpak() {
+  local term="$1"
+  if flatpak remote-ls flathub --app --columns=application 2>/dev/null | grep -Fxq -- "${term}"; then
+    printf '%s\n' "${term}"
+    return 0
+  fi
+  flatpak search --columns=application,name,remotes -- "${term}" 2>/dev/null \
+    | pick_flatpak_id "${term}"
+}
+
+# Applications Flathub proches de $1, quand aucune ne correspond exactement.
+show_flatpak_suggestions() {
+  local shown=0 id name remotes
+  while IFS=$'\t' read -r id name remotes; do
+    [[ "${id}" == *.* && ",${remotes// /}," == *,flathub,* ]] || continue
+    [[ "${shown}" -eq 0 ]] && say "Applications Flatpak proches:" "Close Flatpak applications:"
+    printf '  %-40s %s\n' "${id}" "${name}"
+    shown=$((shown + 1))
+    [[ "${shown}" -ge 8 ]] && break
+  done < <(flatpak search --columns=application,name,remotes -- "$1" 2>/dev/null || true)
+  if [[ "${shown}" -gt 0 ]]; then
+    say "Installez-en une par son identifiant: auxi install IDENTIFIANT" \
+        "Install one by its identifier: auxi install IDENTIFIER"
+  fi
 }
 
 set_apt() {
@@ -576,7 +691,9 @@ run_search() {
     echo "== Flatpak =="
     flatpak search -- "${term}" || true
   fi
-  if [[ "${MODE}" == "both" || "${MODE}" == "deb" ]]; then
+  # Sans --deb, les paquets DEB ne sont proposes que si leur installation est
+  # activee: ailleurs, on les listerait sans pouvoir les installer.
+  if [[ "${MODE}" == "deb" ]] || { [[ "${MODE}" == "both" ]] && deb_apps_enabled; }; then
     echo "== DEB =="
     "$(apt_real apt-cache)" search -- "${term}" || true
   fi
@@ -600,18 +717,49 @@ run_install() {
   if [[ "${MODE}" == "flatpak" ]]; then
     flatpak install "${FLATPAK_OPTS[@]}" --or-update flathub -- "${ARGS[@]}"
   elif [[ "${MODE}" == "deb" ]]; then
+    # --deb explicite: un paquet NOUVEAU est refuse tant que l'installation DEB
+    # n'est pas activee. Un paquet deja installe passe: c'est ainsi que le
+    # centre met a jour une application DEB (AuxiNux Office), et pkexec ne
+    # transmet aucune variable d'environnement. L'assistant de premier
+    # demarrage, qui installe ses propres paquets (Brave, depuis son depot),
+    # passe AUXI_DEB_SYSTEME=1.
+    if ! deb_apps_enabled && [[ "${AUXI_DEB_SYSTEME:-0}" != "1" ]]; then
+      local pkg
+      for pkg in "${ARGS[@]}"; do
+        if ! deb_installed "${pkg}"; then
+          say_err "Paquet DEB non installe: ${pkg}" "DEB package not installed: ${pkg}"
+          deb_disabled_hint
+          exit 1
+        fi
+      done
+    fi
     require_root_for_deb install "$@"
     apt_get install -- "${ARGS[@]}"
   else
-    if flatpak remote-ls flathub --app 2>/dev/null | awk '{print $1}' | grep -Fxq "${item}"; then
-      flatpak install "${FLATPAK_OPTS[@]}" flathub -- "${item}"
-    else
-      say \
-        "Aucun Flatpak exact trouve pour ${item}; installation DEB." \
-        "No exact Flatpak found for ${item}; using DEB installation."
-      require_root_for_deb install "$@"
-      apt_get install -- "${item}"
-    fi
+    # Flatpak TOUJOURS d'abord; le DEB seulement si aucun Flatpak ne
+    # correspond, et seulement si l'installation DEB est activee.
+    local id
+    for item in "${ARGS[@]}"; do
+      if id="$(resolve_flatpak "${item}")"; then
+        [[ "${id}" != "${item}" ]] && say \
+          "${item}: application Flatpak ${id}" \
+          "${item}: Flatpak application ${id}"
+        flatpak install "${FLATPAK_OPTS[@]}" flathub -- "${id}"
+      elif deb_apps_enabled; then
+        say \
+          "Aucun Flatpak trouve pour ${item}; installation DEB." \
+          "No Flatpak found for ${item}; using DEB installation."
+        require_root_for_deb install "${item}"
+        apt_get install -- "${item}"
+      else
+        say_err \
+          "Aucune application Flatpak nommee ${item}." \
+          "No Flatpak application named ${item}."
+        show_flatpak_suggestions "${item}"
+        deb_disabled_hint
+        exit 1
+      fi
+    done
   fi
 }
 
@@ -702,7 +850,8 @@ case "${1:-}" in
     shift
     case "${1:-}" in
       apt=*) set_apt "${1#apt=}" ;;
-      *) say_err "Usage: auxi set apt=true|false" "Usage: auxi set apt=true|false"; exit 64 ;;
+      deb=*) set_deb_apps "${1#deb=}" ;;
+      *) say_err "Usage: auxi set apt=true|false | deb=true|false" "Usage: auxi set apt=true|false | deb=true|false"; exit 64 ;;
     esac
     ;;
   status)
@@ -711,6 +860,11 @@ case "${1:-}" in
       say "APT direct: actif" "Direct APT: enabled"
     else
       say "APT direct: masque, utilisez auxi" "Direct APT: hidden, use auxi"
+    fi
+    if deb_apps_enabled; then
+      say "Installation DEB: active (Flatpak reste prioritaire)" "DEB installation: enabled (Flatpak stays first)"
+    else
+      say "Installation DEB: desactivee, applications Flatpak seulement" "DEB installation: disabled, Flatpak applications only"
     fi
     if snapshots_available; then
       say "Rollback systeme: actif (BTRFS + snapper)" \

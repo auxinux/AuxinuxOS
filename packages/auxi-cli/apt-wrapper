@@ -23,7 +23,8 @@ Examples:
   auxi upgrade
   auxi search firefox
   auxi install org.mozilla.firefox
-  auxi install --deb package-name
+  sudo auxi set deb=true       (allow DEB applications)
+  sudo auxi install --deb package-name
 
 To explicitly re-enable apt in the CLI:
   sudo auxi set apt=true
@@ -37,7 +38,8 @@ Exemples:
   auxi upgrade
   auxi search firefox
   auxi install org.mozilla.firefox
-  auxi install --deb nom-du-paquet
+  sudo auxi set deb=true       (autoriser les applications DEB)
+  sudo auxi install --deb nom-du-paquet
 
 Pour reactiver explicitement apt en CLI:
   sudo auxi set apt=true

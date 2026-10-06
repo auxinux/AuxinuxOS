@@ -37,6 +37,10 @@ use crate::task::{background, staged};
 
 pub const APP_ID: &str = "ca.auxinux.Center";
 
+/// Sources de la liste deroulante de la page Applications, dans l'ordre
+/// affiche (libelles: apps_page::SOURCE_LABELS).
+pub const APPS_SOURCES: [&str; 2] = [SOURCE_FLATHUB, SOURCE_DEB];
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Page {
     Apps,
@@ -93,7 +97,8 @@ pub enum Message {
     AppsLoaded(u64, Vec<AppEntry>),
     ShowInstalled,
     ShowFeatured,
-    SelectSource(usize, String),
+    /// Source affichee par la page Applications (index dans APPS_SOURCES).
+    AppsSource(usize),
     Install(usize),
     Remove(usize),
 
@@ -133,6 +138,7 @@ pub enum Message {
 
     // Reglages
     ToggleAptPolicy(bool),
+    ToggleDebApps(bool),
     SetProfile(String),
     OpenSystemSettings,
     OpenUrl(String),
@@ -177,8 +183,9 @@ pub struct App {
     /// Numero du dernier chargement lance: une recherche relancee avant la fin
     /// de la precedente ne doit pas etre ecrasee par son resultat.
     apps_generation: u64,
-    /// Source retenue pour chaque fiche, quand l'utilisateur en change.
-    chosen_source: std::collections::HashMap<String, String>,
+    /// Source choisie dans la liste deroulante (Flathub ou DEB). Sans
+    /// effet tant que l'installation DEB n'est pas activee.
+    apps_source: String,
 
     // Mises a jour
     updates: Loading<Vec<AppEntry>>,
@@ -209,6 +216,8 @@ pub struct App {
 
     // Reglages
     apt_direct: bool,
+    /// Installation d'applications DEB activee (`auxi set deb=true`).
+    deb_apps: bool,
     profile: crate::profile::ProfileState,
 
     // Assistant de premier demarrage
@@ -231,13 +240,26 @@ pub struct App {
 }
 
 impl App {
-    /// Source active pour une fiche: le choix de l'utilisateur s'il en a fait
-    /// un, sinon la source par defaut calculee par le backend (Flathub).
+    /// Source affichee par la page Applications: Flathub, sauf si
+    /// l'installation DEB est activee ET choisie dans la liste deroulante.
+    pub fn apps_source(&self) -> &str {
+        if self.deb_apps && self.apps_source == SOURCE_DEB {
+            SOURCE_DEB
+        } else {
+            SOURCE_FLATHUB
+        }
+    }
+
+    /// Source visee par une fiche: celle de la page. La page n'affiche que les
+    /// fiches qui l'ont; le repli ne sert qu'a ne jamais viser une source
+    /// absente de la fiche.
     pub fn source_for(&self, app: &AppEntry) -> String {
-        self.chosen_source
-            .get(&app.id)
-            .cloned()
-            .unwrap_or_else(|| app.default_source.clone())
+        let source = self.apps_source();
+        if app.has_source(source) {
+            source.to_string()
+        } else {
+            app.default_source.clone()
+        }
     }
 
     fn start(&mut self) {
@@ -395,7 +417,7 @@ impl Application for App {
             apps_view: AppsView::Featured,
             apps_stage: String::new(),
             apps_generation: 0,
-            chosen_source: std::collections::HashMap::new(),
+            apps_source: SOURCE_FLATHUB.to_string(),
             updates: Loading::Idle,
             updates_stage: String::new(),
             updates_generation: 0,
@@ -413,6 +435,7 @@ impl Application for App {
             custom_body: String::new(),
             custom_key_url: String::new(),
             apt_direct: crate::sources::apt_wrapper_enabled(),
+            deb_apps: crate::sources::deb_apps_enabled(),
             profile: crate::profile::state(),
             assistant_step: 0,
             selection: crate::assistant::Selection::default(),
@@ -508,9 +531,9 @@ impl Application for App {
                 }
                 Task::none()
             }
-            Message::SelectSource(index, source) => {
-                if let Some(app) = self.apps.ready().and_then(|l| l.get(index)) {
-                    self.chosen_source.insert(app.id.clone(), source);
+            Message::AppsSource(index) => {
+                if let Some(source) = APPS_SOURCES.get(index) {
+                    self.apps_source = source.to_string();
                 }
                 Task::none()
             }
@@ -698,6 +721,11 @@ impl Application for App {
                 self.start();
                 background(move || crate::sources::set_apt_wrapper(enabled), Message::Done)
             }
+            Message::ToggleDebApps(enabled) => {
+                self.deb_apps = enabled;
+                self.start();
+                background(move || crate::sources::set_deb_apps(enabled), Message::Done)
+            }
             Message::SetProfile(name) => {
                 self.start();
                 background(move || crate::profile::set(&name), Message::Done)
@@ -843,6 +871,7 @@ impl Application for App {
                 // l'utilisateur annule l'invite polkit, le bouton doit revenir
                 // en arriere au lieu de mentir.
                 self.apt_direct = crate::sources::apt_wrapper_enabled();
+                self.deb_apps = crate::sources::deb_apps_enabled();
                 // Meme raison pour le profil d'usage: si l'invite polkit est
                 // annulee, la carte doit afficher le profil REEL, pas celui
                 // qu'on vient de cliquer.
