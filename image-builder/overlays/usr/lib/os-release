@@ -10,7 +10,7 @@ VERSION_CODENAME=trixie
 # qui affiche sinon "From Debian GNU/Linux" comme source des paquets DEB.
 ID=debian
 ID_LIKE=debian
-HOME_URL="https://auxinux.ca/"
-SUPPORT_URL="https://auxinux.ca/"
-BUG_REPORT_URL="https://auxinux.ca/"
+HOME_URL="https://os.auxinux.ca/auxinuxos"
+SUPPORT_URL="https://os.auxinux.ca/auxinuxos"
+BUG_REPORT_URL="https://os.auxinux.ca/auxinuxos"
 LOGO=auxinuxos
