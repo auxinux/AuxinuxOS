@@ -362,6 +362,11 @@ EOF
 run ln -sf "/usr/share/zoneinfo/${FUSEAU}" "${TARGET}/etc/localtime"
 printf '%s\n' "${FUSEAU}" >"${TARGET}/etc/timezone"
 printf '0.0 0 0.0\n0\nUTC\n' >"${TARGET}/etc/adjtime"
+# L'heure du live a pu etre corrigee par l'installateur (NTP, ou en-tete Date
+# de dep.auxinux.ca) alors que l'horloge de la machine est fausse: on l'y
+# inscrit, en UTC comme dit adjtime, pour que le premier demarrage parte d'une
+# heure juste. Non bloquant: certaines machines refusent l'ecriture.
+run hwclock --systohc --utc || true
 
 printf '%s\n' "${NOM_MACHINE}" >"${TARGET}/etc/hostname"
 cat >"${TARGET}/etc/hosts" <<EOF

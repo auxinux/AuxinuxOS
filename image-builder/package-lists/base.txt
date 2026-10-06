@@ -24,6 +24,17 @@ console-setup
 # du systeme installe (verifie par simulation le 2026-09-29).
 libglib2.0-bin
 ca-certificates
+# Heure: sans elle, AUCUN HTTPS. mmdebstrap --variant=apt n'installe ni
+# timesyncd ni hwclock; l'heure ne venait donc que de la pile CMOS. Sur une
+# vraie machine a l'horloge fausse (pile morte, BIOS remis a zero), le
+# certificat de dep.auxinux.ca paraissait « pas encore valide »: l'installateur
+# console ne voyait pas Internet et apt echouait sur le systeme installe
+# (premiere installation reelle, 2026-10-05). Serveurs: timesyncd.conf.d/.
+# util-linux-extra fournit hwclock, dont se servent le module hwclock de
+# Calamares et le moteur Install NOW pour inscrire l'heure juste dans la
+# machine.
+systemd-timesyncd
+util-linux-extra
 curl
 wget
 gnupg

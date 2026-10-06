@@ -157,7 +157,10 @@ def start(name, argv):
             "-chardev", "socket,id=s0,path=%s/serial.sock,server=on,wait=off,"
                         "logfile=%s/serial.log,logappend=on" % (d, d),
             "-serial", "chardev:s0",
-            "-rtc", "base=utc",
+            # AUXINUX_VM_RTC=base=2026-01-01: horloge materielle fausse, comme
+            # une pile CMOS morte -- seul moyen de voir en VM les pannes HTTPS
+            # d'une machine dont l'heure n'est pas synchronisee.
+            "-rtc", os.environ.get("AUXINUX_VM_RTC", "base=utc"),
             "-device", "qemu-xhci", "-device", "usb-tablet",
             "-pidfile", "%s/qemu.pid" % d]
     if a.vga == "virtio":

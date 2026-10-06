@@ -20,7 +20,7 @@ use ratatui::{DefaultTerminal, Frame};
 
 use crate::assistant::{Profil, Selection, LECTEURS, NAVIGATEURS, VIE_PRIVEE};
 use crate::progress::{self, Parsed};
-use crate::systeme::{self, tr, Clavier, Configuration, Disque, Langue, Wifi, CLAVIERS};
+use crate::systeme::{self, tr, Clavier, Configuration, Disque, EtatInternet, Langue, Lien, Wifi, CLAVIERS};
 
 /// Duree d'affichage d'une diapositive pendant l'installation.
 const DUREE_DIAPO: Duration = Duration::from_secs(14);
@@ -53,6 +53,15 @@ pub enum Sortie {
     Console,
 }
 
+/// Travail reseau fait APRES le prochain affichage: curl, nmcli et le reglage
+/// de l'heure bloquent plusieurs secondes, et l'ecran doit dire pourquoi il ne
+/// repond plus.
+enum Attente {
+    Verifier,
+    Connecter { ssid: String, mot_de_passe: String },
+    Horloge,
+}
+
 enum Evenement {
     Ligne(String),
     Fin(Result<(), String>),
@@ -74,6 +83,13 @@ pub struct App {
 
     // Reseau
     en_ligne: bool,
+    internet: EtatInternet,
+    liens: Vec<Lien>,
+    /// L'heure de l'ordinateur au dernier echec TLS, affichee avec la raison.
+    heure: String,
+    attente: Option<Attente>,
+    /// Le reglage de l'heure a deja ete tente pour cette verification.
+    horloge_tentee: bool,
     wifi: bool,
     reseaux: Vec<Wifi>,
     /// Reseau choisi dont on saisit le mot de passe.
@@ -117,6 +133,11 @@ impl App {
             curseur: 0,
             message: String::new(),
             en_ligne: false,
+            internet: EtatInternet::Dns,
+            liens: Vec::new(),
+            heure: String::new(),
+            attente: None,
+            horloge_tentee: false,
             wifi: false,
             reseaux: Vec::new(),
             saisie_wifi: None,
@@ -156,6 +177,10 @@ impl App {
         loop {
             self.recevoir();
             terminal.draw(|f| self.dessiner(f))?;
+            if let Some(a) = self.attente.take() {
+                self.traiter(a);
+                continue;
+            }
             if event::poll(Duration::from_millis(150))? {
                 if let Event::Key(k) = event::read()? {
                     if k.kind == KeyEventKind::Press {
@@ -176,7 +201,7 @@ impl App {
         self.message.clear();
         self.curseur = 0;
         match ecran {
-            Ecran::Reseau => self.verifier_reseau(),
+            Ecran::Reseau => self.demander(Attente::Verifier),
             Ecran::Fuseau => {
                 if self.fuseaux.is_empty() {
                     self.fuseaux = systeme::fuseaux();
@@ -239,9 +264,41 @@ impl App {
         }
     }
 
+    fn demander(&mut self, a: Attente) {
+        self.message.clear();
+        if matches!(a, Attente::Verifier | Attente::Connecter { .. }) {
+            self.horloge_tentee = false;
+        }
+        self.attente = Some(a);
+    }
+
+    fn traiter(&mut self, a: Attente) {
+        match a {
+            Attente::Verifier => self.verifier_reseau(),
+            Attente::Connecter { ssid, mot_de_passe } => match systeme::connecter_wifi(&ssid, &mot_de_passe) {
+                Ok(()) => self.verifier_reseau(),
+                Err(e) => self.message = format!("{} {e}", self.t("Connexion impossible:", "Could not connect:")),
+            },
+            Attente::Horloge => {
+                systeme::regler_horloge();
+                self.verifier_reseau();
+            }
+        }
+    }
+
     fn verifier_reseau(&mut self) {
-        self.en_ligne = systeme::internet();
+        self.internet = systeme::internet();
+        self.en_ligne = self.internet == EtatInternet::EnLigne;
+        self.liens = systeme::liens_actifs();
         self.wifi = systeme::wifi_present();
+        // Le serveur repond mais refuse la connexion securisee: l'horloge,
+        // presque toujours. Un seul reglage par verification demandee.
+        if self.internet == EtatInternet::Tls && !self.horloge_tentee {
+            self.horloge_tentee = true;
+            self.attente = Some(Attente::Horloge);
+            return;
+        }
+        self.heure = systeme::heure_locale();
         if !self.en_ligne && self.wifi {
             self.reseaux = systeme::reseaux_wifi();
         }
@@ -334,24 +391,9 @@ impl App {
                 }
                 KeyCode::Esc => self.saisie_wifi = None,
                 KeyCode::Enter => {
-                    let (ssid, mdp) = (ssid.clone(), mdp.clone());
+                    let (ssid, mot_de_passe) = (ssid.clone(), mdp.clone());
                     self.saisie_wifi = None;
-                    match systeme::connecter_wifi(&ssid, &mdp) {
-                        Ok(()) => {
-                            self.verifier_reseau();
-                            if !self.en_ligne {
-                                self.message = self
-                                    .t(
-                                        "Connecté au Wi-Fi, mais Internet ne répond pas encore. Réessayez dans un instant.",
-                                        "Connected to Wi-Fi, but the Internet is not answering yet. Try again in a moment.",
-                                    )
-                                    .into();
-                            }
-                        }
-                        Err(e) => {
-                            self.message = format!("{} {e}", self.t("Connexion impossible:", "Could not connect:"))
-                        }
-                    }
+                    self.demander(Attente::Connecter { ssid, mot_de_passe });
                 }
                 _ => {}
             }
@@ -372,13 +414,12 @@ impl App {
                     let r = &self.reseaux[self.curseur];
                     if r.securise {
                         self.saisie_wifi = Some((r.ssid.clone(), String::new()));
-                    } else if let Err(e) = systeme::connecter_wifi(&r.ssid.clone(), "") {
-                        self.message = e;
                     } else {
-                        self.verifier_reseau();
+                        let ssid = r.ssid.clone();
+                        self.demander(Attente::Connecter { ssid, mot_de_passe: String::new() });
                     }
                 } else if self.curseur == self.reseaux.len() {
-                    self.verifier_reseau();
+                    self.demander(Attente::Verifier);
                     self.curseur = 0;
                 } else {
                     // Sans Internet: socle seul, et on le dit.
@@ -951,9 +992,83 @@ impl App {
         f.render_stateful_widget(liste, l, &mut etat);
     }
 
+    /// Ce que l'installateur fait pendant que l'ecran attend.
+    fn libelle_attente(&self, a: &Attente) -> String {
+        match a {
+            Attente::Verifier => self.t("Vérification de la connexion Internet…", "Checking the Internet connection…").into(),
+            Attente::Connecter { ssid, .. } => format!("{} « {ssid} »…", self.t("Connexion au réseau", "Connecting to network")),
+            Attente::Horloge => self
+                .t(
+                    "La connexion sécurisée est refusée: réglage de l'heure de l'ordinateur (jusqu'à 20 secondes)…",
+                    "The secure connection is refused: setting the computer's clock (up to 20 seconds)…",
+                )
+                .into(),
+        }
+    }
+
+    /// Les liens reseau actifs, qu'Internet reponde ou non: la personne voit
+    /// que son Wi-Fi ou son cable est bien pris en compte.
+    fn lignes_liens(&self) -> Vec<Line<'static>> {
+        if self.liens.is_empty() {
+            return vec![Line::raw(self.t("Réseau: aucun câble branché ni Wi-Fi connecté.", "Network: no cable plugged in and no Wi-Fi connected."))];
+        }
+        let vert = Style::new().fg(Color::Green);
+        self.liens
+            .iter()
+            .map(|l| match l {
+                Lien::Cable => Line::styled(self.t("Câble réseau: connecté.", "Network cable: connected."), vert),
+                Lien::Wifi(nom) => Line::styled(format!("{} « {nom} ».", self.t("Wi-Fi: connecté à", "Wi-Fi: connected to")), vert),
+            })
+            .collect()
+    }
+
+    /// Pourquoi Internet ne repond pas, quand un lien est actif (sans lien,
+    /// l'explication suffit) ou que la connexion securisee echoue.
+    fn raison_hors_ligne(&self) -> Option<String> {
+        match self.internet {
+            EtatInternet::EnLigne => None,
+            EtatInternet::Tls => Some(format!(
+                "{} {}. {}",
+                self.t(
+                    "Le serveur AuxiNux répond, mais la connexion sécurisée échoue. L'horloge de l'ordinateur indique",
+                    "The AuxiNux server answers, but the secure connection fails. The computer's clock reads",
+                ),
+                self.heure,
+                self.t(
+                    "Si cette date ou cette heure est fausse, corrigez-la dans le BIOS/UEFI puis réessayez.",
+                    "If this date or time is wrong, correct it in the BIOS/UEFI and try again.",
+                ),
+            )),
+            _ if self.liens.is_empty() => None,
+            EtatInternet::Dns => Some(
+                self.t(
+                    "Le réseau est relié, mais aucun nom de domaine ne se résout (pas de serveur DNS, ou réseau sans sortie vers Internet).",
+                    "The network is up, but no domain name resolves (no DNS server, or a network with no way out to the Internet).",
+                )
+                .into(),
+            ),
+            EtatInternet::Injoignable => Some(
+                self.t(
+                    "Le réseau est relié, mais le serveur dep.auxinux.ca ne répond pas (réseau sans sortie, pare-feu, ou portail de connexion).",
+                    "The network is up, but the dep.auxinux.ca server does not answer (no way out, firewall, or sign-in portal).",
+                )
+                .into(),
+            ),
+        }
+    }
+
     fn dessiner_reseau(&self, f: &mut Frame, zone: Rect) {
+        if let Some(a) = &self.attente {
+            f.render_widget(
+                Paragraph::new(self.libelle_attente(a)).style(Style::new().fg(Color::Cyan)).wrap(Wrap { trim: true }),
+                zone,
+            );
+            return;
+        }
         if self.en_ligne {
-            let t = Text::from(vec![
+            let mut lignes = self.lignes_liens();
+            lignes.extend([
+                Line::raw(""),
                 Line::styled(self.t("Connecté à Internet.", "Connected to the Internet."), Style::new().fg(Color::Green).add_modifier(Modifier::BOLD)),
                 Line::raw(""),
                 Line::raw(self.t(
@@ -963,7 +1078,7 @@ impl App {
                 Line::raw(""),
                 Line::raw(self.t("Appuyez sur Entrée pour continuer.", "Press Enter to continue.")),
             ]);
-            f.render_widget(Paragraph::new(t).wrap(Wrap { trim: true }), zone);
+            f.render_widget(Paragraph::new(Text::from(lignes)).wrap(Wrap { trim: true }), zone);
             return;
         }
         if let Some((ssid, mdp)) = &self.saisie_wifi {
@@ -975,7 +1090,7 @@ impl App {
             f.render_widget(Paragraph::new(t), zone);
             return;
         }
-        let [q, l] = Layout::vertical([Constraint::Length(6), Constraint::Min(3)]).areas(zone);
+        let [q, l] = Layout::vertical([Constraint::Length(12), Constraint::Min(3)]).areas(zone);
         let explication = if self.wifi {
             self.t(
                 "Aucune connexion Internet. Choisissez un réseau Wi-Fi, ou continuez sans Internet: l'installation sera MINIMALE, et il faudra relier l'ordinateur à Internet pour terminer la personnalisation (applications, mises à jour).",
@@ -987,7 +1102,13 @@ impl App {
                 "No Internet connection. Plug in a network cable and try again, or continue offline: the installation will be MINIMAL, and the computer must be connected to the Internet to finish the personalisation.",
             )
         };
-        f.render_widget(Paragraph::new(explication).style(Style::new().fg(Color::Yellow)).wrap(Wrap { trim: true }), q);
+        let mut lignes = self.lignes_liens();
+        if let Some(raison) = self.raison_hors_ligne() {
+            lignes.push(Line::styled(raison, Style::new().fg(Color::Red).add_modifier(Modifier::BOLD)));
+        }
+        lignes.push(Line::raw(""));
+        lignes.push(Line::styled(explication, Style::new().fg(Color::Yellow)));
+        f.render_widget(Paragraph::new(Text::from(lignes)).wrap(Wrap { trim: true }), q);
         let mut items: Vec<String> = self
             .reseaux
             .iter()
@@ -1336,6 +1457,32 @@ mod tests {
         assert!((a.progression.fraction - 2.5 / 7.0).abs() < 1e-6);
         a.integrer("Réglage de grub-efi-amd64");
         assert_eq!(a.progression.detail, "Réglage de grub-efi-amd64");
+    }
+
+    #[test]
+    fn offline_reason_names_the_clock_and_stays_quiet_without_a_link() {
+        let mut a = App::new();
+        a.internet = EtatInternet::Tls;
+        a.heure = "2026-04-13 09:00".into();
+        let r = a.raison_hors_ligne().expect("raison TLS");
+        assert!(r.contains("2026-04-13 09:00") && r.contains("BIOS/UEFI"), "{r}");
+        a.internet = EtatInternet::Dns;
+        assert_eq!(a.raison_hors_ligne(), None, "sans lien, l'explication suffit");
+        a.liens = vec![Lien::Wifi("Maison".into())];
+        assert!(a.raison_hors_ligne().unwrap().contains("DNS"));
+        a.internet = EtatInternet::EnLigne;
+        assert_eq!(a.raison_hors_ligne(), None);
+    }
+
+    #[test]
+    fn every_new_check_may_set_the_clock_again() {
+        let mut a = App::new();
+        a.horloge_tentee = true;
+        a.demander(Attente::Horloge);
+        assert!(a.horloge_tentee);
+        a.demander(Attente::Verifier);
+        assert!(!a.horloge_tentee);
+        assert!(matches!(a.attente, Some(Attente::Verifier)));
     }
 
     #[test]

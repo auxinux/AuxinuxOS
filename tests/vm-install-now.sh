@@ -40,6 +40,8 @@ for i in $(seq 1 45); do
 done
 shot fin
 $V sh "$name" "grep -E 'auxinux-erreur|^Installation terminee' /var/log/auxinux-installation.log" --timeout 60
+# Avec AUXINUX_VM_RTC (horloge fausse), la preuve que l'heure a ete corrigee.
+$V sh "$name" "date -u; timedatectl show -p NTPSynchronized; hwclock -r" --timeout 60
 $V sh "$name" "grep -q '^Installation terminee' /var/log/auxinux-installation.log" --timeout 60 | grep -q "rc=0" \
   || { log "ECHEC installation"; exit 2; }
 $V eject "$name" >/dev/null 2>&1

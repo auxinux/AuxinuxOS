@@ -75,6 +75,14 @@ check "aucune mise a jour Flatpak automatique" \
 echo "== 6. Verrouillage de l'ecran (confidentialite physique) =="
 setting "verrouillage automatique actif" "${OVERLAYS}/etc/xdg/kscreenlockerrc" '^Autolock=true'
 
+echo "== 7. Destinations reseau decidees (docs/privacy-stance.md) =="
+# NTP contacte un tiers a chaque demarrage. La destination a ete choisie le
+# 2026-10-05 (CNRC, pool Debian en secours): la changer doit etre un acte
+# visible, pas une ligne modifiee en passant.
+TIMESYNCD="${OVERLAYS}/etc/systemd/timesyncd.conf.d/50-auxinux.conf"
+setting "NTP: serveurs du CNRC" "${TIMESYNCD}" '^NTP=time\.nrc\.ca time\.chu\.nrc\.ca$'
+setting "NTP: secours limite au pool Debian" "${TIMESYNCD}" '^FallbackNTP=([0-3]\.debian\.pool\.ntp\.org ?)+$'
+
 echo
 if [[ "${fail}" -eq 0 ]]; then echo "TOUS LES TESTS PASSENT"; else echo "DES TESTS ECHOUENT"; fi
 exit "${fail}"

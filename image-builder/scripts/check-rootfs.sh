@@ -268,6 +268,19 @@ need_file /usr/share/backgrounds/auxinuxos/default.png "le script du fond d'ecra
 need_package libgl1-mesa-dri "serveur graphique SANS pilote DRI: KWin ne demarre pas (ce paquet n'est qu'un Recommends)"
 need_package login "PAM sans /etc/pam.d/login: la pile d'authentification du greeter echoue"
 
+echo "-- Heure (sans elle, aucun HTTPS)"
+# Ajoute le 2026-10-05: l'image n'avait AUCUNE synchronisation de l'heure. Sur
+# une vraie machine a l'horloge fausse, le certificat de dep.auxinux.ca etait
+# « pas encore valide »: l'installateur console ne voyait pas Internet, et apt
+# echouait sur le systeme installe. Invisible en VM, ou QEMU donne l'heure.
+need_package systemd-timesyncd "l'horloge n'est jamais synchronisee: HTTPS (apt, Flatpak, installateur) echoue des qu'elle est fausse"
+need_file /etc/systemd/system/sysinit.target.wants/systemd-timesyncd.service \
+  "systemd-timesyncd installe mais NON ACTIVE"
+need_setting /etc/systemd/timesyncd.conf.d/50-auxinux.conf '^NTP=time\.nrc\.ca' \
+  "serveurs d'heure du CNRC (destination decidee dans docs/privacy-stance.md)"
+need_any "sans hwclock, l'heure corrigee n'est jamais inscrite dans la machine (module hwclock de Calamares, moteur Install NOW)" \
+  /usr/sbin/hwclock /sbin/hwclock
+
 echo "-- Ecran de connexion (SDDM)"
 need_exec /usr/bin/sddm "aucun gestionnaire de session: le systeme s'arrete sur une console"
 need_file /etc/pam.d/sddm "SDDM refuse d'ouvrir une session sans son service PAM"

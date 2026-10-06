@@ -96,6 +96,7 @@ has "GRUB comme Calamares (signe)" "grub-install --target=x86_64-efi --efi-direc
 has "paquets GRUB embarques, pas Internet" "/usr/share/auxinux/installateur/paquets/efi/*.deb"
 has "fichiers de configuration ecrits avant le paquet: gardes" "dpkg -i --force-confdef --force-confold"
 lacks "hors ligne: pas de mise a jour" "auxi --yes --progress upgrade"
+has "heure du live inscrite dans la machine, en UTC" "hwclock --systohc --utc"
 has "scripts de fin communs" "post-install-cleanup.sh /"
 has "compte conserve par le nettoyage" "AUXINUX_KEEP_USER=marie"
 has "verification d'amorcabilite" "verify-installed-boot.sh /"

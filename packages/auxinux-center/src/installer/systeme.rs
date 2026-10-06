@@ -158,14 +158,130 @@ pub fn analyser_lsblk(json: &str, support: &str) -> Vec<Disque> {
 // Reseau
 // ---------------------------------------------------------------------------
 
+/// Ce que le test Internet a vu. L'ecran affiche la raison telle quelle: une
+/// panne sur une vraie machine doit se diagnostiquer depuis une photo de
+/// l'ecran, sans console.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum EtatInternet {
+    EnLigne,
+    /// Aucun nom ne se resout: pas de reseau, ou pas de serveur DNS.
+    Dns,
+    /// Le serveur ne repond pas (pas de route, delai depasse, erreur HTTP).
+    Injoignable,
+    /// Le serveur repond, mais la connexion securisee echoue: presque
+    /// toujours l'horloge de l'ordinateur (voir `regler_horloge`).
+    Tls,
+}
+
+/// Classe le code de sortie de curl.
+pub fn classer_curl(code: Option<i32>) -> EtatInternet {
+    match code {
+        Some(0) => EtatInternet::EnLigne,
+        Some(6) => EtatInternet::Dns,
+        // 35 poignee de main, 51/60 certificat refuse (« not yet valid »
+        // compris), 58/59 certificat client/chiffrement, 77 magasin d'AC
+        // illisible, 83 emetteur, 90/91 epinglage et OCSP.
+        Some(35 | 51 | 58 | 59 | 60 | 77 | 83 | 90 | 91) => EtatInternet::Tls,
+        _ => EtatInternet::Injoignable,
+    }
+}
+
 /// Internet REELLEMENT joignable: le depot AuxiNux, d'ou viennent les mises a
 /// jour. Un reseau local sans sortie ne compte pas.
-pub fn internet() -> bool {
-    run(
-        "curl",
-        &["-sfI", "--max-time", "8", "-o", "/dev/null", "https://dep.auxinux.ca/"],
+pub fn internet() -> EtatInternet {
+    classer_curl(
+        run(
+            "curl",
+            &["-sfI", "--max-time", "8", "-o", "/dev/null", "https://dep.auxinux.ca/"],
+        )
+        .code,
     )
-    .ok
+}
+
+/// Remet l'horloge a l'heure quand la connexion securisee echoue.
+///
+/// Pile CMOS morte ou BIOS remis a zero: l'ordinateur se croit avant la date
+/// de debut du certificat de dep.auxinux.ca, et TOUT HTTPS echoue -- le test
+/// Internet de l'installateur comme apt sur le systeme installe (premiere
+/// installation sur une vraie machine, 2026-10-05; invisible en VM, ou QEMU
+/// donne l'heure de l'hote).
+///
+/// D'abord NTP (systemd-timesyncd, serveurs du CNRC). En secours, si l'UDP 123
+/// est filtre: l'en-tete `Date` du serveur AuxiNux en HTTP clair. Il n'est pas
+/// authentifie, mais NTP ne l'est pas davantage, et HTTPS verifie toujours le
+/// certificat ensuite. Vrai si l'heure est maintenant synchronisee ou corrigee.
+pub fn regler_horloge() -> bool {
+    // Relance: le Wi-Fi vient peut-etre de monter, et timesyncd attend sinon
+    // son prochain essai.
+    let _ = run("systemctl", &["restart", "systemd-timesyncd"]);
+    for _ in 0..15 {
+        let synchro = run("timedatectl", &["show", "-p", "NTPSynchronized", "--value"]);
+        if synchro.stdout.trim() == "yes" {
+            return true;
+        }
+        std::thread::sleep(std::time::Duration::from_secs(1));
+    }
+    let entetes = run("curl", &["-sI", "--max-time", "5", "http://dep.auxinux.ca/"]).stdout;
+    let Some(date) = analyser_date_http(&entetes) else {
+        return false;
+    };
+    let Ok(serveur) = run("date", &["-u", "-d", date, "+%s"]).stdout.trim().parse::<i64>() else {
+        return false;
+    };
+    let local = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0);
+    // Deux minutes d'ecart n'empechent aucun certificat: l'horloge n'est
+    // alors pas en cause, on n'y touche pas.
+    if (serveur - local).abs() < 120 {
+        return false;
+    }
+    run("date", &["-u", "-s", &format!("@{serveur}")]).ok
+}
+
+/// Valeur de l'en-tete `Date` d'une reponse HTTP (nom insensible a la casse).
+pub fn analyser_date_http(entetes: &str) -> Option<&str> {
+    entetes.lines().find_map(|l| {
+        let (nom, valeur) = l.split_once(':')?;
+        let valeur = valeur.trim();
+        (nom.trim().eq_ignore_ascii_case("date") && !valeur.is_empty()).then_some(valeur)
+    })
+}
+
+/// L'heure que l'ordinateur croit etre, pour l'afficher a cote d'un echec TLS.
+pub fn heure_locale() -> String {
+    run("date", &["+%Y-%m-%d %H:%M"]).stdout.trim().to_string()
+}
+
+/// Un lien reseau actif, quel que soit l'etat d'Internet derriere.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Lien {
+    Cable,
+    Wifi(String),
+}
+
+pub fn liens_actifs() -> Vec<Lien> {
+    analyser_liens(&run("nmcli", &["-t", "-f", "TYPE,STATE,CONNECTION", "device"]).stdout)
+}
+
+/// Sortie « terse » de `nmcli -f TYPE,STATE,CONNECTION device`. Le nom de la
+/// connexion Wi-Fi est celui du reseau (nmcli la nomme ainsi a la connexion).
+pub fn analyser_liens(terse: &str) -> Vec<Lien> {
+    terse
+        .lines()
+        .filter_map(|ligne| {
+            let champs = champs_terse(ligne);
+            if champs.len() < 3 || !champs[1].starts_with("connected") {
+                return None;
+            }
+            match champs[0].as_str() {
+                "ethernet" => Some(Lien::Cable),
+                "wifi" => Some(Lien::Wifi(champs[2].clone())),
+                _ => None,
+            }
+        })
+        .collect()
 }
 
 pub fn wifi_present() -> bool {
@@ -190,29 +306,34 @@ pub fn reseaux_wifi() -> Vec<Wifi> {
     analyser_wifi(&sortie.stdout)
 }
 
-/// Sortie « terse » de nmcli: champs separes par « : », et « \: » pour un
-/// deux-points DANS le nom du reseau. Un reseau vu par plusieurs bornes
-/// n'apparait qu'une fois, avec le meilleur signal; les reseaux caches (sans
-/// nom) sont ignores.
+/// Une ligne de sortie « terse » de nmcli: champs separes par « : », et « \: »
+/// pour un deux-points DANS un champ (nom de reseau).
+fn champs_terse(ligne: &str) -> Vec<String> {
+    let mut champs = Vec::new();
+    let mut courant = String::new();
+    let mut echappe = false;
+    for c in ligne.chars() {
+        if echappe {
+            courant.push(c);
+            echappe = false;
+        } else if c == '\\' {
+            echappe = true;
+        } else if c == ':' {
+            champs.push(std::mem::take(&mut courant));
+        } else {
+            courant.push(c);
+        }
+    }
+    champs.push(courant);
+    champs
+}
+
+/// Un reseau vu par plusieurs bornes n'apparait qu'une fois, avec le meilleur
+/// signal; les reseaux caches (sans nom) sont ignores.
 pub fn analyser_wifi(terse: &str) -> Vec<Wifi> {
     let mut reseaux: Vec<Wifi> = Vec::new();
     for ligne in terse.lines() {
-        let mut champs = Vec::new();
-        let mut courant = String::new();
-        let mut echappe = false;
-        for c in ligne.chars() {
-            if echappe {
-                courant.push(c);
-                echappe = false;
-            } else if c == '\\' {
-                echappe = true;
-            } else if c == ':' {
-                champs.push(std::mem::take(&mut courant));
-            } else {
-                courant.push(c);
-            }
-        }
-        champs.push(courant);
+        let champs = champs_terse(ligne);
         if champs.len() < 3 || champs[0].is_empty() {
             continue;
         }
@@ -485,6 +606,37 @@ mod tests {
         assert_eq!(r.len(), 2);
         assert_eq!(r[0], Wifi { ssid: "Maison:5G".into(), signal: 85, securise: true });
         assert!(!r[1].securise);
+    }
+
+    #[test]
+    fn active_links_cable_wifi_with_colon_and_none() {
+        let t = "ethernet:connected:Wired connection 1\nwifi:connected:Maison\\:5G\n\
+                 wifi-p2p:disconnected:\nloopback:connected (externally):lo\n";
+        assert_eq!(analyser_liens(t), vec![Lien::Cable, Lien::Wifi("Maison:5G".into())]);
+        let aucun = "ethernet:unavailable:\nwifi:disconnected:\nloopback:connected (externally):lo\n";
+        assert!(analyser_liens(aucun).is_empty());
+        assert_eq!(analyser_liens("ethernet:connecting (getting IP configuration):Wired\n"), vec![]);
+    }
+
+    #[test]
+    fn curl_exit_codes_tell_the_clock_from_the_network() {
+        assert_eq!(classer_curl(Some(0)), EtatInternet::EnLigne);
+        assert_eq!(classer_curl(Some(6)), EtatInternet::Dns);
+        // « SSL certificate problem: certificate is not yet valid »
+        assert_eq!(classer_curl(Some(60)), EtatInternet::Tls);
+        assert_eq!(classer_curl(Some(35)), EtatInternet::Tls);
+        assert_eq!(classer_curl(Some(7)), EtatInternet::Injoignable);
+        assert_eq!(classer_curl(Some(28)), EtatInternet::Injoignable);
+        assert_eq!(classer_curl(None), EtatInternet::Injoignable);
+    }
+
+    #[test]
+    fn http_date_header_is_found_whatever_its_case() {
+        let r = "HTTP/1.1 301 Moved Permanently\r\nServer: nginx\r\nDate: Mon, 05 Oct 2026 21:15:37 GMT\r\n\r\n";
+        assert_eq!(analyser_date_http(r), Some("Mon, 05 Oct 2026 21:15:37 GMT"));
+        assert_eq!(analyser_date_http("HTTP/1.1 200 OK\ndate: Tue, 06 Oct 2026 01:02:03 GMT\n"), Some("Tue, 06 Oct 2026 01:02:03 GMT"));
+        assert_eq!(analyser_date_http("HTTP/1.1 200 OK\nLast-Modified: x\nDate:\n"), None);
+        assert_eq!(analyser_date_http(""), None);
     }
 
     #[test]

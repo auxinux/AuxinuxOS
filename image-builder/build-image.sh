@@ -527,9 +527,12 @@ mount_chroot_api_filesystems
 # protection au demarrage (voir packages/boot-sentinel/README.md): la premiere
 # compte les demarrages, la seconde confirme qu'une session graphique s'est
 # reellement ouverte.
+#
+# systemd-timesyncd: le paquet s'active lui-meme, mais un preset du chroot
+# pourrait l'en empecher -- et sans heure juste, plus aucun HTTPS.
 for unit in zramswap.service systemd-oomd.service fstrim.timer sddm.service \
             auxinux-boot-arm.service auxinux-boot-sentinel.service \
-            auxinux-profile.service; do
+            auxinux-profile.service systemd-timesyncd.service; do
   if ! sudo chroot "${ROOTFS_DIR}" systemctl enable "${unit}" >/dev/null 2>&1; then
     echo "AVERTISSEMENT: activation de ${unit} echouee." >&2
   fi
