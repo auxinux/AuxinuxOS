@@ -87,6 +87,18 @@ compteur piégé, redémarrage jusqu'au bureau) ; cette ISO-ci n'y ajoute que de
 correctifs d'affichage du centre et n'a pas été réinstallée en VM. L'ISO
 20261004 a été retirée.
 
+**Remplacée le 2026-10-06 par `auxinuxos-0.2.0-20261006-amd64.iso`**
+(commit `5e43ec0`, sha256 `cd0b0f18…e05210c7`) : **synchronisation de
+l'heure**. La première installation sur une vraie machine a montré qu'avec une
+horloge matérielle fausse, aucun HTTPS ne passait : l'installateur console ne
+voyait pas Internet et `apt`/`auxi` échouaient en erreur SSL après une
+installation Calamares. L'image installe désormais `systemd-timesyncd`
+(serveurs du CNRC, voir [vie privée](privacy-stance.md)) et `hwclock` ;
+l'installateur console règle l'heure lui-même et affiche le lien actif et la
+raison précise d'un échec. Validée en VM avec une horloge au 2026-01-01 :
+installation Install NOW en ligne complète jusqu'au bureau. L'ISO 20261004-2 a
+été retirée.
+
 Reste à valider : le démarrage par le chemin UEFI de secours (`EFI/BOOT`, le
 micrologiciel l'a bien choisi après suppression de l'entrée NVRAM, mais l'écran
 obtenu n'a pas pu être capturé), le démarrage sur un instantané depuis le
