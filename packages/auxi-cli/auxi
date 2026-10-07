@@ -807,6 +807,14 @@ kernel_default() {
   if [[ -z "${v}" && -r "${GRUB_CFG}" ]]; then
     v="$(grep -m1 -oE 'vmlinuz-[^[:space:]]+' "${GRUB_CFG}" | sed 's/^vmlinuz-//' || true)"
   fi
+  # grub.cfg est en 0600: le centre de controle, qui lit cet etat SANS droits,
+  # ne pouvait pas savoir quel noyau demarrerait (constate en VM le
+  # 2026-10-07: « Activer » propose sur le noyau deja par defaut). grub-mkconfig
+  # classe les noyaux par version (version_sort): le premier est le plus
+  # recent installe.
+  if [[ -z "${v}" ]]; then
+    v="$(kernels_installed | tail -n1)"
+  fi
   printf '%s' "${v}"
 }
 

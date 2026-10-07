@@ -119,6 +119,14 @@ check "source d'essai coupee" "$(grep -P '^source-dev\t' <<<"${out}")" $'source-
 check "installe et actif" "$(grep -P '^noyau\t7.2.5-' <<<"${out}")" $'noyau\t7.2.5-auxinuxos-amd64\tstable\tinstalle,actif'
 check "stable disponible" "$(grep -P '^noyau\t7.2.6-' <<<"${out}")" $'noyau\t7.2.6-auxinuxos-amd64\tstable\tdisponible'
 check "essai disponible, canal dev" "$(grep -P '^noyau\t7.2.9-' <<<"${out}")" $'noyau\t7.2.9-dev-auxinuxos-amd64\tdev\tdisponible'
+INSTALLED="7.2.5-auxinuxos-amd64 7.2.9-dev-auxinuxos-amd64"
+GRUB_CFG_SAVE="${GRUB_CFG}"
+GRUB_CFG="${WORK}/illisible/grub.cfg"   # comme /boot/grub/grub.cfg (0600) vu sans droits
+run run_kernel_list --porcelain
+check "grub.cfg illisible: le plus recent installe" "$(grep -P '^defaut\t' <<<"${out}")" $'defaut\t7.2.9-dev-auxinuxos-amd64\tauto'
+GRUB_CFG="${GRUB_CFG_SAVE}"
+INSTALLED="7.2.5-auxinuxos-amd64"
+run run_kernel_list --porcelain
 check "ni noyau Debian ni reliquat de configuration" "$(grep -cE 'deb13|7\.1\.0|linux-image-amd64' <<<"${out}")" "0"
 
 echo "== 2. Seuls les noyaux AuxiNux sont acceptes (pas une porte derobee DEB) =="
