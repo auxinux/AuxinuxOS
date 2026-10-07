@@ -89,7 +89,7 @@ Architecture: all
 Maintainer: ${MAINTAINER}
 Section: admin
 Priority: optional
-Depends: bash, apt, dpkg
+Depends: apt
 Recommends: flatpak, snapper, grub-common
 Homepage: ${HOMEPAGE}
 Description: commande d'administration d'AuxiNux OS
@@ -100,6 +100,11 @@ EOF
 # --- auxinux-center ----------------------------------------------------------
 CENTER_ROOT="${WORK}/center"
 install -D -m 0755 "${BIN}" "${CENTER_ROOT}/usr/bin/auxinux-center"
+# Les symboles de debogage gonflent le paquet et ne servent a personne sur une
+# machine d'utilisateur.
+if command -v strip >/dev/null 2>&1; then
+  strip --strip-unneeded "${CENTER_ROOT}/usr/bin/auxinux-center"
+fi
 install -D -m 0644 "${CENTER_DIR}/data/ca.auxinux.Center.desktop" \
   "${CENTER_ROOT}/usr/share/applications/ca.auxinux.Center.desktop"
 install -D -m 0644 "${CENTER_DIR}/data/ca.auxinux.Center.metainfo.xml" \
@@ -143,6 +148,33 @@ Description: AuxiNux OS Center, centre de controle d'AuxiNux OS
  Applications, mises a jour, noyaux, sante du systeme, sources,
  reglages et restauration.
 EOF
+
+# Licence et journal des changements: exiges par la politique Debian
+# (/usr/share/doc/<paquet>/), et ce que lit quiconque se demande d'ou vient un
+# paquet installe.
+for pkg in auxi auxinux-center; do
+  root="${AUXI_ROOT}"
+  [[ "${pkg}" == auxinux-center ]] && root="${CENTER_ROOT}"
+  doc="${root}/usr/share/doc/${pkg}"
+  install -d -m 0755 "${doc}"
+  cat >"${doc}/copyright" <<COPYRIGHT
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: ${pkg}
+Source: ${HOMEPAGE}
+
+Files: *
+Copyright: AuxiNux
+License: GPL-3.0-or-later
+ On Debian systems, the full text of the GNU General Public License version 3
+ can be found in /usr/share/common-licenses/GPL-3.
+COPYRIGHT
+  {
+    printf '%s (%s) stable; urgency=medium\n\n' "${pkg}" "${VERSION}"
+    printf '  * Version %s, voir %s.\n\n' "${VERSION}" "${HOMEPAGE}"
+    printf ' -- %s  %s\n' "${MAINTAINER}" "$(date -R)"
+  } | gzip -9n >"${doc}/changelog.gz"
+  chmod 0644 "${doc}/copyright" "${doc}/changelog.gz"
+done
 
 for root in "${AUXI_ROOT}" "${CENTER_ROOT}"; do
   (cd "${root}" && find . -type f ! -path './DEBIAN/*' -printf '%P\0' \
