@@ -62,7 +62,11 @@ source "${AUXI_BIN}" >/dev/null
 # script: c'est lui qui fait sortir `auxi` quand apt-get echoue.
 set +e
 apt_real() { echo "${WORK}/apt-get"; }
+apt_cache() { echo "apt-cache $*" >>"${CALLS}"; }
 require_root_for_deb() { return 0; }
+# L'etape noyaux de osupdate a son propre test (test-auxi-kernel.sh): ici, on
+# verifie seulement qu'elle est appelee.
+kernel_update_channels() { echo "etape-noyaux" >>"${CALLS}"; }
 # Installation DEB activee pour les cas 1 a 7; le cas 8 la coupe.
 APPS_CONF="${WORK}/apps.conf"
 printf 'DEB_APPS=1\n' >"${APPS_CONF}"
@@ -104,8 +108,31 @@ echo "== 3. Un echec Flatpak n'empeche plus les correctifs DEB =="
 FLATPAK_RC=1
 ( set -e; run_upgrade ) </dev/null >/dev/null 2>&1
 check "l'echec est rendu" "$?" "1"
-has "apt-get upgrade a quand meme tourne" "upgrade DEBIAN_FRONTEND"
+has "apt-get upgrade a quand meme tourne" "upgrade --with-new-pkgs DEBIAN_FRONTEND"
 FLATPAK_RC=0
+
+echo "== 3b. Le systeme se met a jour avec ses NOUVEAUX paquets (noyau) =="
+# PANNE (2026-10-07): `apt-get upgrade` simple met de cote (« kept back ») un
+# kernel-auxinuxos qui tire un nouveau linux-image, et sort en 0.
+: >"${CALLS}"
+ASSUME_YES=1 PROGRESS=1
+( set -e; run_upgrade ) </dev/null >/dev/null 2>&1
+check "reussit" "$?" "0"
+has "les index sont rafraichis d'abord" "update DEBIAN_FRONTEND"
+has "upgrade accepte les nouveaux paquets tires" "upgrade --with-new-pkgs"
+lacks "jamais de full-upgrade (qui retirerait des paquets)" "full-upgrade"
+has "les noyaux d'essai suivent" "etape-noyaux"
+check "update AVANT upgrade" \
+  "$(grep '^apt-get' "${CALLS}" | grep -e ' update ' -e 'upgrade --with' | head -n1 | grep -c ' update ')" "1"
+
+echo "== 3c. auxi osupdate: le systeme seul, quel que soit le reglage DEB =="
+printf 'DEB_APPS=0\n' >"${APPS_CONF}"
+: >"${CALLS}"
+( set -e; run_osupdate ) </dev/null >/dev/null 2>&1
+check "reussit avec DEB_APPS=0" "$?" "0"
+has "upgrade --with-new-pkgs" "upgrade --with-new-pkgs"
+lacks "aucune application Flatpak touchee" "flatpak"
+printf 'DEB_APPS=1\n' >"${APPS_CONF}"
 
 echo "== 4. Le terminal garde son comportement sans --yes =="
 : >"${CALLS}"
@@ -196,11 +223,11 @@ has "--deb de l'assistant: apt-get install" "install -- brave-browser"
 # La recherche ne liste les DEB que si leur installation est activee.
 : >"${CALLS}"
 ( set -e; run_search gimp ) </dev/null >/dev/null 2>&1
-lacks "recherche, DEB desactive: pas d'apt-cache" "apt-get search"
+lacks "recherche, DEB desactive: pas d'apt-cache" "apt-cache search"
 printf 'DEB_APPS=1\n' >"${APPS_CONF}"
 : >"${CALLS}"
 ( set -e; run_search gimp ) </dev/null >/dev/null 2>&1
-has "recherche, DEB active: apt-cache aussi" "apt-get search -- gimp"
+has "recherche, DEB active: apt-cache aussi" "apt-cache search -- gimp"
 
 if [[ "${fail}" -eq 0 ]]; then
   echo "test-auxi-noninteractive: OK"

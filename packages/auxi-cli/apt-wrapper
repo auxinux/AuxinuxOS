@@ -21,6 +21,8 @@ AuxiNux OS uses the user-facing auxi command to manage applications and packages
 Examples:
   auxi update
   auxi upgrade
+  sudo auxi osupdate           (system update: every DEB package, kernels included)
+  auxi kernel                  (installed and available kernels)
   auxi search firefox
   auxi install org.mozilla.firefox
   sudo auxi set deb=true       (allow DEB applications)
@@ -31,17 +33,19 @@ To explicitly re-enable apt in the CLI:
 EOF
 else
 cat >&2 <<EOF
-AuxiNux OS utilise la commande utilisateur auxi pour gerer les applications et paquets.
+AuxiNux OS utilise la commande utilisateur auxi pour gérer les applications et paquets.
 
 Exemples:
   auxi update
   auxi upgrade
+  sudo auxi osupdate           (mise à jour du système: tous les paquets DEB, noyaux compris)
+  auxi kernel                  (noyaux installés et disponibles)
   auxi search firefox
   auxi install org.mozilla.firefox
   sudo auxi set deb=true       (autoriser les applications DEB)
   sudo auxi install --deb nom-du-paquet
 
-Pour reactiver explicitement apt en CLI:
+Pour réactiver explicitement apt en CLI:
   sudo auxi set apt=true
 EOF
 fi
