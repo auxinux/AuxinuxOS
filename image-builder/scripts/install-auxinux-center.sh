@@ -47,7 +47,12 @@ CENTER_DEB="$(ls "${DEBS_DIR}"/auxinux-center_*_amd64.deb)"
 echo "==> Installation d'AuxiNux OS Center et d'auxi dans le rootfs"
 sudo install -d -m 0755 "${ROOTFS}/tmp/auxinux-debs"
 sudo cp "${AUXI_DEB}" "${CENTER_DEB}" "${ROOTFS}/tmp/auxinux-debs/"
+# --force-confnew: sur un rootfs reutilise, /etc/xdg/autostart/auxinux-assistant.desktop
+# existe deja, copie a la main par une construction precedente et inconnu de
+# dpkg. Le conffile du paquet en differe: dpkg POSE UNE QUESTION, lit une fin
+# de fichier et echoue (constate en VM le 2026-10-07 sur un systeme installe).
 sudo chroot "${ROOTFS}" env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+  -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confnew \
   "/tmp/auxinux-debs/$(basename "${AUXI_DEB}")" \
   "/tmp/auxinux-debs/$(basename "${CENTER_DEB}")"
 sudo rm -rf "${ROOTFS}/tmp/auxinux-debs"

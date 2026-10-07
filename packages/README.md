@@ -40,6 +40,11 @@ jour du système n'installe pas un paquet que rien ne demande. Une seule fois :
 
 ```bash
 sudo auxi set apt=true
-sudo apt update && sudo apt install auxi auxinux-center
+sudo apt update
+sudo apt install -o Dpkg::Options::=--force-confnew auxi auxinux-center
 sudo auxi set apt=false
 ```
+
+`--force-confnew` : `/etc/xdg/autostart/auxinux-assistant.desktop` existe déjà,
+copié par l'image sans paquet ; sans l'option, dpkg demande s'il faut le
+remplacer.
