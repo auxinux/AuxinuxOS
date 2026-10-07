@@ -38,6 +38,23 @@
   </developer>
   <content_rating type="oars-1.1" />
   <releases>
+    <release version="0.2.1" date="2026-10-07">
+      <description>
+        <p>
+          New Kernel view in Applications: running kernel, installed and available
+          kernels, activate, install, update, remove, and test kernels (kernel-dev).
+          The system update now installs new kernels. French text now has its
+          accents. Distributed as a DEB package, updated with the system.
+        </p>
+        <p xml:lang="fr">
+          Nouvelle vue Noyau dans Applications : noyau actif, noyaux installés et
+          disponibles, activer, installer, mettre à jour, désinstaller, et noyaux en
+          essai (kernel-dev). La mise à jour du système installe désormais les
+          nouveaux noyaux. Le texte français a retrouvé ses accents. Distribué en
+          paquet DEB, mis à jour avec le système.
+        </p>
+      </description>
+    </release>
     <release version="0.2.0" date="2026-09-04">
       <description>
         <p>

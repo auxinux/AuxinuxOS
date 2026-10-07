@@ -26,12 +26,31 @@ if [[ ! -x "${BIN}" ]]; then
   exit 70
 fi
 
-echo "==> Installation d'AuxiNux OS Center dans le rootfs"
-sudo install -D -m 0755 "${BIN}" "${ROOTFS}/usr/bin/auxinux-center"
-sudo install -D -m 0644 "${PKG_DIR}/data/ca.auxinux.Center.desktop" \
-  "${ROOTFS}/usr/share/applications/ca.auxinux.Center.desktop"
-sudo install -D -m 0644 "${PKG_DIR}/data/ca.auxinux.Center.metainfo.xml" \
-  "${ROOTFS}/usr/share/metainfo/ca.auxinux.Center.metainfo.xml"
+# EN PAQUETS DEB depuis le 2026-10-07 (packages/build-debs.sh): auxinux-center
+# (binaire, .desktop, metainfo, autostart de l'assistant, helpers, action
+# polkit) et auxi (la commande, le bouclier apt, le hook d'instantane). Copies
+# a la main, ces fichiers etaient inconnus de dpkg: aucune installation ne
+# pouvait recevoir un correctif sans nouvelle ISO. Installes ici par paquet,
+# ils suivent la mise a jour du systeme (suite APPS du depot AuxiNuxOS).
+#
+# apt-get install d'un fichier local, et non dpkg -i: les dependances
+# manquantes eventuelles sont resolues au lieu de laisser dpkg a moitie
+# configure. A ce stade, les diversions d'apt (install-auxi-cli.sh) ne sont
+# pas encore posees: c'est le vrai apt-get.
+echo "==> Construction des paquets auxi et auxinux-center"
+DEBS_DIR="$(mktemp -d)"
+trap 'rm -rf "${DEBS_DIR}"' EXIT
+AUXINUX_CENTER_BIN="${BIN}" "${PROJECT_DIR}/packages/build-debs.sh" --out "${DEBS_DIR}" >/dev/null
+AUXI_DEB="$(ls "${DEBS_DIR}"/auxi_*_all.deb)"
+CENTER_DEB="$(ls "${DEBS_DIR}"/auxinux-center_*_amd64.deb)"
+
+echo "==> Installation d'AuxiNux OS Center et d'auxi dans le rootfs"
+sudo install -d -m 0755 "${ROOTFS}/tmp/auxinux-debs"
+sudo cp "${AUXI_DEB}" "${CENTER_DEB}" "${ROOTFS}/tmp/auxinux-debs/"
+sudo chroot "${ROOTFS}" env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+  "/tmp/auxinux-debs/$(basename "${AUXI_DEB}")" \
+  "/tmp/auxinux-debs/$(basename "${CENTER_DEB}")"
+sudo rm -rf "${ROOTFS}/tmp/auxinux-debs"
 
 # Installateur console « Install NOW » (entree GRUB par defaut du live):
 # programme, moteur et unite qui le lance sur la premiere console. Tous trois
@@ -51,10 +70,9 @@ sudo install -d -m 0755 "${ROOTFS}/etc/systemd/system/multi-user.target.wants"
 sudo ln -sf /etc/systemd/system/auxinux-installer.service \
   "${ROOTFS}/etc/systemd/system/multi-user.target.wants/auxinux-installer.service"
 
-# Assistant de premier demarrage: ouvert a chaque ouverture de session tant
+# L'assistant de premier demarrage (/etc/xdg/autostart/auxinux-assistant.desktop)
+# vient du paquet auxinux-center: ouvert a chaque ouverture de session tant
 # qu'il n'a pas ete termine ou passe (le centre en decide lui-meme).
-sudo install -D -m 0644 "${PKG_DIR}/data/auxinux-assistant.desktop" \
-  "${ROOTFS}/etc/xdg/autostart/auxinux-assistant.desktop"
 
 # Raccourci sur le bureau de chaque nouveau compte (useradd -m copie /etc/skel).
 #

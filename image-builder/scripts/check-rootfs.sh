@@ -70,6 +70,17 @@ need_package() {
   fi
 }
 
+# Le fichier appartient-il au paquet attendu? Un fichier copie a la main par
+# un script de construction ne recevrait aucune mise a jour.
+need_owned() {
+  local path="$1" pkg="$2" why="$3"
+  if sudo chroot "${ROOTFS}" dpkg-query -S "${path}" 2>/dev/null | grep -q "^${pkg}: ${path}$"; then
+    ok "${path} (paquet ${pkg})"
+  else
+    fail "${path} n'appartient pas au paquet ${pkg} — ${why}"
+  fi
+}
+
 refuse_package() {
   local pkg="$1" why="$2"
   if sudo chroot "${ROOTFS}" dpkg-query -W -f='${Status}' "${pkg}" 2>/dev/null \
@@ -214,6 +225,8 @@ need_file /etc/apt/apt.conf.d/80auxinux-snapshot "le hook ne serait jamais appel
 echo "-- Outils AuxiNux"
 need_exec /usr/bin/auxi "commande d'administration principale"
 need_exec /usr/bin/auxinux-center "centre de controle"
+need_owned /usr/bin/auxi auxi "auxi ne se mettrait jamais a jour (suite APPS)"
+need_owned /usr/bin/auxinux-center auxinux-center "le centre de controle ne se mettrait jamais a jour (suite APPS)"
 need_package auxinux-office "pas d'AuxiNux Office, donc pas d'editeur de texte (AuxiText remplace Kate)"
 need_file /usr/share/applications/ca.auxinux.AuxiNuxOffice.Text.desktop \
   "les fichiers texte seraient associes (mimeapps.list) a un lanceur absent"

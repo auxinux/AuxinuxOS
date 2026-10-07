@@ -10,6 +10,9 @@
 *.qcow2
 *.raw
 *.squashfs
+# Paquets construits par packages/build-debs.sh
+/build/
+*.deb
 
 # Rapports locaux
 *.log
