@@ -11,15 +11,15 @@ use crate::ui::{widgets, App, Loading, Message};
 
 pub fn view(app: &App) -> Element<'_, Message> {
     let header = widgets::header(
-        "Sante du systeme",
-        "Diagnostic de l'espace disque, de la memoire, des services et des sauvegardes",
-        vec![widget::button::standard("Reanalyser")
+        "Santé du système",
+        "Diagnostic de l'espace disque, de la mémoire, des services et des sauvegardes",
+        vec![widget::button::standard("Réanalyser")
             .on_press(Message::RefreshHealth)
             .into()],
     );
 
     let body: Element<Message> = match &app.health {
-        Loading::Idle | Loading::Busy => widgets::busy("Analyse du systeme…"),
+        Loading::Idle | Loading::Busy => widgets::busy("Analyse du système…"),
         Loading::Ready(report) => {
             let mut col = widget::Column::new().spacing(8).push(summary(report));
             for c in &report.checks {
@@ -42,15 +42,15 @@ fn summary(report: &crate::model::HealthReport) -> Element<'_, Message> {
     let (title, detail) = match report.overall() {
         Severity::Ok => (
             "Tout va bien".to_string(),
-            "Aucun point d'attention detecte.".to_string(),
+            "Aucun point d'attention détecté.".to_string(),
         ),
         Severity::Warning => (
             format!("{warning} point(s) d'attention"),
-            "Rien d'urgent, mais ces points meritent un coup d'oeil.".to_string(),
+            "Rien d'urgent, mais ces points méritent un coup d'œil.".to_string(),
         ),
         Severity::Critical => (
-            format!("{critical} probleme(s) a traiter"),
-            "Ces points peuvent empecher le systeme de fonctionner correctement."
+            format!("{critical} problème(s) à traiter"),
+            "Ces points peuvent empêcher le système de fonctionner correctement."
                 .to_string(),
         ),
     };
@@ -100,13 +100,13 @@ fn check_card(c: &HealthCheck) -> Element<'_, Message> {
 fn hardware_card(system: &crate::model::SystemReport) -> Element<'_, Message> {
     let mut col = widget::Column::new()
         .spacing(4)
-        .push(widget::text::heading("Materiel et session"))
+        .push(widget::text::heading("Matériel et session"))
         .push(widget::text::body(format!(
             "{} — noyau {}",
             system.os, system.kernel
         )))
         .push(widget::text::body(format!(
-            "{} ({} coeurs)",
+            "{} ({} cœurs)",
             system.cpu, system.cpu_cores
         )));
 
@@ -120,7 +120,7 @@ fn hardware_card(system: &crate::model::SystemReport) -> Element<'_, Message> {
     }
     if let Some(uptime) = system.uptime_min {
         col = col.push(widget::text::caption(format!(
-            "Allume depuis {} h {:02} min",
+            "Allumé depuis {} h {:02} min",
             uptime / 60,
             uptime % 60
         )));

@@ -19,6 +19,7 @@
 mod apps_page;
 mod assistant_page;
 mod health_page;
+mod kernel_view;
 mod operation;
 mod recovery_page;
 mod settings_page;
@@ -62,6 +63,8 @@ pub enum AppsView {
     Featured,
     Installed,
     Search(String),
+    /// Noyaux AuxiNux (voir kernel_view.rs).
+    Kernel,
 }
 
 /// Etat de chargement d'une section. Distinguer « en cours » de « vide »
@@ -101,6 +104,18 @@ pub enum Message {
     AppsSource(usize),
     Install(usize),
     Remove(usize),
+
+    // Noyaux (vue Noyau de la page Applications)
+    ShowKernel,
+    KernelLoaded(Result<crate::kernel::KernelState, String>),
+    KernelInstall(String),
+    KernelUpdate,
+    /// Version, ou "latest" pour revenir au plus recent.
+    KernelActivate(String),
+    /// Noyau dont la desinstallation attend confirmation.
+    KernelConfirmRemove(Option<String>),
+    KernelRemove(String),
+    KernelDevSource(bool),
 
     // Mises a jour
     RefreshUpdates,
@@ -186,6 +201,10 @@ pub struct App {
     /// Source choisie dans la liste deroulante (Flathub ou DEB). Sans
     /// effet tant que l'installation DEB n'est pas activee.
     apps_source: String,
+
+    // Noyaux
+    kernel: Loading<Result<crate::kernel::KernelState, String>>,
+    pending_kernel_remove: Option<String>,
 
     // Mises a jour
     updates: Loading<Vec<AppEntry>>,
@@ -297,6 +316,9 @@ impl App {
 
     /// Recharge la page Applications dans la vue courante.
     fn reload_apps(&mut self) -> Task<Message> {
+        if self.apps_view == AppsView::Kernel {
+            return self.load_kernel();
+        }
         self.apps = Loading::Busy;
         self.apps_stage.clear();
         self.apps_generation += 1;
@@ -310,7 +332,15 @@ impl App {
             AppsView::Search(q) => {
                 staged(move |on_stage| crate::apps::search_with(&q, on_stage), stage, done)
             }
+            AppsView::Kernel => unreachable!("traite plus haut"),
         }
+    }
+
+    fn load_kernel(&mut self) -> Task<Message> {
+        self.kernel = Loading::Busy;
+        self.pending_kernel_remove = None;
+        self.start();
+        background(crate::kernel::load, Message::KernelLoaded)
     }
 
     fn load_updates(&mut self) -> Task<Message> {
@@ -394,11 +424,11 @@ impl Application for App {
             // d'un bloc et s'affiche en carre plein (« applications-all »,
             // constate en VM).
             ("Applications", ["system-software-install-symbolic", "view-app-grid-symbolic"], Page::Apps),
-            ("Mises a jour", ["software-update-available-symbolic", "update-none"], Page::Updates),
-            ("Sante du systeme", ["utilities-system-monitor-symbolic", "speedometer"], Page::Health),
+            ("Mises à jour", ["software-update-available-symbolic", "update-none"], Page::Updates),
+            ("Santé du système", ["utilities-system-monitor-symbolic", "speedometer"], Page::Health),
             ("Restauration", ["document-revert-symbolic", "edit-undo"], Page::Recovery),
             ("Sources", ["application-x-addon-symbolic", "repository"], Page::Sources),
-            ("Reglages", ["preferences-system-symbolic", "configure"], Page::Settings),
+            ("Réglages", ["preferences-system-symbolic", "configure"], Page::Settings),
             ("Assistant", ["tools-wizard-symbolic", "tools-wizard"], Page::Assistant),
         ] {
             nav.insert()
@@ -418,6 +448,8 @@ impl Application for App {
             apps_stage: String::new(),
             apps_generation: 0,
             apps_source: SOURCE_FLATHUB.to_string(),
+            kernel: Loading::Idle,
+            pending_kernel_remove: None,
             updates: Loading::Idle,
             updates_stage: String::new(),
             updates_generation: 0,
@@ -453,7 +485,7 @@ impl Application for App {
         } else {
             app.load_apps_featured()
         };
-        let title = app.set_window_title(format!("Centre de controle — {}", app.os_version));
+        let title = app.set_window_title(format!("Centre de contrôle — {}", app.os_version));
         (app, Task::batch(vec![task, title]))
     }
 
@@ -476,6 +508,11 @@ impl Application for App {
                 // premiere ouverture. Tout charger au demarrage rendrait le
                 // lancement aussi lent que l'operation la plus lente.
                 match page {
+                    Page::Apps if self.apps_view == AppsView::Kernel
+                        && matches!(self.kernel, Loading::Idle) =>
+                    {
+                        self.load_kernel()
+                    }
                     Page::Apps if matches!(self.apps, Loading::Idle) => self.load_apps_featured(),
                     Page::Updates if matches!(self.updates, Loading::Idle) => self.load_updates(),
                     Page::Health if matches!(self.health, Loading::Idle) => {
@@ -555,13 +592,60 @@ impl Application for App {
                 Some(app) => {
                     let source = self.source_for(app);
                     let id = app.id_for(&source).to_string();
-                    let title = format!("Desinstallation de {}", app.name);
+                    let title = format!("Désinstallation de {}", app.name);
                     self.launch(title, move |on_line| {
                         crate::apps::remove(&id, &source, on_line)
                     })
                 }
                 None => Task::none(),
             },
+
+            // --- Noyaux ---
+            Message::ShowKernel => {
+                self.query.clear();
+                self.apps_view = AppsView::Kernel;
+                self.reload_apps()
+            }
+            Message::KernelLoaded(state) => {
+                self.finish();
+                self.kernel = Loading::Ready(state);
+                Task::none()
+            }
+            Message::KernelInstall(version) => {
+                self.launch(format!("Installation du noyau {version}"), move |on_line| {
+                    crate::kernel::install(&version, on_line)
+                })
+            }
+            Message::KernelUpdate => {
+                self.launch("Mise à jour des noyaux".into(), crate::kernel::update)
+            }
+            Message::KernelActivate(version) => {
+                let title = if version == "latest" {
+                    "Retour au noyau le plus récent".to_string()
+                } else {
+                    format!("Activation du noyau {version}")
+                };
+                self.launch(title, move |on_line| crate::kernel::activate(&version, on_line))
+            }
+            Message::KernelConfirmRemove(version) => {
+                // Comme une restauration: jamais d'un seul clic.
+                self.pending_kernel_remove = version;
+                Task::none()
+            }
+            Message::KernelRemove(version) => {
+                self.pending_kernel_remove = None;
+                self.launch(format!("Désinstallation du noyau {version}"), move |on_line| {
+                    crate::kernel::remove(&version, on_line)
+                })
+            }
+            Message::KernelDevSource(enabled) => self.launch(
+                if enabled {
+                    "Activation des noyaux en essai".into()
+                } else {
+                    "Désactivation des noyaux en essai".into()
+                },
+                move |on_line| crate::kernel::set_dev_source(enabled, on_line),
+            ),
 
             // --- Mises a jour ---
             Message::RefreshUpdates => self.load_updates(),
@@ -588,13 +672,13 @@ impl Application for App {
                 Task::none()
             }
             Message::UpgradeAll => {
-                self.launch("Mise a jour du systeme".into(), crate::updates::upgrade_all)
+                self.launch("Mise à jour du système".into(), crate::updates::upgrade_all)
             }
             Message::UpdateOne(index) => match self.updates.ready().and_then(|l| l.get(index)) {
                 Some(app) => {
                     let source = app.default_source.clone();
                     let id = app.id_for(&source).to_string();
-                    let title = format!("Mise a jour de {}", app.name);
+                    let title = format!("Mise à jour de {}", app.name);
                     self.launch(title, move |on_line| {
                         crate::apps::update_app(&id, &source, on_line)
                     })
@@ -628,7 +712,7 @@ impl Application for App {
             }
             Message::CreateSnapshot => {
                 let desc = if self.snapshot_description.trim().is_empty() {
-                    "Instantane manuel".to_string()
+                    "Instantané manuel".to_string()
                 } else {
                     self.snapshot_description.trim().to_string()
                 };
@@ -660,6 +744,9 @@ impl Application for App {
                 self.presets = presets;
                 self.remotes = remotes;
                 Task::none()
+            }
+            Message::ToggleAptSource(file, enabled) if crate::sources::is_kernel_dev_source(&file) => {
+                self.update(Message::KernelDevSource(enabled))
             }
             Message::ToggleAptSource(file, enabled) => {
                 self.start();
@@ -764,8 +851,8 @@ impl Application for App {
                 // Le changement de page efface le bandeau: on le pose apres.
                 let task = self.update(Message::Page(Page::Apps));
                 self.toast = Some(ActionResult::ok(
-                    "Assistant passe. Vous pouvez le relancer a tout moment: \
-                     Reglages, « Relancer l'assistant ».",
+                    "Assistant passé. Vous pouvez le relancer à tout moment: \
+                     Réglages, « Relancer l'assistant ».",
                 ));
                 task
             }
@@ -845,6 +932,20 @@ impl Application for App {
                 if self.page != Page::Updates {
                     self.updates = Loading::Idle;
                 }
+                // Meme raison pour les noyaux: une mise a jour du systeme ou la
+                // page Sources peuvent les avoir changes.
+                if self.page != Page::Apps || self.apps_view != AppsView::Kernel {
+                    self.kernel = Loading::Idle;
+                }
+                // Le Center est un paquet DEB depuis la 0.2.1: une mise a jour
+                // du systeme peut l'avoir remplace pendant qu'il tourne. Le
+                // binaire en memoire reste l'ancien jusqu'a sa reouverture.
+                if let Some(version) = crate::updates::center_updated() {
+                    self.toast = Some(ActionResult::ok(format!(
+                        "AuxiNux OS Center a été mis à jour (version {version}). \
+                         Fermez-le et rouvrez-le pour utiliser la nouvelle version."
+                    )));
+                }
                 self.reload_current_page()
             }
             Message::ToggleLog => {
@@ -886,8 +987,8 @@ impl Application for App {
             Message::TaskPanicked => {
                 self.finish();
                 self.toast = Some(ActionResult::err(
-                    "L'operation s'est interrompue de facon inattendue. \
-                     Reessayez; si le probleme persiste, lancez la meme action \
+                    "L'opération s'est interrompue de façon inattendue. \
+                     Réessayez; si le problème persiste, lancez la même action \
                      dans un terminal avec « auxi » pour voir le message complet.",
                 ));
                 Task::none()
@@ -998,9 +1099,9 @@ pub mod widgets {
                 .align_y(iced::Alignment::Center)
                 .push(super::icon("content-loading-symbolic", &["process-working-symbolic"]).size(16))
                 .push(widget::text::caption(if count > 1 {
-                    format!("{count} operations en cours…")
+                    format!("{count} opérations en cours…")
                 } else {
-                    "Operation en cours…".to_string()
+                    "Opération en cours…".to_string()
                 })),
         )
         .class(cosmic::theme::Container::Card)
@@ -1019,7 +1120,7 @@ pub mod widgets {
     /// ne l'a pas encore annoncee: la page ne saute pas a la premiere etape.
     pub fn stage_or_start(stage: &str) -> &str {
         if stage.is_empty() {
-            "Demarrage…"
+            "Démarrage…"
         } else {
             stage
         }
@@ -1043,7 +1144,7 @@ pub mod widgets {
             col = col.push(widget::text::caption(detail));
         }
         widget::container(col.push(widget::text::caption(
-            "Vous pouvez continuer a naviguer pendant l'operation.",
+            "Vous pouvez continuer à naviguer pendant l'opération.",
         )))
         .center_x(iced::Length::Fill)
         .padding(40)

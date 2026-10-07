@@ -61,11 +61,11 @@ fn disk_checks(info: &SystemReport) -> Vec<HealthCheck> {
         };
         let advice = match severity {
             Severity::Critical => {
-                "Liberez de l'espace maintenant: videz le cache avec « auxi clean », \
-                 supprimez des applications inutilisees, ou supprimez d'anciens instantanes."
+                "Libérez de l'espace maintenant: videz le cache avec « auxi clean », \
+                 supprimez des applications inutilisées, ou supprimez d'anciens instantanés."
             }
             Severity::Warning => {
-                "Pensez a liberer de l'espace: « auxi clean » vide le cache des paquets."
+                "Pensez à libérer de l'espace: « auxi clean » vide le cache des paquets."
             }
             Severity::Ok => "",
         };
@@ -73,7 +73,7 @@ fn disk_checks(info: &SystemReport) -> Vec<HealthCheck> {
             &format!("disk:{}", disk.mount),
             &format!("Espace disque — {}", disk.mount),
             format!(
-                "{percent}% utilise — {} Go libres sur {} Go",
+                "{percent}% utilisé — {} Go libres sur {} Go",
                 disk.available_gb, disk.total_gb
             ),
             severity,
@@ -86,7 +86,7 @@ fn disk_checks(info: &SystemReport) -> Vec<HealthCheck> {
             "Espace disque",
             "aucun disque lisible",
             Severity::Warning,
-            "Verifiez les montages avec « findmnt ».",
+            "Vérifiez les montages avec « findmnt ».",
         ));
     }
     out
@@ -94,21 +94,21 @@ fn disk_checks(info: &SystemReport) -> Vec<HealthCheck> {
 
 fn memory_check(info: &SystemReport) -> HealthCheck {
     if info.memory_total_mb == 0 {
-        return check("memory", "Memoire", "indisponible", Severity::Ok, "");
+        return check("memory", "Mémoire", "indisponible", Severity::Ok, "");
     }
     let ratio = info.memory_used_mb as f32 / info.memory_total_mb as f32;
     let percent = (ratio * 100.0).round() as u32;
     let severity = if ratio >= MEM_WARN { Severity::Warning } else { Severity::Ok };
     check(
         "memory",
-        "Memoire vive",
+        "Mémoire vive",
         format!(
-            "{percent}% utilisee — {} Mo sur {} Mo",
+            "{percent}% utilisée — {} Mo sur {} Mo",
             info.memory_used_mb, info.memory_total_mb
         ),
         severity,
         if severity == Severity::Warning {
-            "Fermez des applications, ou redemarrez si la memoire ne se libere pas."
+            "Fermez des applications, ou redémarrez si la mémoire ne se libère pas."
         } else {
             ""
         },
@@ -120,8 +120,8 @@ fn failed_services_check() -> HealthCheck {
     if !out.ok {
         return check(
             "services",
-            "Services systeme",
-            "etat indisponible",
+            "Services système",
+            "état indisponible",
             Severity::Ok,
             "",
         );
@@ -134,30 +134,30 @@ fn failed_services_check() -> HealthCheck {
         .collect();
 
     if failed.is_empty() {
-        return check("services", "Services systeme", "tous les services fonctionnent", Severity::Ok, "");
+        return check("services", "Services système", "tous les services fonctionnent", Severity::Ok, "");
     }
     check(
         "services",
-        "Services systeme",
-        format!("{} service(s) en echec: {}", failed.len(), failed.join(", ")),
+        "Services système",
+        format!("{} service(s) en échec: {}", failed.len(), failed.join(", ")),
         Severity::Warning,
-        "Consultez le detail avec « systemctl status <service> ». Si la panne est \
-         apparue apres une mise a jour, la restauration peut l'annuler.",
+        "Consultez le détail avec « systemctl status <service> ». Si la panne est \
+         apparue après une mise à jour, la restauration peut l'annuler.",
     )
 }
 
 fn updates_check() -> HealthCheck {
     let updates = crate::apps::list_updates();
     if updates.is_empty() {
-        return check("updates", "Mises a jour", "le systeme est a jour", Severity::Ok, "");
+        return check("updates", "Mises à jour", "le système est à jour", Severity::Ok, "");
     }
     check(
         "updates",
-        "Mises a jour",
-        format!("{} mise(s) a jour disponible(s)", updates.len()),
+        "Mises à jour",
+        format!("{} mise(s) à jour disponible(s)", updates.len()),
         Severity::Warning,
-        "Installez-les depuis l'onglet « Mises a jour ». Un instantane est cree \
-         automatiquement avant, vous pourrez revenir en arriere.",
+        "Installez-les depuis l'onglet « Mises à jour ». Un instantané est créé \
+         automatiquement avant, vous pourrez revenir en arrière.",
     )
 }
 
@@ -166,27 +166,27 @@ fn rollback_check() -> HealthCheck {
     if !state.available {
         return check(
             "rollback",
-            "Restauration systeme",
+            "Restauration système",
             format!("indisponible — {}", state.reason),
             Severity::Warning,
-            "Sans instantanes, une mise a jour ratee ne peut pas etre annulee. \
+            "Sans instantanés, une mise à jour ratée ne peut pas être annulée. \
              La restauration exige une installation sur BTRFS.",
         );
     }
     if state.snapshots.is_empty() {
         return check(
             "rollback",
-            "Restauration systeme",
-            "active, mais aucun instantane enregistre",
+            "Restauration système",
+            "active, mais aucun instantané enregistré",
             Severity::Warning,
-            "Creez un premier point de restauration depuis l'onglet « Restauration ».",
+            "Créez un premier point de restauration depuis l'onglet « Restauration ».",
         );
     }
     check(
         "rollback",
-        "Restauration systeme",
+        "Restauration système",
         format!(
-            "{} point(s) de restauration — le plus recent: {}",
+            "{} point(s) de restauration — le plus récent: {}",
             state.snapshots.len(),
             state.snapshots[0].date
         ),
@@ -198,10 +198,10 @@ fn rollback_check() -> HealthCheck {
 fn boot_time_check() -> HealthCheck {
     let out = run("systemd-analyze", &["time"]);
     if !out.ok || out.stdout.trim().is_empty() {
-        return check("boot", "Temps de demarrage", "indisponible", Severity::Ok, "");
+        return check("boot", "Temps de démarrage", "indisponible", Severity::Ok, "");
     }
     let line = out.stdout.lines().next().unwrap_or("").trim().to_string();
-    check("boot", "Temps de demarrage", line, Severity::Ok, "")
+    check("boot", "Temps de démarrage", line, Severity::Ok, "")
 }
 
 fn apt_policy_check() -> HealthCheck {
@@ -209,16 +209,16 @@ fn apt_policy_check() -> HealthCheck {
         check(
             "apt-policy",
             "Politique APT",
-            "APT direct est reactive",
+            "APT direct est réactivé",
             Severity::Ok,
-            "Les commandes apt fonctionnent normalement. « auxi » reste recommande: \
-             il cree un instantane avant chaque operation, ce que apt ne fait pas.",
+            "Les commandes apt fonctionnent normalement. « auxi » reste recommandé: \
+             il crée un instantané avant chaque opération, ce que apt ne fait pas.",
         )
     } else {
         check(
             "apt-policy",
             "Politique APT",
-            "APT direct est masque, « auxi » prend le relais",
+            "APT direct est masqué, « auxi » prend le relais",
             Severity::Ok,
             "",
         )

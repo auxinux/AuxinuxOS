@@ -34,7 +34,7 @@ pub struct Step {
 impl Step {
     pub fn starting() -> Self {
         Step {
-            label: "Demarrage…".into(),
+            label: "Démarrage…".into(),
             fraction: None,
             detail: String::new(),
         }
@@ -77,7 +77,7 @@ pub fn parse(line: &str) -> Parsed {
         "dlstatus" if fields.len() >= 4 => {
             if let Ok(percent) = fields[2].trim().parse::<f32>() {
                 return Parsed::Status {
-                    label: "Telechargement",
+                    label: "Téléchargement",
                     fraction: (percent / 100.0).clamp(0.0, 1.0),
                     detail: fields[3..].join(":").trim().to_string(),
                 };
@@ -176,14 +176,14 @@ pub fn conclude(out: &Output, recent: &[String], via_pkexec: bool, success: &str
     // passe refuse. Rien n'a ete lance; le dire evite de chercher une panne.
     if via_pkexec && out.code == Some(126) {
         return ActionResult::err(
-            "Operation annulee: l'autorisation administrateur n'a pas ete donnee. \
-             Rien n'a ete modifie.",
+            "Opération annulée: l'autorisation administrateur n'a pas été donnée. \
+             Rien n'a été modifié.",
         );
     }
     if recent.is_empty() {
         return ActionResult::err(match out.code {
-            Some(code) => format!("Echec de l'operation (code {code}), sans message."),
-            None => "Echec de l'operation: le programme s'est arrete sans message.".to_string(),
+            Some(code) => format!("Échec de l'opération (code {code}), sans message."),
+            None => "Échec de l'opération: le programme s'est arrêté sans message.".to_string(),
         });
     }
     ActionResult::err(recent.join("\n"))
@@ -203,7 +203,7 @@ mod tests {
     #[test]
     fn download_status() {
         let (label, fraction, detail) = status("dlstatus:3:42.5000:Retrieving file 3 of 28");
-        assert_eq!(label, "Telechargement");
+        assert_eq!(label, "Téléchargement");
         assert!((fraction - 0.425).abs() < 1e-6);
         assert_eq!(detail, "Retrieving file 3 of 28");
     }
@@ -229,7 +229,7 @@ mod tests {
     fn ordinary_lines_are_kept_verbatim() {
         for line in [
             "Reception de :1 http://deb.debian.org/debian trixie/main amd64 libssl3t64 [2 345 kB]",
-            "AuxiNuxOS: instantane de securite 12 cree avant cette operation.",
+            "AuxiNuxOS: instantané de sécurité 12 créé avant cette opération.",
             "dlstatus:pas un nombre",
             "pmstatus:",
         ] {
@@ -244,7 +244,7 @@ mod tests {
     #[test]
     fn real_apt_output() {
         let (label, fraction, detail) = status("dlstatus:2:49.9995:Retrieving file 2 of 2");
-        assert_eq!(label, "Telechargement");
+        assert_eq!(label, "Téléchargement");
         assert!((fraction - 0.499995).abs() < 1e-5);
         assert_eq!(detail, "Retrieving file 2 of 2");
 

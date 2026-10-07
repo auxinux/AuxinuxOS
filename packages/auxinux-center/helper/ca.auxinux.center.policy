@@ -17,7 +17,7 @@
     <description>Add a software source</description>
     <description xml:lang="fr">Ajouter une source de logiciels</description>
     <message>Authentication is required to add a software source to this system</message>
-    <message xml:lang="fr">Une authentification est requise pour ajouter une source de logiciels a ce systeme</message>
+    <message xml:lang="fr">Une authentification est requise pour ajouter une source de logiciels à ce système</message>
     <icon_name>application-x-addon</icon_name>
     <defaults>
       <allow_any>no</allow_any>

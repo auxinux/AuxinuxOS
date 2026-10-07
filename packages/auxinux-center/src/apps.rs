@@ -221,7 +221,7 @@ pub fn search_with(query: &str, on_stage: &mut dyn FnMut(&str)) -> Vec<AppEntry>
         }
     }
 
-    on_stage("Verification des applications deja installees…");
+    on_stage("Vérification des applications déjà installées…");
     mark_installed(&mut entries);
     entries
 }
@@ -235,17 +235,17 @@ pub fn featured() -> Vec<AppEntry> {
 pub fn featured_with(on_stage: &mut dyn FnMut(&str)) -> Vec<AppEntry> {
     // (flatpak_id, nom, resume, paquet_deb_candidat)
     let curated: &[(&str, &str, &str, &str)] = &[
-        ("org.videolan.VLC",          "VLC",        "Lecteur multimedia universel",              "vlc"),
-        ("org.mozilla.firefox",        "Firefox",    "Navigateur web respectueux de la vie privee","firefox"),
-        ("org.gimp.GIMP",              "GIMP",       "Retouche et edition d'images",              "gimp"),
-        ("org.kde.krita",              "Krita",      "Peinture numerique et illustration",         "krita"),
-        ("org.libreoffice.LibreOffice","LibreOffice","Suite bureautique complete",                  "libreoffice"),
-        ("com.obsproject.Studio",      "OBS Studio", "Enregistrement et streaming video",          "obs-studio"),
-        ("org.blender.Blender",        "Blender",    "Creation 3D, animation, rendu",              "blender"),
-        ("org.kde.kdenlive",           "Kdenlive",   "Montage video non lineaire",                 "kdenlive"),
-        ("org.audacityteam.Audacity",  "Audacity",   "Edition audio multipiste",                   "audacity"),
+        ("org.videolan.VLC",          "VLC",        "Lecteur multimédia universel",              "vlc"),
+        ("org.mozilla.firefox",        "Firefox",    "Navigateur web respectueux de la vie privée","firefox"),
+        ("org.gimp.GIMP",              "GIMP",       "Retouche et édition d'images",              "gimp"),
+        ("org.kde.krita",              "Krita",      "Peinture numérique et illustration",         "krita"),
+        ("org.libreoffice.LibreOffice","LibreOffice","Suite bureautique complète",                  "libreoffice"),
+        ("com.obsproject.Studio",      "OBS Studio", "Enregistrement et streaming vidéo",          "obs-studio"),
+        ("org.blender.Blender",        "Blender",    "Création 3D, animation, rendu",              "blender"),
+        ("org.kde.kdenlive",           "Kdenlive",   "Montage vidéo non linéaire",                 "kdenlive"),
+        ("org.audacityteam.Audacity",  "Audacity",   "Édition audio multipiste",                   "audacity"),
         ("org.inkscape.Inkscape",      "Inkscape",   "Dessin vectoriel",                           "inkscape"),
-        ("org.signal.Signal",          "Signal",     "Messagerie chiffree, vie privee",            "signal-desktop"),
+        ("org.signal.Signal",          "Signal",     "Messagerie chiffrée, vie privée",            "signal-desktop"),
         ("org.telegram.desktop",       "Telegram",   "Messagerie rapide",                          "telegram-desktop"),
     ];
 
@@ -253,7 +253,7 @@ pub fn featured_with(on_stage: &mut dyn FnMut(&str)) -> Vec<AppEntry> {
     let deb_candidates: Vec<&str> = curated.iter().map(|(_, _, _, d)| *d).collect();
     let mut args = vec!["show", "--no-all-versions"];
     args.extend(deb_candidates.iter().copied());
-    on_stage("Verification des paquets DEB disponibles…");
+    on_stage("Vérification des paquets DEB disponibles…");
     let deb_out = run(apt_cache_bin(), &args);
     let mut available_debs: std::collections::HashSet<String> = std::collections::HashSet::new();
     for line in deb_out.stdout.lines() {
@@ -285,7 +285,7 @@ pub fn featured_with(on_stage: &mut dyn FnMut(&str)) -> Vec<AppEntry> {
             }
         })
         .collect();
-    on_stage("Verification des applications deja installees…");
+    on_stage("Vérification des applications déjà installées…");
     mark_installed(&mut entries);
     entries
 }
@@ -333,7 +333,7 @@ pub fn list_installed_with(on_stage: &mut dyn FnMut(&str)) -> Vec<AppEntry> {
     // On resout le NOM DE PAQUET de chaque .desktop (l'id du fichier, ex.
     // org.kde.kate, n'est pas le paquet "kate") pour que install/remove/status
     // fonctionnent ensuite.
-    on_stage("Lecture des applications du systeme (DEB)…");
+    on_stage("Lecture des applications du système (DEB)…");
     let pkg_map = desktop_package_map();
     if let Ok(rd) = std::fs::read_dir("/usr/share/applications") {
         for f in rd.flatten() {
@@ -653,7 +653,7 @@ pub fn install(id: &str, source: &str, on_line: &mut dyn FnMut(&str)) -> ActionR
     if !is_safe_app_id(id) {
         return ActionResult::err("identifiant d'application invalide");
     }
-    let done = format!("Installe: {id}");
+    let done = format!("Installé: {id}");
     match source {
         SOURCE_FLATHUB | "flatpak" => progress::user(
             "flatpak",
@@ -669,7 +669,7 @@ pub fn remove(id: &str, source: &str, on_line: &mut dyn FnMut(&str)) -> ActionRe
     if !is_safe_app_id(id) {
         return ActionResult::err("identifiant d'application invalide");
     }
-    let done = format!("Desinstalle: {id}");
+    let done = format!("Désinstallé: {id}");
     match source {
         SOURCE_FLATHUB | "flatpak" => progress::user(
             "flatpak",
@@ -685,7 +685,7 @@ pub fn update_app(id: &str, source: &str, on_line: &mut dyn FnMut(&str)) -> Acti
     if !is_safe_app_id(id) {
         return ActionResult::err("identifiant d'application invalide");
     }
-    let done = "Mise a jour terminee";
+    let done = "Mise à jour terminée";
     match source {
         SOURCE_FLATHUB | "flatpak" => progress::user(
             "flatpak",
@@ -725,7 +725,7 @@ pub fn list_updates_with(on_stage: &mut dyn FnMut(&str)) -> Vec<AppEntry> {
             entries.push(AppEntry {
                 id: id.to_string(),
                 name: cols.get(1).copied().unwrap_or(id).trim().to_string(),
-                summary: "Mise a jour Flatpak disponible".into(),
+                summary: "Mise à jour Flatpak disponible".into(),
                 version: cols.get(2).copied().unwrap_or("").trim().to_string(),
                 sources: vec![SOURCE_FLATHUB.into()],
                 default_source: SOURCE_FLATHUB.into(),
@@ -738,22 +738,16 @@ pub fn list_updates_with(on_stage: &mut dyn FnMut(&str)) -> Vec<AppEntry> {
     }
 
     // Upgradable DEB packages (simulated upgrade, read-only).
-    on_stage("Calcul des mises a jour du systeme (paquets DEB)…");
-    let deb = run(apt_cache_bin(), &["-s", "upgrade"]);
-    let apt_get_sim = if deb.ok && deb.stdout.contains("Inst ") {
-        deb
-    } else {
-        // apt-cache has no `upgrade`; use the real apt-get in dry-run mode.
-        run(apt_get_bin(), &["-s", "upgrade"])
-    };
+    //
+    // --with-new-pkgs, comme `auxi osupdate`: sans lui, un kernel-auxinuxos qui
+    // tire un nouveau linux-image est « kept back » et n'apparait pas du tout
+    // (panne du 2026-10-07: le nouveau noyau n'etait jamais propose).
+    on_stage("Calcul des mises à jour du système (paquets DEB)…");
+    let apt_get_sim = run(apt_get_bin(), &["-s", "upgrade", "--with-new-pkgs"]);
     if apt_get_sim.ok {
         for line in apt_get_sim.stdout.lines() {
-            // Format: "Inst <pkg> [old] (new arch ...)"
-            let Some(rest) = line.strip_prefix("Inst ") else { continue };
-            let pkg = rest.split_whitespace().next().unwrap_or("").to_string();
-            if pkg.is_empty() {
-                continue;
-            }
+            let Some((pkg, rest)) = upgraded_package(line) else { continue };
+            let pkg = pkg.to_string();
             let version = rest
                 .split_once('(')
                 .and_then(|(_, r)| r.split_whitespace().next())
@@ -762,7 +756,7 @@ pub fn list_updates_with(on_stage: &mut dyn FnMut(&str)) -> Vec<AppEntry> {
             entries.push(AppEntry {
                 id: pkg.clone(),
                 name: pkg.clone(),
-                summary: "Mise a jour DEB disponible".into(),
+                summary: "Mise à jour DEB disponible".into(),
                 version,
                 sources: vec![SOURCE_DEB.into()],
                 default_source: SOURCE_DEB.into(),
@@ -775,6 +769,24 @@ pub fn list_updates_with(on_stage: &mut dyn FnMut(&str)) -> Vec<AppEntry> {
     }
 
     entries
+}
+
+/// Ligne « Inst » d'une simulation apt qui MET A JOUR un paquet installe:
+/// (paquet, reste de la ligne).
+///
+/// Formats:
+///   Inst kernel-auxinuxos [7.2.5-…] (7.2.6-… AuxiNux:kernel [amd64])   mise a jour
+///   Inst linux-image-7.2.6-auxinuxos-amd64 (7.2.6-… AuxiNux:kernel [amd64])   nouveau
+/// Un paquet NOUVEAU (sans « [ancienne version] ») est tire par un autre: il
+/// arrive avec lui. Le lister a part proposerait un bouton qui l'installerait
+/// seul -- et que le reglage DEB refuserait, le paquet n'etant pas installe.
+fn upgraded_package(line: &str) -> Option<(&str, &str)> {
+    let rest = line.strip_prefix("Inst ")?;
+    let (pkg, after) = rest.split_once(' ')?;
+    if pkg.is_empty() || !after.trim_start().starts_with('[') {
+        return None;
+    }
+    Some((pkg, rest))
 }
 
 /// The real apt-get binary (diverted by dpkg-divert), for read-only dry-run
@@ -791,6 +803,16 @@ fn apt_get_bin() -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn simulated_upgrade_lists_only_installed_packages() {
+        let up = "Inst kernel-auxinuxos [7.2.5-auxinuxos-amd64.1] (7.2.6-auxinuxos-amd64.1 AuxiNux:kernel [amd64])";
+        assert_eq!(upgraded_package(up).map(|(p, _)| p), Some("kernel-auxinuxos"));
+        // Le nouveau noyau tire par kernel-auxinuxos: il arrive avec lui.
+        let new = "Inst linux-image-7.2.6-auxinuxos-amd64 (7.2.6-auxinuxos-amd64.1 AuxiNux:kernel [amd64])";
+        assert_eq!(upgraded_package(new), None);
+        assert_eq!(upgraded_package("Conf kernel-auxinuxos (7.2.6 AuxiNux:kernel [amd64])"), None);
+    }
 
     #[test]
     fn flatpak_rows_ignore_the_no_match_sentence() {

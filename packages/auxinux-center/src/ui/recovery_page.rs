@@ -17,7 +17,7 @@ const VISIBLES: usize = 5;
 pub fn view(app: &App) -> Element<'_, Message> {
     let header = widgets::header(
         "Restauration",
-        "Revenir a un etat anterieur du systeme",
+        "Revenir à un état antérieur du système",
         vec![widget::button::standard("Actualiser")
             .on_press(Message::RefreshRecovery)
             .into()],
@@ -33,7 +33,7 @@ pub fn view(app: &App) -> Element<'_, Message> {
                 .push(widget::text::body(state.reason.clone()))
                 .push(widget::text::caption(
                     "La restauration exige une installation sur BTRFS. Elle ne peut pas \
-                     etre activee apres coup sur un systeme installe en ext4.",
+                     être activée après coup sur un système installé en ext4.",
                 )),
         )
         .center_x(iced::Length::Fill)
@@ -41,14 +41,14 @@ pub fn view(app: &App) -> Element<'_, Message> {
         .into(),
         Loading::Ready(state) if state.snapshots.is_empty() => widgets::empty(
             "Aucun point de restauration",
-            "Creez-en un maintenant: c'est la sauvegarde a laquelle vous reviendrez \
-             si une mise a jour tourne mal.",
+            "Créez-en un maintenant: c'est la sauvegarde à laquelle vous reviendrez \
+             si une mise à jour tourne mal.",
         ),
         Loading::Ready(state) => {
             let points = crate::recovery::points(&state.snapshots);
             let mut col = widget::Column::new().spacing(8).push(widget::text::caption(
-                "En cas de probleme, choisissez le point le plus recent d'AVANT le \
-                 probleme. Vos fichiers personnels ne sont jamais touches.",
+                "En cas de problème, choisissez le point le plus récent d'AVANT le \
+                 problème. Vos fichiers personnels ne sont jamais touchés.",
             ));
             let caches = points.len().saturating_sub(VISIBLES);
             for (i, point) in points.into_iter().enumerate() {
@@ -61,7 +61,7 @@ pub fn view(app: &App) -> Element<'_, Message> {
             if caches > 0 {
                 col = col.push(
                     widget::button::text(if app.recovery_show_all {
-                        "Afficher seulement les plus recents".to_string()
+                        "Afficher seulement les plus récents".to_string()
                     } else {
                         format!("Afficher les {caches} autres points")
                     })
@@ -108,13 +108,13 @@ fn temporary_card(app: &App, number: u32) -> Element<'_, Message> {
         widget::Row::new()
             .spacing(8)
             .push(
-                widget::button::destructive("Confirmer: garder cet etat")
+                widget::button::destructive("Confirmer: garder cet état")
                     .on_press(Message::Rollback(number)),
             )
             .push(widget::button::standard("Annuler").on_press(Message::ConfirmRollback(None)))
             .into()
     } else {
-        widget::button::suggested("Garder cet etat definitivement")
+        widget::button::suggested("Garder cet état définitivement")
             .on_press(Message::ConfirmRollback(Some(number)))
             .into()
     };
@@ -124,14 +124,14 @@ fn temporary_card(app: &App, number: u32) -> Element<'_, Message> {
             .spacing(8)
             .push(widget::text::heading("Vous utilisez un point de restauration, temporairement"))
             .push(widget::text::body(format!(
-                "Le systeme a demarre sur le point {titre}, choisi dans le menu de \
-                 demarrage. Rien n'est encore restaure: ce que vous faites maintenant \
-                 sera perdu au prochain redemarrage."
+                "Le système a démarré sur le point {titre}, choisi dans le menu de \
+                 démarrage. Rien n'est encore restauré: ce que vous faites maintenant \
+                 sera perdu au prochain redémarrage."
             )))
             .push(widget::text::caption(
-                "Si tout fonctionne, gardez cet etat: il remplacera le systeme au \
-                 prochain redemarrage (l'ancien est conserve, et vos fichiers \
-                 personnels ne sont pas touches). Sinon, redemarrez normalement.",
+                "Si tout fonctionne, gardez cet état: il remplacera le système au \
+                 prochain redémarrage (l'ancien est conservé, et vos fichiers \
+                 personnels ne sont pas touchés). Sinon, redémarrez normalement.",
             ))
             .push(action),
     )
@@ -145,10 +145,10 @@ fn create_card(app: &App) -> Element<'_, Message> {
     widget::container(
         widget::Column::new()
             .spacing(8)
-            .push(widget::text::heading("Creer un point de restauration"))
+            .push(widget::text::heading("Créer un point de restauration"))
             .push(widget::text::caption(
-                "Utile avant une manipulation risquee. Un point est deja cree \
-                 automatiquement avant chaque installation ou mise a jour de paquets.",
+                "Utile avant une manipulation risquée. Un point est déjà créé \
+                 automatiquement avant chaque installation ou mise à jour de paquets.",
             ))
             .push(
                 widget::Row::new()
@@ -164,7 +164,7 @@ fn create_card(app: &App) -> Element<'_, Message> {
                         .width(iced::Length::Fill),
                     )
                     .push(
-                        widget::button::suggested("Creer")
+                        widget::button::suggested("Créer")
                             .on_press(Message::CreateSnapshot),
                     ),
             ),
@@ -177,10 +177,10 @@ fn create_card(app: &App) -> Element<'_, Message> {
 
 fn point_card(app: &App, point: Point) -> Element<'_, Message> {
     let origine = match point.origine {
-        Origine::Installation => "Le systeme tel qu'il etait juste apres l'installation",
-        Origine::AvantModification => "Pose automatiquement avant une modification des logiciels",
+        Origine::Installation => "Le système tel qu'il était juste après l'installation",
+        Origine::AvantModification => "Posé automatiquement avant une modification des logiciels",
         Origine::Quotidien => "Sauvegarde automatique, une par jour",
-        Origine::Manuel => "Cree par vous",
+        Origine::Manuel => "Créé par vous",
     };
 
     let info = widget::Column::new()
@@ -197,13 +197,13 @@ fn point_card(app: &App, point: Point) -> Element<'_, Message> {
             .spacing(6)
             .push(widget::text::caption(
                 "Confirmer? Vos fichiers personnels et vos applications Flatpak \
-                 ne seront pas modifies. Le systeme actuel est conserve.",
+                 ne seront pas modifiés. Le système actuel est conservé.",
             ))
             .push(
                 widget::Row::new()
                     .spacing(8)
                     .push(
-                        widget::button::destructive("Restaurer et redemarrer plus tard")
+                        widget::button::destructive("Restaurer et redémarrer plus tard")
                             .on_press(Message::Rollback(point.number)),
                     )
                     .push(

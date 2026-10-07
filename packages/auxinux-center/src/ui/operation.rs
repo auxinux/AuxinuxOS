@@ -65,7 +65,7 @@ impl Operation {
                 // en cours, sinon elle repartirait de zero a chaque etape.
                 self.step = match &self.stage {
                     Some((index, total, name)) => Step {
-                        label: format!("Etape {index} sur {total} — {name} — {label}"),
+                        label: format!("Étape {index} sur {total} — {name} — {label}"),
                         fraction: Some(((*index - 1) as f32 + fraction) / *total as f32),
                         detail: shorten(&detail),
                     },
@@ -78,12 +78,12 @@ impl Operation {
             }
             Parsed::Stage { index, total, label } => {
                 self.step = Step {
-                    label: format!("Etape {index} sur {total} — {label}"),
+                    label: format!("Étape {index} sur {total} — {label}"),
                     fraction: Some((index - 1) as f32 / total as f32),
                     detail: String::new(),
                 };
                 self.stage = Some((index, total, label.clone()));
-                self.push_log(format!("== Etape {index} sur {total}: {label}"));
+                self.push_log(format!("== Étape {index} sur {total}: {label}"));
             }
             Parsed::Log(text) => {
                 self.step.detail = shorten(&text);
@@ -120,11 +120,11 @@ pub fn view(op: &Operation) -> Element<'_, Message> {
         ),
         Some(r) if r.ok => (
             crate::ui::icon("emblem-ok-symbolic", &["object-select-symbolic"]),
-            format!("{} — termine", op.title),
+            format!("{} — terminé", op.title),
         ),
         Some(_) => (
             crate::ui::icon("dialog-error-symbolic", &["dialog-error", "data-error"]),
-            format!("{} — echec", op.title),
+            format!("{} — échec", op.title),
         ),
     };
 
@@ -132,9 +132,9 @@ pub fn view(op: &Operation) -> Element<'_, Message> {
     if op.show_log {
         actions = actions
             .push(widget::button::text("Copier le journal").on_press(Message::CopyLog))
-            .push(widget::button::text("Masquer le detail").on_press(Message::ToggleLog));
+            .push(widget::button::text("Masquer le détail").on_press(Message::ToggleLog));
     } else {
-        actions = actions.push(widget::button::text("Voir le detail").on_press(Message::ToggleLog));
+        actions = actions.push(widget::button::text("Voir le détail").on_press(Message::ToggleLog));
     }
     if !op.running() {
         actions = actions.push(widget::button::text("Fermer").on_press(Message::DismissOperation));
@@ -213,11 +213,11 @@ mod tests {
 
     #[test]
     fn status_lines_move_the_bar_and_stay_out_of_the_log() {
-        let mut op = Operation::new("Mise a jour du systeme");
+        let mut op = Operation::new("Mise à jour du système");
         op.feed("Lecture des listes de paquets…");
-        op.feed("dlstatus:2:50:Reception du fichier 2 sur 4");
+        op.feed("dlstatus:2:50:Réception du fichier 2 sur 4");
         assert_eq!(op.step.fraction, Some(0.5));
-        assert_eq!(op.step.label, "Telechargement");
+        assert_eq!(op.step.label, "Téléchargement");
         assert_eq!(op.log.len(), 1);
         op.feed("Depaquetage de libssl3t64 (3.5.7-1~deb13u3) …");
         // Une ligne ordinaire change le detail, pas l'avancement.
@@ -229,12 +229,12 @@ mod tests {
     #[test]
     fn stages_keep_the_bar_global() {
         let mut op = Operation::new("Installation de vos applications");
-        op.feed("auxinux-etape:2:4:Paquets systeme");
+        op.feed("auxinux-etape:2:4:Paquets système");
         assert_eq!(op.step.fraction, Some(0.25));
         op.feed("pmstatus:brave-browser:50:Configuration de brave-browser");
         // Moitie de l'etape 2 sur 4: 1,5 / 4.
         assert_eq!(op.step.fraction, Some(0.375));
-        assert!(op.step.label.starts_with("Etape 2 sur 4"));
+        assert!(op.step.label.starts_with("Étape 2 sur 4"));
     }
 
     #[test]

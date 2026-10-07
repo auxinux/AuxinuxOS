@@ -55,7 +55,7 @@ const fn flatpak(id: &'static str, name: &'static str, summary: &'static str) ->
 pub const TOUJOURS: [App; 1] = [flatpak(
     "com.usebottles.bottles",
     "Bottles",
-    "Applications Windows, chacune dans son espace isole (Proton, DXVK)",
+    "Applications Windows, chacune dans son espace isolé (Proton, DXVK)",
 )];
 
 pub const NAVIGATEURS: [App; 5] = [
@@ -63,22 +63,22 @@ pub const NAVIGATEURS: [App; 5] = [
     App {
         id: "brave-browser",
         name: "Brave",
-        summary: "Bloqueur de publicites integre; telemetrie coupee par AuxiNux",
+        summary: "Bloqueur de publicités intégré; télémétrie coupée par AuxiNux",
         source: Source::Brave,
     },
     flatpak(
         "io.gitlab.librewolf-community",
         "LibreWolf",
-        "Firefox durci pour la vie privee",
+        "Firefox durci pour la vie privée",
     ),
     flatpak("org.chromium.Chromium", "Chromium", "Version libre du moteur de Chrome"),
-    flatpak("com.vivaldi.Vivaldi", "Vivaldi", "Navigateur tres personnalisable"),
+    flatpak("com.vivaldi.Vivaldi", "Vivaldi", "Navigateur très personnalisable"),
 ];
 
 /// VLC en tete: c'est le lecteur que le projet recommande.
 pub const LECTEURS: [App; 3] = [
-    flatpak("org.videolan.VLC", "VLC", "Lit a peu pres tout (recommande)"),
-    flatpak("org.kde.haruna", "Haruna", "Lecteur video de KDE"),
+    flatpak("org.videolan.VLC", "VLC", "Lit à peu près tout (recommandé)"),
+    flatpak("org.kde.haruna", "Haruna", "Lecteur vidéo de KDE"),
     flatpak("io.mpv.Mpv", "mpv", "Lecteur minimaliste"),
 ];
 
@@ -89,7 +89,7 @@ pub const VIE_PRIVEE: [App; 5] = [
     flatpak(
         "fr.romainvigier.MetadataCleaner",
         "Metadata Cleaner",
-        "Retire les metadonnees des photos et documents",
+        "Retire les métadonnées des photos et documents",
     ),
     flatpak("org.bleachbit.BleachBit", "BleachBit", "Efface les traces et fichiers temporaires"),
 ];
@@ -117,7 +117,7 @@ impl Profil {
     pub fn label(self) -> &'static str {
         match self {
             Profil::Bureautique => "Bureautique",
-            Profil::Multimedia => "Multimedia",
+            Profil::Multimedia => "Multimédia",
             Profil::Jeu => "Jeu",
         }
     }
@@ -132,22 +132,22 @@ impl Profil {
     pub fn suggestions(self) -> &'static [(App, bool)] {
         const BUREAUTIQUE: [(App, bool); 3] = [
             (flatpak("org.mozilla.Thunderbird", "Thunderbird", "Courriel et agenda"), true),
-            (flatpak("org.gnome.SimpleScan", "Numeriseur", "Numeriser des documents"), true),
+            (flatpak("org.gnome.SimpleScan", "Numériseur", "Numériser des documents"), true),
             (flatpak("com.github.xournalpp.xournalpp", "Xournal++", "Annoter des PDF, prendre des notes"), false),
         ];
         const MULTIMEDIA: [(App, bool); 6] = [
             (flatpak("org.kde.elisa", "Elisa", "Lecteur de musique de KDE"), true),
-            (flatpak("org.kde.kdenlive", "Kdenlive", "Montage video"), true),
-            (flatpak("org.audacityteam.Audacity", "Audacity", "Edition audio"), true),
+            (flatpak("org.kde.kdenlive", "Kdenlive", "Montage vidéo"), true),
+            (flatpak("org.audacityteam.Audacity", "Audacity", "Édition audio"), true),
             (flatpak("org.gimp.GIMP", "GIMP", "Retouche d'images"), true),
             (flatpak("org.kde.krita", "Krita", "Peinture et illustration"), false),
-            (flatpak("com.obsproject.Studio", "OBS Studio", "Enregistrement et diffusion d'ecran"), false),
+            (flatpak("com.obsproject.Studio", "OBS Studio", "Enregistrement et diffusion d'écran"), false),
         ];
         const JEU: [(App, bool); 4] = [
             (flatpak("com.valvesoftware.Steam", "Steam", "Jeux Steam, avec Proton pour les jeux Windows"), false),
             (flatpak("com.heroicgameslauncher.hgl", "Heroic", "Jeux Epic, GOG et Amazon"), true),
             (flatpak("net.lutris.Lutris", "Lutris", "Lanceur pour tous les autres jeux"), false),
-            (flatpak("net.davidotek.pupgui2", "ProtonUp-Qt", "Versions supplementaires de Proton"), false),
+            (flatpak("net.davidotek.pupgui2", "ProtonUp-Qt", "Versions supplémentaires de Proton"), false),
         ];
         match self {
             Profil::Bureautique => &BUREAUTIQUE,
@@ -279,7 +279,7 @@ pub fn apply(selection: &Selection, on_line: &mut dyn FnMut(&str)) -> ActionResu
     let args = selection.helper_args();
     let mut full: Vec<&str> = vec![APPLY_HELPER];
     full.extend(args.iter().map(String::as_str));
-    let result = crate::progress::privileged(&full, on_line, "Vos applications sont installees");
+    let result = crate::progress::privileged(&full, on_line, "Vos applications sont installées");
     // Le navigateur choisi devient celui du bureau (liens ouverts depuis les
     // applications, lanceur « navigateur » de la barre des taches). L'image
     // n'en declare plus aucun. Seulement s'il est REELLEMENT installe: une
@@ -289,9 +289,9 @@ pub fn apply(selection: &Selection, on_line: &mut dyn FnMut(&str)) -> ActionResu
         if path.exists() {
             let out = crate::util::run("xdg-settings", &["set", "default-web-browser", &desktop]);
             on_line(&if out.ok {
-                format!("Navigateur par defaut: {}", browser.name)
+                format!("Navigateur par défaut: {}", browser.name)
             } else {
-                format!("Impossible de declarer {} comme navigateur par defaut: {}", browser.name, out.stderr.trim())
+                format!("Impossible de déclarer {} comme navigateur par défaut: {}", browser.name, out.stderr.trim())
             });
         }
     }
@@ -329,7 +329,7 @@ pub fn bilan(selection: &Selection, result: &ActionResult, installed: impl Fn(&A
         && result
             .message
             .lines()
-            .any(|l| l.trim_start().starts_with("Echec pour:") && l.contains("profil "));
+            .any(|l| l.trim_start().starts_with("Échec pour:") && l.contains("profil "));
     Bilan {
         ok: result.ok,
         installees: installees.iter().map(|a| a.name).collect(),
@@ -505,7 +505,7 @@ mod tests {
     #[test]
     fn bilan_echec_partiel_juge_chaque_application() {
         let sel = Selection::default();
-        let result = ActionResult::err("flatpak: erreur reseau\nEchec pour: com.usebottles.bottles");
+        let result = ActionResult::err("flatpak: erreur réseau\nÉchec pour: com.usebottles.bottles");
         let b = bilan(&sel, &result, |app| app.name != "Bottles");
         assert!(!b.ok);
         assert_eq!(b.echecs, vec!["Bottles"]);
@@ -515,7 +515,7 @@ mod tests {
 
     #[test]
     fn bilan_repere_l_echec_du_profil() {
-        let result = ActionResult::err("Echec pour: profil gaming");
+        let result = ActionResult::err("Échec pour: profil gaming");
         let b = bilan(&Selection::default(), &result, |_| true);
         assert!(b.profil_echoue);
         assert!(b.echecs.is_empty());

@@ -11,8 +11,8 @@ use crate::ui::{widgets, App, Message};
 
 pub fn view(app: &App) -> Element<'_, Message> {
     let header = widgets::header(
-        "Reglages",
-        "Politique de paquets et acces aux reglages du bureau",
+        "Réglages",
+        "Politique de paquets et accès aux réglages du bureau",
         vec![],
     );
 
@@ -21,10 +21,10 @@ pub fn view(app: &App) -> Element<'_, Message> {
             .spacing(8)
             .push(widget::text::heading("Commandes APT directes"))
             .push(widget::text::caption(
-                "Par defaut, « apt » et « apt-get » renvoient vers « auxi », qui met \
-                 Flatpak en avant et cree un point de restauration avant chaque \
-                 operation. Reactiver APT direct rend ces commandes utilisables \
-                 telles quelles — mais sans ce filet de securite.",
+                "Par défaut, « apt » et « apt-get » renvoient vers « auxi », qui met \
+                 Flatpak en avant et crée un point de restauration avant chaque \
+                 opération. Réactiver APT direct rend ces commandes utilisables \
+                 telles quelles — mais sans ce filet de sécurité.",
             ))
             .push(
                 widget::Row::new()
@@ -34,7 +34,7 @@ pub fn view(app: &App) -> Element<'_, Message> {
                         widget::text::body(if app.apt_direct {
                             "APT direct: actif"
                         } else {
-                            "APT direct: masque (recommande)"
+                            "APT direct: masqué (recommandé)"
                         })
                         .width(iced::Length::Fill),
                     )
@@ -54,9 +54,9 @@ pub fn view(app: &App) -> Element<'_, Message> {
             .spacing(8)
             .push(widget::text::heading("Applications DEB"))
             .push(widget::text::caption(
-                "Par defaut, les applications s'installent depuis Flatpak \
-                 (Flathub), isolees du systeme. Activer l'installation DEB ajoute \
-                 une liste deroulante Flatpak / DEB a la page Applications. Flatpak \
+                "Par défaut, les applications s'installent depuis Flatpak \
+                 (Flathub), isolées du système. Activer l'installation DEB ajoute \
+                 une liste déroulante Flatpak / DEB à la page Applications. Flatpak \
                  reste prioritaire: « auxi install » ne prend le paquet DEB que si \
                  aucun Flatpak n'existe.",
             ))
@@ -66,9 +66,9 @@ pub fn view(app: &App) -> Element<'_, Message> {
                     .align_y(iced::Alignment::Center)
                     .push(
                         widget::text::body(if app.deb_apps {
-                            "Installation DEB: active"
+                            "Installation DEB: activée"
                         } else {
-                            "Installation DEB: desactivee (recommande)"
+                            "Installation DEB: désactivée (recommandé)"
                         })
                         .width(iced::Length::Fill),
                     )
@@ -93,7 +93,7 @@ pub fn view(app: &App) -> Element<'_, Message> {
                 "Actuel: {label} — {effect}"
             )))
             .push(widget::text::caption(format!(
-                "Alimentation {}, quantum audio {} echantillons, rtprio {}.",
+                "Alimentation {}, quantum audio {} échantillons, rtprio {}.",
                 app.profile.power, app.profile.quantum, app.profile.rtprio
             )));
 
@@ -112,7 +112,7 @@ pub fn view(app: &App) -> Element<'_, Message> {
         profile_col = profile_col.push(row);
     } else {
         profile_col = profile_col.push(widget::text::caption(
-            "« auxinux-profile » est introuvable sur ce systeme: les profils \
+            "« auxinux-profile » est introuvable sur ce système: les profils \
              d'usage ne sont pas disponibles.",
         ));
     }
@@ -127,9 +127,9 @@ pub fn view(app: &App) -> Element<'_, Message> {
             .spacing(8)
             .push(widget::text::heading("Assistant de configuration"))
             .push(widget::text::caption(
-                "L'assistant du premier demarrage: navigateur, lecteur \
-                 multimedia, applications selon votre profil, outils de vie privee. \
-                 Le relancer n'enleve rien: il installe ce que vous ajoutez.",
+                "L'assistant du premier démarrage: navigateur, lecteur \
+                 multimédia, applications selon votre profil, outils de vie privée. \
+                 Le relancer n'enlève rien: il installe ce que vous ajoutez.",
             ))
             .push(
                 widget::button::suggested("Relancer l'assistant")
@@ -143,13 +143,13 @@ pub fn view(app: &App) -> Element<'_, Message> {
     let desktop = widget::container(
         widget::Column::new()
             .spacing(8)
-            .push(widget::text::heading("Reglages du bureau"))
+            .push(widget::text::heading("Réglages du bureau"))
             .push(widget::text::caption(
-                "Affichage, apparence, clavier, langue, reseau et comptes se \
-                 configurent dans les reglages du bureau.",
+                "Affichage, apparence, clavier, langue, réseau et comptes se \
+                 configurent dans les réglages du bureau.",
             ))
             .push(
-                widget::button::suggested("Ouvrir les reglages du bureau")
+                widget::button::suggested("Ouvrir les réglages du bureau")
                     .on_press(Message::OpenSystemSettings),
             ),
     )
@@ -160,11 +160,11 @@ pub fn view(app: &App) -> Element<'_, Message> {
     let about = widget::container(
         widget::Column::new()
             .spacing(8)
-            .push(widget::text::heading("A propos"))
+            .push(widget::text::heading("À propos"))
             .push(widget::text::body(app.os_version.clone()))
             .push(widget::text::caption(
-                "AuxiNux OS Center — centre de controle: applications, mises a jour, \
-                 sante, sources, reglages et restauration.",
+                "AuxiNux OS Center — centre de contrôle: applications, mises à jour, \
+                 santé, sources, réglages et restauration.",
             ))
             .push(
                 widget::button::text("Site du projet")

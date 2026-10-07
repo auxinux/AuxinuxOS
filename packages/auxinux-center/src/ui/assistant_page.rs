@@ -25,7 +25,7 @@ pub fn view(app: &App) -> Element<'_, Message> {
 
     let header = widgets::header(
         "Assistant de configuration",
-        format!("Etape {} sur {}", step + 1, STEPS),
+        format!("Étape {} sur {}", step + 1, STEPS),
         vec![],
     );
 
@@ -33,20 +33,20 @@ pub fn view(app: &App) -> Element<'_, Message> {
         0 => intro(),
         1 => question(
             "Quel navigateur voulez-vous ?",
-            "Un seul sera installe. Vous pourrez en ajouter d'autres plus tard \
+            "Un seul sera installé. Vous pourrez en ajouter d'autres plus tard \
              depuis la page Applications.",
             radios(&NAVIGATEURS, sel.navigateur, Message::AssistantBrowser, "Aucun pour l'instant"),
         ),
         2 => question(
-            "Quel lecteur multimedia voulez-vous ?",
-            "Pour vos videos et votre musique. Les codecs sont deja installes: \
+            "Quel lecteur multimédia voulez-vous ?",
+            "Pour vos vidéos et votre musique. Les codecs sont déjà installés: \
              tout lecteur saura lire les formats courants.",
             radios(&LECTEURS, sel.lecteur, Message::AssistantPlayer, "Aucun"),
         ),
         3 => profil(sel),
         4 => question(
-            "Outils de vie privee",
-            "Proposes par AuxiNux, coches d'avance. Decochez ceux dont vous ne \
+            "Outils de vie privée",
+            "Proposés par AuxiNux, cochés d'avance. Décochez ceux dont vous ne \
              voulez pas.",
             checkboxes(
                 VIE_PRIVEE.iter().copied().zip(sel.vie_privee.iter().copied()),
@@ -67,7 +67,7 @@ pub fn view(app: &App) -> Element<'_, Message> {
     nav = nav.push(widget::Space::new().width(iced::Length::Fill));
     if step > 0 {
         nav = nav.push(
-            widget::button::standard("Precedent")
+            widget::button::standard("Précédent")
                 .on_press_maybe(idle.then_some(Message::AssistantBack)),
         );
     }
@@ -123,22 +123,22 @@ fn intro<'a>() -> Element<'a, Message> {
             .spacing(12)
             .push(widget::text::title3("Bienvenue dans AuxiNux OS"))
             .push(widget::text::body(
-                "Votre systeme est installe avec le strict necessaire: le bureau KDE \
+                "Votre système est installé avec le strict nécessaire: le bureau KDE \
                  Plasma, ses outils de base, la suite AuxiNux Office (texte, \
-                 tableur, presentations, PDF et AuxiText) et de quoi faire \
+                 tableur, présentations, PDF et AuxiText) et de quoi faire \
                  tourner les applications Windows (Wine et Bottles).",
             ))
             .push(widget::text::body(
-                "Aucune autre application n'a ete choisie a votre place. Cet \
+                "Aucune autre application n'a été choisie à votre place. Cet \
                  assistant vous demande ce que vous voulez: navigateur, \
-                 lecteur multimedia, et des applications selon l'usage que \
+                 lecteur multimédia, et des applications selon l'usage que \
                  vous faites de votre ordinateur.",
             ))
             .push(widget::text::caption(
-                "Rien n'est installe avant le dernier ecran, qui recapitule vos \
-                 choix. Une connexion Internet est necessaire. Vous pourrez \
-                 relancer cet assistant a tout moment depuis le centre de \
-                 controle, dans Reglages.",
+                "Rien n'est installé avant le dernier écran, qui récapitule vos \
+                 choix. Une connexion Internet est nécessaire. Vous pourrez \
+                 relancer cet assistant à tout moment depuis le centre de \
+                 contrôle, dans Réglages.",
             )),
     )
 }
@@ -205,14 +205,14 @@ fn profil(sel: &assistant::Selection) -> Element<'_, Message> {
     card(
         widget::Column::new()
             .spacing(12)
-            .push(widget::text::title4("A quoi servira surtout cet ordinateur ?"))
+            .push(widget::text::title4("À quoi servira surtout cet ordinateur ?"))
             .push(widget::text::body(
-                "Le profil regle le systeme pour cet usage, et propose des \
-                 applications. Il se change ensuite dans Reglages.",
+                "Le profil règle le système pour cet usage, et propose des \
+                 applications. Il se change ensuite dans Réglages.",
             ))
             .push(profiles)
             .push(widget::text::caption(effect))
-            .push(widget::text::heading("Applications suggerees"))
+            .push(widget::text::heading("Applications suggérées"))
             .push(checkboxes(
                 sel.profil
                     .suggestions()
@@ -230,7 +230,7 @@ fn recap(app: &App) -> Element<'_, Message> {
     for entry in sel.applications() {
         let origin = match entry.source {
             assistant::Source::Flatpak => "Flatpak (Flathub)",
-            assistant::Source::Brave => "Depot officiel de Brave",
+            assistant::Source::Brave => "Dépôt officiel de Brave",
         };
         list = list.push(
             widget::Row::new()
@@ -243,17 +243,17 @@ fn recap(app: &App) -> Element<'_, Message> {
     card(
         widget::Column::new()
             .spacing(12)
-            .push(widget::text::title4("Recapitulatif"))
+            .push(widget::text::title4("Récapitulatif"))
             .push(widget::text::body(format!(
-                "Profil d'usage: {}. Ces applications vont etre installees:",
+                "Profil d'usage: {}. Ces applications vont être installées:",
                 sel.profil.label()
             )))
             .push(list)
             .push(widget::text::caption(
-                "Bottles est toujours installe: c'est lui qui fait tourner les \
+                "Bottles est toujours installé: c'est lui qui fait tourner les \
                  applications Windows exigeantes. Une seule autorisation vous sera \
-                 demandee pour l'ensemble. L'installation peut prendre plusieurs \
-                 minutes; vous pouvez suivre le detail ci-dessous.",
+                 demandée pour l'ensemble. L'installation peut prendre plusieurs \
+                 minutes; vous pouvez suivre le détail ci-dessous.",
             )),
     )
 }
@@ -268,7 +268,7 @@ fn fin<'a>(app: &'a App, bilan: &'a assistant::Bilan) -> Element<'a, Message> {
 
     let header = widgets::header(
         "Assistant de configuration",
-        if bilan.ok { "Termine" } else { "Termine, avec des erreurs" },
+        if bilan.ok { "Terminé" } else { "Terminé, avec des erreurs" },
         vec![],
     );
 
@@ -277,7 +277,7 @@ fn fin<'a>(app: &'a App, bilan: &'a assistant::Bilan) -> Element<'a, Message> {
         // d'un bloc et s'affiche en forme pleine.
         (
             crate::ui::icon("emblem-ok-symbolic", &["state-ok-symbolic", "object-select-symbolic"]),
-            "Tout est installe !",
+            "Tout est installé !",
         )
     } else if partiel {
         (
@@ -285,7 +285,7 @@ fn fin<'a>(app: &'a App, bilan: &'a assistant::Bilan) -> Element<'a, Message> {
                 "dialog-warning-symbolic",
                 &["state-warning-symbolic", "messagebox_warning-symbolic"],
             ),
-            "Installation terminee, avec des erreurs",
+            "Installation terminée, avec des erreurs",
         )
     } else {
         (
@@ -304,23 +304,23 @@ fn fin<'a>(app: &'a App, bilan: &'a assistant::Bilan) -> Element<'a, Message> {
 
     if !bilan.installees.is_empty() {
         col = col.push(widget::text::heading(if bilan.ok {
-            "Vos applications sont pretes:"
+            "Vos applications sont prêtes:"
         } else {
-            "Installees:"
+            "Installées:"
         }));
         col = col.push(liste(&bilan.installees));
     }
     if !bilan.echecs.is_empty() {
         col = col.push(widget::text::heading(if partiel {
-            "Non installees:"
+            "Non installées:"
         } else {
-            "Aucune application n'a ete installee:"
+            "Aucune application n'a été installée:"
         }));
         col = col.push(liste(&bilan.echecs));
     }
     if bilan.profil_echoue {
         col = col.push(widget::text::body(format!(
-            "Le profil d'usage « {} » n'a pas pu etre applique.",
+            "Le profil d'usage « {} » n'a pas pu être appliqué.",
             app.selection.profil.label()
         )));
     }
@@ -328,7 +328,7 @@ fn fin<'a>(app: &'a App, bilan: &'a assistant::Bilan) -> Element<'a, Message> {
     if bilan.ok {
         col = col.push(widget::text::caption(
             "Elles sont dans le menu des applications. Pour en ajouter d'autres, \
-             ouvrez la page Applications. L'assistant reste disponible ici a tout \
+             ouvrez la page Applications. L'assistant reste disponible ici à tout \
              moment.",
         ));
     } else {
@@ -336,14 +336,14 @@ fn fin<'a>(app: &'a App, bilan: &'a assistant::Bilan) -> Element<'a, Message> {
         // d'operation: celui-ci se ferme, la page finale reste.
         if !bilan.message.is_empty() {
             col = col
-                .push(widget::text::heading("Cause signalee:"))
+                .push(widget::text::heading("Cause signalée:"))
                 .push(widget::text::monotext(bilan.message.clone()));
         }
         col = col.push(widget::text::caption(
-            "« Reessayer » relance l'installation de votre selection; verifiez \
+            "« Réessayer » relance l'installation de votre sélection; vérifiez \
              d'abord la connexion Internet. Le journal complet est dans le panneau \
-             ci-dessous (« Voir le detail »). Tant que l'installation n'a pas \
-             reussi, l'assistant se rouvrira a la prochaine session.",
+             ci-dessous (« Voir le détail »). Tant que l'installation n'a pas \
+             réussi, l'assistant se rouvrira à la prochaine session.",
         ));
     }
 
@@ -351,7 +351,7 @@ fn fin<'a>(app: &'a App, bilan: &'a assistant::Bilan) -> Element<'a, Message> {
     nav = nav.push(widget::Space::new().width(iced::Length::Fill));
     if !bilan.ok {
         nav = nav.push(
-            widget::button::standard("Reessayer")
+            widget::button::standard("Réessayer")
                 .on_press_maybe(idle.then_some(Message::AssistantInstall)),
         );
     }

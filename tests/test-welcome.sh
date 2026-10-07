@@ -59,7 +59,7 @@ HOME="${HOME_DIR}" USER=auxinux LANG=en_US.UTF-8 \
 check "sort en 0" "$?" "0"
 check "aucun terminate-user" "$(grep -c 'terminate-user' "${STUB_LOG}")" "0"
 check "aucune demande de redemarrage de session" \
-  "$(grep -ci 'redemarrer\|restart' "${STUB_LOG}")" "0"
+  "$(grep -ci 'red[eé]marrer\|restart' "${STUB_LOG}")" "0"
 check "langue enregistree" "$(cat "${HOME_DIR}/.config/auxinux/language")" "fr"
 check "environment.d ecrit" \
   "$(grep -c '^LANG=fr_CA.UTF-8$' "${HOME_DIR}/.config/environment.d/60-auxinux-locale.conf")" "1"

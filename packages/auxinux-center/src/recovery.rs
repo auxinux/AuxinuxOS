@@ -46,14 +46,14 @@ fn snapshot_boot_now() -> Option<u32> {
 /// Vrai si la racine est un BTRFS avec une configuration snapper "root".
 fn configured() -> Result<(), String> {
     if !std::path::Path::new("/etc/snapper/configs/root").exists() {
-        return Err("snapper n'est pas configure sur ce systeme".into());
+        return Err("snapper n'est pas configuré sur ce système".into());
     }
     let racine = if snapshot_boot_now().is_some() { SNAPSHOT_OVERLAY_LOWER } else { "/" };
     let fs = run("findmnt", &["-no", "FSTYPE", racine]);
     if fs.stdout.trim() != "btrfs" {
         return Err(format!(
             "la racine est en {} et non en BTRFS",
-            if fs.stdout.trim().is_empty() { "systeme inconnu" } else { fs.stdout.trim() }
+            if fs.stdout.trim().is_empty() { "système inconnu" } else { fs.stdout.trim() }
         ));
     }
     Ok(())
@@ -71,7 +71,7 @@ pub fn state() -> RecoveryState {
     if !out.ok {
         return RecoveryState {
             available: false,
-            reason: "lecture des instantanes impossible (droits insuffisants ?)".into(),
+            reason: "lecture des instantanés impossible (droits insuffisants ?)".into(),
             snapshots: Vec::new(),
             demarre_sur: snapshot_boot_now(),
         };
@@ -222,7 +222,7 @@ fn origine(s: &Snapshot) -> Origine {
 
 fn titre(s: &Snapshot, origine: Origine) -> String {
     match origine {
-        Origine::Installation => "Etat d'origine (installation du systeme)".into(),
+        Origine::Installation => "État d'origine (installation du système)".into(),
         Origine::Quotidien => "Sauvegarde automatique du jour".into(),
         Origine::Manuel if s.description.is_empty() => format!("Point de restauration {}", s.number),
         Origine::Manuel => s.description.clone(),
@@ -257,9 +257,9 @@ fn avant(commande: &str) -> String {
         format!(" de {}{}", paquets.join(", "), if plus { "…" } else { "" })
     };
     match mots[i] {
-        "upgrade" | "dist-upgrade" | "full-upgrade" => "Avant la mise a jour du systeme".into(),
-        "remove" | "purge" | "autoremove" if liste.is_empty() => "Avant une desinstallation".into(),
-        "remove" | "purge" | "autoremove" => format!("Avant la desinstallation{liste}"),
+        "upgrade" | "dist-upgrade" | "full-upgrade" => "Avant la mise à jour du système".into(),
+        "remove" | "purge" | "autoremove" if liste.is_empty() => "Avant une désinstallation".into(),
+        "remove" | "purge" | "autoremove" => format!("Avant la désinstallation{liste}"),
         _ if liste.is_empty() => "Avant une installation".into(),
         _ => format!("Avant l'installation{liste}"),
     }
@@ -269,8 +269,8 @@ fn avant(commande: &str) -> String {
 /// snapper ecrirait autrement est rendue telle quelle.
 pub fn date_lisible(date: &str) -> String {
     const MOIS: [&str; 12] = [
-        "janvier", "fevrier", "mars", "avril", "mai", "juin", "juillet", "aout",
-        "septembre", "octobre", "novembre", "decembre",
+        "janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août",
+        "septembre", "octobre", "novembre", "décembre",
     ];
     let mut parts = date.split_whitespace();
     let (Some(jour), Some(heure)) = (parts.next(), parts.next()) else {
@@ -284,7 +284,7 @@ pub fn date_lisible(date: &str) -> String {
         return date.to_string();
     };
     match MOIS.get(m.wrapping_sub(1)) {
-        Some(mois) => format!("{j} {mois} {y} a {} h {mm}", hh.trim_start_matches('0').parse::<u32>().unwrap_or(0)),
+        Some(mois) => format!("{j} {mois} {y} à {} h {mm}", hh.trim_start_matches('0').parse::<u32>().unwrap_or(0)),
         None => date.to_string(),
     }
 }
@@ -295,11 +295,11 @@ pub fn create_snapshot(description: &str) -> ActionResult {
     // elle est reaffichee par snapper: on borne la longueur et on refuse les
     // caracteres de controle qui casseraient la sortie CSV relue ci-dessus.
     if desc.is_empty() || desc.len() > 200 || desc.chars().any(|c| c.is_control() || c == ',') {
-        return ActionResult::err("description invalide (200 caracteres max, sans virgule)");
+        return ActionResult::err("description invalide (200 caractères max, sans virgule)");
     }
     let out = run_pkexec(&["auxi", "snapshot", desc]);
     if out.ok {
-        ActionResult::ok(format!("Instantane cree: {desc}"))
+        ActionResult::ok(format!("Instantané créé: {desc}"))
     } else {
         ActionResult::err(last_lines(&out.stderr))
     }
@@ -310,7 +310,7 @@ pub fn rollback(number: u32) -> ActionResult {
     let out = run_pkexec(&["auxi", "rollback", &n, "--yes"]);
     if out.ok {
         ActionResult::ok(format!(
-            "Restauration de l'instantane {number} prete. Redemarrez pour l'appliquer."
+            "Restauration de l'instantané {number} prête. Redémarrez pour l'appliquer."
         ))
     } else {
         ActionResult::err(last_lines(&out.stderr))
@@ -322,7 +322,7 @@ fn last_lines(s: &str) -> String {
     let start = lines.len().saturating_sub(6);
     let msg = lines[start..].join("\n");
     if msg.is_empty() {
-        "Echec de l'operation".into()
+        "Échec de l'opération".into()
     } else {
         msg
     }
@@ -404,7 +404,7 @@ mod tests {
         assert_eq!(p[1].titre, "Avant l'installation de vlc");
         assert_eq!(p[2].origine, Origine::Quotidien);
         assert_eq!(p[3].origine, Origine::Installation);
-        assert_eq!(p[3].date, "1 octobre 2026 a 9 h 00");
+        assert_eq!(p[3].date, "1 octobre 2026 à 9 h 00");
     }
 
     #[test]
@@ -417,9 +417,9 @@ mod tests {
 
     #[test]
     fn transaction_titles_say_what_was_about_to_happen() {
-        assert_eq!(avant("apt-get -y upgrade"), "Avant la mise a jour du systeme");
-        assert_eq!(avant("/usr/bin/apt-get -y -o Dpkg::Options::=--force-confold full-upgrade"), "Avant la mise a jour du systeme");
-        assert_eq!(avant("apt purge kate"), "Avant la desinstallation de kate");
+        assert_eq!(avant("apt-get -y upgrade"), "Avant la mise à jour du système");
+        assert_eq!(avant("/usr/bin/apt-get -y -o Dpkg::Options::=--force-confold full-upgrade"), "Avant la mise à jour du système");
+        assert_eq!(avant("apt purge kate"), "Avant la désinstallation de kate");
         assert_eq!(avant("apt install a b c d"), "Avant l'installation de a, b, c…");
         assert_eq!(avant("/usr/bin/dpkg --status-fd 3"), "Avant une modification des logiciels");
         assert_eq!(avant(""), "Avant une modification des logiciels");
@@ -427,7 +427,7 @@ mod tests {
 
     #[test]
     fn unreadable_dates_are_shown_as_is() {
-        assert_eq!(date_lisible("2026-12-25 07:05:00"), "25 decembre 2026 a 7 h 05");
+        assert_eq!(date_lisible("2026-12-25 07:05:00"), "25 décembre 2026 à 7 h 05");
         assert_eq!(date_lisible("hier"), "hier");
         assert_eq!(date_lisible("2026-13-01 10:00:00"), "2026-13-01 10:00:00");
     }
