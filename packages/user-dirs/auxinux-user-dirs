@@ -1,0 +1,63 @@
+#!/bin/sh
+# Dossiers personnels standard: Desktop, Downloads, Documents...
+#
+# PANNE A L'ORIGINE (2026-10-08, rapportee par aporler): le compte utilisateur
+# n'avait QUE ~/Desktop. xdg-user-dirs n'est pas installe, donc rien ne
+# creait ~/Downloads ni ~/.config/user-dirs.dirs. Firefox (Flatpak) n'a alors
+# aucun dossier de telechargement autorise par son bac a sable: le fichier
+# telecharge partait dans ~/.var/app/..., invisible pour l'utilisateur.
+#
+# Noms ANGLAIS fixes (arbitrage d'aporler, 2026-10-08): ils ne changent pas
+# quand on change de langue, et le raccourci du centre de controle reste dans
+# ~/Desktop (voir install-auxinux-center.sh). Dolphin et la boite
+# « Enregistrer » affichent quand meme des libelles traduits (« Telechargements »).
+#
+# Un ~/.config/user-dirs.dirs existant est RESPECTE, quels que soient ses noms
+# (francais compris): seuls les dossiers qu'il cite et qui manquent sont crees.
+#
+# Usage: auxinux-user-dirs [DOSSIER_PERSONNEL]   (defaut: $HOME)
+#   - a chaque ouverture de session (/etc/xdg/autostart/auxinux-user-dirs.desktop):
+#     repare les comptes existants;
+#   - a la construction de l'image, sur /etc/skel: tout nouveau compte les a.
+set -u
+
+base="${1:-${HOME:-}}"
+[ -n "${base}" ] && [ -d "${base}" ] || {
+  echo "auxinux-user-dirs: dossier personnel introuvable: ${base:-(vide)}" >&2
+  exit 66
+}
+
+conf="${base}/.config/user-dirs.dirs"
+
+if [ ! -f "${conf}" ]; then
+  mkdir -p "${base}/.config" || exit 73
+  cat > "${conf}" <<'DIRS'
+# Dossiers personnels (cree par auxinux-user-dirs). Format de xdg-user-dirs:
+# modifiable, il est respecte tel quel.
+XDG_DESKTOP_DIR="$HOME/Desktop"
+XDG_DOWNLOAD_DIR="$HOME/Downloads"
+XDG_TEMPLATES_DIR="$HOME/Templates"
+XDG_PUBLICSHARE_DIR="$HOME/Public"
+XDG_DOCUMENTS_DIR="$HOME/Documents"
+XDG_MUSIC_DIR="$HOME/Music"
+XDG_PICTURES_DIR="$HOME/Pictures"
+XDG_VIDEOS_DIR="$HOME/Videos"
+DIRS
+fi
+
+# Langue des noms: empeche xdg-user-dirs-update, s'il est installe un jour,
+# de proposer de renommer ces dossiers dans la langue de la session.
+[ -f "${base}/.config/user-dirs.locale" ] || printf 'en_US\n' > "${base}/.config/user-dirs.locale"
+
+# Chaque dossier cite et absent est cree. "$HOME" seul (dossier desactive par
+# l'utilisateur) est laisse tel quel.
+sed -n 's/^XDG_[A-Z]*_DIR="\(.*\)"[[:space:]]*$/\1/p' "${conf}" | while IFS= read -r path; do
+  case "${path}" in
+    '$HOME'|'$HOME/') continue ;;
+    '$HOME/'*) dir="${base}/${path#\$HOME/}" ;;
+    /*) dir="${path}" ;;
+    *) continue ;;
+  esac
+  [ -d "${dir}" ] || mkdir -p "${dir}" 2>/dev/null || true
+done
+exit 0

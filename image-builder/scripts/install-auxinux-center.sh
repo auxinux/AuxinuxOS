@@ -92,6 +92,11 @@ sudo ln -sf /etc/systemd/system/auxinux-installer.service \
 # ~/Desktop et non un nom traduit: xdg-user-dirs n'est pas installe, donc le
 # bureau de Plasma est ~/Desktop quelle que soit la langue.
 sudo install -d -m 0755 "${ROOTFS}/etc/skel/Desktop"
+# Downloads, Documents... et ~/.config/user-dirs.dirs pour tout nouveau compte
+# (useradd -m copie /etc/skel). Sans eux, Firefox (Flatpak) telechargeait dans
+# son bac a sable, introuvable (rapporte le 2026-10-08). Les comptes existants
+# sont repares a l'ouverture de session (/etc/xdg/autostart/auxinux-user-dirs.desktop).
+sudo chroot "${ROOTFS}" /usr/lib/auxinux/auxinux-user-dirs /etc/skel
 sudo rm -f "${ROOTFS}/etc/skel/Desktop/AuxiNux OS Center.desktop"
 sudo install -m 0755 "${PKG_DIR}/data/ca.auxinux.Center.desktop" \
   "${ROOTFS}/etc/skel/Desktop/AuxiNux OS Center.desktop"

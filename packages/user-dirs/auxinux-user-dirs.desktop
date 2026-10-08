@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=AuxiNux user folders
+Name[fr]=Dossiers personnels AuxiNux
+Comment=Create Downloads, Documents and the other standard folders
+Comment[fr]=Créer Downloads, Documents et les autres dossiers standard
+Exec=/usr/lib/auxinux/auxinux-user-dirs
+NoDisplay=true
+# Phase 0: avant le bureau et les applications, qui lisent user-dirs.dirs.
+X-KDE-autostart-phase=0
+X-GNOME-Autostart-Phase=Initialization

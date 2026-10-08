@@ -5,9 +5,16 @@ name="$(basename "$0")"
 real="/usr/lib/auxinux/apt-real/${name}"
 conf="/etc/auxinux/apt.conf"
 
+# Langue des messages: la PREMIERE preference, comme gettext (LANGUAGE, puis
+# LC_ALL, LC_MESSAGES, LANG). LANGUAGE est une liste de REPLI
+# (« fr_CA:fr:en_CA:en », posee par l'image pour tout le monde): y chercher
+# « en » n'importe ou affichait l'anglais a tous les francophones (constate en
+# VM le 2026-10-08).
 is_english() {
-  local locale_chain="${LC_ALL:-}|${LC_MESSAGES:-}|${LANGUAGE:-}|${LANG:-}"
-  [[ "${locale_chain}" =~ (^|[|:])en([_.]|$) ]]
+  local lang="${LANGUAGE:-}"
+  lang="${lang%%:*}"
+  [[ -n "${lang}" ]] || lang="${LC_ALL:-${LC_MESSAGES:-${LANG:-}}}"
+  [[ "${lang}" == en || "${lang}" == en_* || "${lang}" == en.* ]]
 }
 
 if [[ -r "${conf}" ]] && grep -Eq '^APT_ENABLED=1$' "${conf}"; then

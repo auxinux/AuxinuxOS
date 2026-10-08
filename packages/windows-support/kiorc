@@ -1,0 +1,18 @@
+# Ouverture des fichiers executables dans Dolphin et Plasma (KIO).
+#
+# Par defaut (alwaysAsk), KIO demande « Que voulez-vous faire avec ce
+# fichier ? » avec « Annuler » preselectionne -- y compris pour un .exe
+# Windows. Pour quelqu'un qui ne connait rien a Linux, c'etait une impasse de
+# plus (rapporte le 2026-10-08).
+#
+# execute: un .exe sans bit d'execution -- c'est le cas de TOUT fichier
+# telecharge -- va directement a l'application associee, l'assistant des
+# applications Windows (/etc/xdg/mimeapps.list). Seul un fichier que
+# l'utilisateur a lui-meme rendu executable se lance d'un double-clic.
+#
+# PAS « open »: essaye en VM le 2026-10-08, Dolphin refuse alors les .exe
+# (« le lancement d'executables n'est pas autorise dans ce contexte »).
+#
+# Modifiable dans Dolphin: Configuration > Interface > Fichiers executables.
+[Executable scripts]
+behaviourOnLaunch=execute

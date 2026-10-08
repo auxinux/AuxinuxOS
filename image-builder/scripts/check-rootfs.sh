@@ -268,6 +268,13 @@ need_package zenity "les assistants (accueil live, .exe) n'afficheraient aucune 
 need_package kdialog "boites de dialogue natives pour les scripts KDE"
 need_exec /usr/bin/auxinux-welcome "premier ecran de la session live"
 need_exec /usr/bin/auxinux-windows-wizard "ouverture des fichiers .exe"
+need_package wine32:i386 "Wine ne lancerait aucun programme 32 bits, donc presque aucun installateur Windows"
+need_owned /usr/bin/auxinux-windows-wizard auxinux-center
+need_setting /etc/xdg/kiorc '^behaviourOnLaunch=execute$' \
+  "Dolphin demanderait « Executer / Annuler » (Annuler par defaut) avant d'ouvrir un .exe" "l'assistant des .exe ne recevrait aucun correctif"
+need_file /etc/skel/Downloads "les telechargements des nouveaux comptes partiraient dans le bac a sable de Firefox"
+need_file /etc/skel/.config/user-dirs.dirs "aucun dossier de telechargement declare pour les nouveaux comptes"
+need_file /etc/xdg/autostart/auxinux-user-dirs.desktop "les comptes existants n'auraient jamais leurs dossiers personnels"
 need_exec /usr/bin/auxinux-windows-setup "installation de la couche Windows et jeux"
 
 echo "-- Bureau et session (KDE Plasma / Wayland)"
