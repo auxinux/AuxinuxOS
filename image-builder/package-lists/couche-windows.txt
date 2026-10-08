@@ -17,6 +17,11 @@
 # mesure et de bridage, et Lutris pour lancer les jeux non-Steam.
 
 wine
+# Wine 32 bits: une simple RECOMMANDATION de `wine`, et l'image est construite
+# sans les recommandations. Il manquait donc (constate en VM le 2026-10-08):
+# Wine refusait les programmes 32 bits -- presque tous les INSTALLATEURS
+# Windows, celui de 7-Zip 64 bits compris (« wine32 is missing »).
+wine32:i386
 winetricks
 dxvk
 

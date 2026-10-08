@@ -16,11 +16,21 @@ set -uo pipefail
 target="${1:-}"
 
 BOTTLES_ID="com.usebottles.bottles"
+# Helper privilegie de l'assistant de premier demarrage: il installe un paquet
+# systeme sous sa propre action polkit. Sert ici a ajouter wine32.
+APPLY_HELPER="${AUXINUX_APPLY_HELPER:-/usr/libexec/auxinux/auxinux-assistant-apply}"
 PREFIX_ROOT="${XDG_DATA_HOME:-${HOME}/.local/share}/auxinux/wine-prefixes"
 
+# Langue des messages: la PREMIERE preference, comme gettext (LANGUAGE, puis
+# LC_ALL, LC_MESSAGES, LANG). LANGUAGE est une liste de REPLI
+# (« fr_CA:fr:en_CA:en », posee par l'image pour tout le monde): y chercher
+# « en » n'importe ou affichait l'anglais a tous les francophones (constate en
+# VM le 2026-10-08).
 is_english() {
-  local locale_chain="${LC_ALL:-}|${LC_MESSAGES:-}|${LANGUAGE:-}|${LANG:-}"
-  [[ "${locale_chain}" =~ (^|[|:])en([_.]|$) ]]
+  local lang="${LANGUAGE:-}"
+  lang="${lang%%:*}"
+  [[ -n "${lang}" ]] || lang="${LC_ALL:-${LC_MESSAGES:-${LANG:-}}}"
+  [[ "${lang}" == en || "${lang}" == en_* || "${lang}" == en.* ]]
 }
 
 t() {
@@ -37,6 +47,15 @@ if ! command -v zenity >/dev/null 2>&1; then
             "zenity not found: graphical assistant unavailable.")" >&2
   exit 69
 fi
+
+# Fenetre d'attente alimentee par une commande. Chaque ligne est prefixee par
+# « # »: zenity l'affiche alors comme texte d'avancement. Sans prefixe, une
+# ligne qui COMMENCE par un nombre (« 120 paquets peuvent etre mis a jour »)
+# est lue comme un pourcentage; a 100, --auto-close ferme la fenetre, et la
+# commande en amont meurt de SIGPIPE au milieu de son travail.
+progress_window() {
+  sed -u 's/^/# /' | zenity --progress --pulsate --auto-close --no-cancel "$@" 2>/dev/null
+}
 
 die() {
   zenity --error --no-wrap --title "AuxiNuxOS" --text "$1" 2>/dev/null
@@ -91,7 +110,7 @@ new_menu_entries() {
 # Wine installait vraiment. Desormais le choix par defaut INSTALLE, en un clic.
 choice="$(zenity --list --radiolist \
   --title "$(t "Application Windows détectée" "Windows application detected")" \
-  --width 720 --height 340 \
+  --width 720 --height 400 \
   --text "$(t \
       "« ${app_name} » est un programme conçu pour Windows.\n\nAuxiNux OS peut l'installer dans un espace qui lui est propre : s'il pose problème, rien d'autre n'est touché." \
       "'${app_name}' is a program built for Windows.\n\nAuxiNux OS can install it in a space of its own: if it misbehaves, nothing else is affected.")" \
@@ -132,9 +151,8 @@ case "${choice}" in
       # une installation de plusieurs centaines de Mo sans retour visuel
       # passe pour un plantage.
       flatpak install -y --noninteractive flathub "${BOTTLES_ID}" 2>&1 \
-        | zenity --progress --pulsate --auto-close --no-cancel \
-                 --title "Bottles" \
-                 --text "$(t "Installation de Bottles…" "Installing Bottles…")" 2>/dev/null
+        | progress_window --title "Bottles" \
+                          --text "$(t "Installation de Bottles…" "Installing Bottles…")"
       flatpak info "${BOTTLES_ID}" >/dev/null 2>&1 \
         || die "$(t "L'installation de Bottles a échoué." "Installing Bottles failed.")" 70
     fi
@@ -151,9 +169,9 @@ case "${choice}" in
     }
     if [[ ! -d "${bottle_dir}" ]]; then
       bottles_cli new --bottle-name "${bottle}" --environment application 2>&1 \
-        | zenity --progress --pulsate --auto-close --no-cancel --title "Bottles" \
-                 --text "$(t "Préparation de l'espace « ${bottle} »…\nLa première fois, Bottles télécharge ses composants : comptez quelques minutes." \
-                             "Preparing the '${bottle}' space…\nThe first time, Bottles downloads its components: allow a few minutes.")" 2>/dev/null
+        | progress_window --title "Bottles" \
+                          --text "$(t "Préparation de l'espace « ${bottle} »…\nLa première fois, Bottles télécharge ses composants : comptez quelques minutes." \
+                                      "Preparing the '${bottle}' space…\nThe first time, Bottles downloads its components: allow a few minutes.")"
     fi
     if [[ ! -d "${bottle_dir}" ]]; then
       # Repli: Bottles n'a pas pu creer la bouteille seul (premier lancement
@@ -178,6 +196,32 @@ case "${choice}" in
       die "$(t "Wine n'est pas installé sur ce système." "Wine is not installed on this system.")" 69
     fi
 
+    # Wine 32 bits. PANNE CONSTATEE EN VM LE 2026-10-08: l'image n'installait
+    # que Wine 64 bits (wine32:i386 est une simple recommandation, et
+    # l'image est construite sans les recommandations). Or presque tous les
+    # INSTALLATEURS Windows sont des programmes 32 bits -- celui de 7-Zip 64
+    # bits compris: Wine refusait de les lancer (« wine32 is missing ») et
+    # l'assistant annoncait quand meme « termine ». Les nouvelles images
+    # l'ont; ici, on le propose aux machines installees avant.
+    if ! dpkg-query -W -f='${Status}' wine32:i386 2>/dev/null | grep -q 'install ok installed'; then
+      if ! zenity --question --no-wrap --title "Wine" \
+        --text "$(t \
+          "Le composant qui fait tourner les programmes Windows 32 bits n'est pas installé.\nLa plupart des installateurs en ont besoin.\n\nL'installer maintenant ? (environ 150 Mo, mot de passe administrateur)" \
+          "The component that runs 32-bit Windows programs is not installed.\nMost installers need it.\n\nInstall it now? (about 150 MB, administrator password)")" 2>/dev/null; then
+        exit 0
+      fi
+      # La fenetre d'attente ne s'ouvre qu'a la PREMIERE ligne du helper,
+      # c'est-a-dire apres l'authentification: ouverte tout de suite, elle
+      # recouvrait le champ du mot de passe de polkit (constate en VM).
+      pkexec "${APPLY_HELPER}" --deb wine32:i386 2>&1 \
+        | { IFS= read -r first || exit 0
+            { printf '%s\n' "${first}"; cat; } \
+              | progress_window --title "Wine" \
+                                --text "$(t "Installation de Wine 32 bits…" "Installing 32-bit Wine…")"; }
+      dpkg-query -W -f='${Status}' wine32:i386 2>/dev/null | grep -q 'install ok installed' \
+        || die "$(t "L'installation de Wine 32 bits a échoué ou a été annulée." "Installing 32-bit Wine failed or was cancelled.")" 70
+    fi
+
     prefix="${PREFIX_ROOT}/${prefix_name}"
     if ! mkdir -p "${prefix}"; then
       die "$(t "Impossible de créer l'espace Wine :" "Could not create the Wine space:")
@@ -190,24 +234,49 @@ ${prefix}" 73
     export WINEPREFIX="${prefix}"
     export WINEDLLOVERRIDES="mscoree,mshtml="
 
+    log="${prefix}/auxinux-wine.log"
+
+    # Premier lancement: l'espace est d'abord PREPARE (wineboot --init), et
+    # le programme n'est lance qu'une fois cette preparation terminee.
+    # CONSTATE EN VM LE 2026-10-08: lance directement, Wine prepare l'espace
+    # et le programme en meme temps; sur une machine lente la preparation
+    # depasse le delai d'attente de Wine (« boot event wait timed out ») et le
+    # programme echoue (« could not load kernel32.dll »).
+    if [[ ! -f "${prefix}/system.reg" ]]; then
+      { wine wineboot --init >"${log}" 2>&1; wineserver -w 2>/dev/null; echo fin; } \
+        | progress_window --title "Wine" \
+                          --text "$(t "Préparation de l'espace Windows de « ${app_name} »…\nLa première fois, comptez une minute." \
+                                      "Preparing the Windows space for '${app_name}'…\nThe first time, allow a minute.")"
+    fi
+
     marker="${prefix}/.auxinux-debut"
     : > "${marker}"
-    log="${prefix}/auxinux-wine.log"
 
     # Chaque format s'ouvre avec la commande qui lui correspond. `wine
     # fichier.msi` ECHOUE: un paquet MSI n'est pas un executable, il doit
     # passer par msiexec. Idem pour un raccourci .lnk, resolu par `start`.
     case "${target,,}" in
-      *.msi) wine msiexec /i "${target}" >"${log}" 2>&1 ;;
-      *.lnk) wine start /unix "${target}" >"${log}" 2>&1 ;;
-      *)     wine "${target}" >"${log}" 2>&1 ;;
+      *.msi) wine msiexec /i "${target}" >>"${log}" 2>&1 ;;
+      *.lnk) wine start /unix "${target}" >>"${log}" 2>&1 ;;
+      *)     wine "${target}" >>"${log}" 2>&1 ;;
     esac
+    status=$?
     # L'installateur lance souvent un second processus et rend la main tout de
     # suite: on attend que TOUT ce qui tourne dans cet espace soit termine.
     wineserver -w 2>/dev/null || true
 
     installed="$(new_menu_entries "${marker}")"
-    if [[ -n "${installed}" ]]; then
+    failed=0
+    [[ "${status}" -ne 0 ]] && failed=1
+    grep -qE 'failed to (open|load)|wine32 is missing' "${log}" 2>/dev/null && failed=1
+    if [[ -z "${installed}" && "${failed}" -eq 1 ]]; then
+      # Ne plus annoncer « termine » quand Wine n'a rien pu lancer.
+      zenity --error --no-wrap --title "Wine" \
+        --text "$(t \
+          "« ${app_name} » n'a pas pu s'exécuter correctement (code ${status}).\n\nEssayez plutôt « Installer avec Bottles ». Détails techniques :\n${log}" \
+          "'${app_name}' could not run correctly (code ${status}).\n\nTry 'Install with Bottles' instead. Technical details:\n${log}")" 2>/dev/null
+      exit 1
+    elif [[ -n "${installed}" ]]; then
       zenity --info --no-wrap --title "$(t "Installation terminée" "Installation complete")" \
         --text "$(t \
           "C'est installé. Vous trouverez dans le menu des applications (catégorie Wine) :\n\n${installed}" \

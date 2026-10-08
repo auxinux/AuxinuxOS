@@ -26,12 +26,37 @@ mkdir -p "${STUBS}"
 # Journal des appels wine, pour inspecter WINEPREFIX.
 cat > "${STUBS}/wine" <<'STUB'
 #!/usr/bin/env bash
+# Preparation de l'espace: consignee a part, et l'espace devient « pret ».
+if [[ "$1" == "wineboot" ]]; then
+  echo "WINEBOOT ${WINEPREFIX}" >> "${WINE_LOG}"
+  touch "${WINEPREFIX}/system.reg"
+  exit 0
+fi
 printf 'WINEPREFIX=%s\n' "${WINEPREFIX:-<absent>}" >> "${WINE_LOG}"
 printf 'OVERRIDES=%s\n' "${WINEDLLOVERRIDES:-<absent>}" >> "${WINE_LOG}"
 printf 'TARGET=%s\n' "$1" >> "${WINE_LOG}"
 printf 'ARGS=%s\n' "$*" >> "${WINE_LOG}"
+[[ -n "${WINE_ERREUR:-}" ]] && { echo "wine: failed to load L\"C:\\windows\\syswow64\\ntdll.dll\""; exit 1; }
+exit 0
 STUB
 chmod +x "${STUBS}/wine"
+
+# wine32:i386 present tant que ${WORK}/wine32-ok existe; pkexec (helper de
+# l'assistant) l'installe si WINE32_INSTALLABLE est defini.
+cat > "${STUBS}/dpkg-query" <<STUB
+#!/usr/bin/env bash
+[[ -e "${WORK}/wine32-ok" ]] && printf 'install ok installed'
+exit 0
+STUB
+chmod +x "${STUBS}/dpkg-query"
+cat > "${STUBS}/pkexec" <<STUB
+#!/usr/bin/env bash
+echo "pkexec \$*" >> "\${WINE_LOG}"
+[[ -n "\${WINE32_INSTALLABLE:-}" ]] && touch "${WORK}/wine32-ok"
+exit 0
+STUB
+chmod +x "${STUBS}/pkexec"
+touch "${WORK}/wine32-ok"
 
 # wineserver -w: l'installateur simule cree un raccourci de menu, comme le
 # fait winemenubuilder, si WINE_CREE_MENU est defini.
@@ -73,7 +98,7 @@ for arg in "$@"; do
   case "${arg}" in
     --list)     printf '%s\n' "${ZENITY_LIST:-}"; exit 0 ;;
     --question) exit "${ZENITY_ANSWER:-1}" ;;
-    --info) printf '%s\n' "$@" >> "${ZENITY_LOG}"; exit 0 ;;
+    --info|--error) printf '%s\n' "$@" >> "${ZENITY_LOG}"; exit 0 ;;
   esac
 done
 exit 0
@@ -148,11 +173,13 @@ echo "== 8. Installation: un seul clic, puis ce qui a ete ajoute au menu =="
 # PANNE (2026-10-08): le choix par defaut ouvrait le centre de controle sur sa
 # page d'accueil -- « rien ne se passe ». Le choix par defaut INSTALLE.
 : > "${WINE_LOG}"; : > "${ZENITY_LOG}"
+printf 'MZ' > "${WORK}/JeuDeluxeSetup.exe"
 ZENITY_LIST="${INSTALLER}" ZENITY_ANSWER=1 WINE_CREE_MENU="Jeu Deluxe" \
-  run_wizard "${WORK}/Setup Jeu (v2).exe" >/dev/null 2>&1
+  run_wizard "${WORK}/JeuDeluxeSetup.exe" >/dev/null 2>&1
 check "sort en 0" "$?" "0"
 check "aucune question de plus: wine appele" "$(grep -c '^TARGET=' "${WINE_LOG}")" "1"
-check "attend la fin de tout l'espace Wine" "$(grep -c '^wineserver -w' "${WINE_LOG}")" "1"
+check "espace prepare AVANT le programme" "$(grep -m1 -E '^(WINEBOOT|TARGET=)' "${WINE_LOG}" | cut -c1-8)" "WINEBOOT"
+check "attend la fin de tout l'espace Wine" "$(grep -c '^wineserver -w' "${WINE_LOG}")" "2"
 check "le programme installe est nomme" "$(grep -c 'Jeu Deluxe' "${ZENITY_LOG}")" "1"
 
 echo "== 9. Alternative Linux: le centre s'ouvre SUR une recherche =="
@@ -180,6 +207,35 @@ BOTTLES_ECHEC=1 ZENITY_LIST="Installer avec Bottles (jeux, logiciels exigeants)"
   run_wizard "${WORK}/Autre.exe" >/dev/null 2>&1
 check "Bottles ouvert" "$(grep -c '^flatpak run com.usebottles.bottles$' "${WINE_LOG}")" "1"
 check "la marche a suivre est donnee" "$(grep -c 'Exécuter un fichier' "${ZENITY_LOG}")" "1"
+
+echo "== 12. Wine 32 bits absent (machines d'avant): propose, refus = rien =="
+# PANNE (VM, 2026-10-08): sans wine32, Wine ne lance pas les installateurs
+# 32 bits (presque tous), et l'assistant disait quand meme « termine ».
+rm -f "${WORK}/wine32-ok"; : > "${WINE_LOG}"
+ZENITY_LIST="${INSTALLER}" ZENITY_ANSWER=1 run_wizard "${WORK}/Setup Jeu (v2).exe" >/dev/null 2>&1
+check "refus: sort en 0" "$?" "0"
+check "refus: wine non appele" "$(grep -c '^TARGET=' "${WINE_LOG}")" "0"
+
+echo "== 13. Wine 32 bits absent: accepte -> installe par le helper, puis wine =="
+: > "${WINE_LOG}"
+WINE32_INSTALLABLE=1 ZENITY_LIST="${INSTALLER}" ZENITY_ANSWER=0 \
+  run_wizard "${WORK}/Setup Jeu (v2).exe" >/dev/null 2>&1
+check "helper de l'assistant, paquet wine32:i386" "$(grep -c '^pkexec /usr/libexec/auxinux/auxinux-assistant-apply --deb wine32:i386$' "${WINE_LOG}")" "1"
+check "puis wine" "$(grep -c '^TARGET=' "${WINE_LOG}")" "1"
+touch "${WORK}/wine32-ok"
+
+echo "== 14. Wine echoue: une erreur, et non « termine » =="
+: > "${WINE_LOG}"; : > "${ZENITY_LOG}"
+WINE_ERREUR=1 ZENITY_LIST="${INSTALLER}" run_wizard "${WORK}/Setup Jeu (v2).exe" >/dev/null 2>&1
+check "sort en 1" "$?" "1"
+check "message d'erreur avec le journal" "$(grep -c "auxinux-wine.log" "${ZENITY_LOG}")" "1"
+check "pas de « s'est terminé »" "$(grep -c "s'est terminé" "${ZENITY_LOG}")" "0"
+
+echo "== 15. Espace deja prepare: pas de nouvelle preparation =="
+: > "${WINE_LOG}"
+ZENITY_LIST="${INSTALLER}" run_wizard "${WORK}/Setup Jeu (v2).exe" >/dev/null 2>&1
+check "aucun wineboot" "$(grep -c '^WINEBOOT' "${WINE_LOG}")" "0"
+check "le programme est lance" "$(grep -c '^TARGET=' "${WINE_LOG}")" "1"
 
 echo
 if [[ "${fail}" == "0" ]]; then echo "TOUS LES TESTS PASSENT"; else echo "DES TESTS ECHOUENT"; exit 1; fi

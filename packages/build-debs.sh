@@ -124,13 +124,14 @@ install -D -m 0755 "${SCRIPT_DIR}/windows-support/auxinux-windows-wizard" \
   "${CENTER_ROOT}/usr/bin/auxinux-windows-wizard"
 install -D -m 0644 "${SCRIPT_DIR}/windows-support/auxinux-windows-wizard.desktop" \
   "${CENTER_ROOT}/usr/share/applications/auxinux-windows-wizard.desktop"
+install -D -m 0644 "${SCRIPT_DIR}/windows-support/kiorc" "${CENTER_ROOT}/etc/xdg/kiorc"
 install -D -m 0755 "${SCRIPT_DIR}/user-dirs/auxinux-user-dirs" \
   "${CENTER_ROOT}/usr/lib/auxinux/auxinux-user-dirs"
 install -D -m 0644 "${SCRIPT_DIR}/user-dirs/auxinux-user-dirs.desktop" \
   "${CENTER_ROOT}/etc/xdg/autostart/auxinux-user-dirs.desktop"
 install -d -m 0755 "${CENTER_ROOT}/DEBIAN"
 printf '%s\n' /etc/xdg/autostart/auxinux-assistant.desktop \
-  /etc/xdg/autostart/auxinux-user-dirs.desktop >"${CENTER_ROOT}/DEBIAN/conffiles"
+  /etc/xdg/autostart/auxinux-user-dirs.desktop /etc/xdg/kiorc >"${CENTER_ROOT}/DEBIAN/conffiles"
 
 # Bibliotheques liees au binaire (libc, libgcc, libssl...), calculees par
 # dpkg-shlibdeps quand il est la. libwayland-client et libxkbcommon sont
