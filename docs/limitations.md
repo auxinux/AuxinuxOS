@@ -128,6 +128,23 @@ a été validé sur un système installé avec les mêmes paquets. L'ISO
 20261006-2 a été retirée. Sur une installation antérieure, une seule commande
 suffit pour recevoir les paquets (voir `packages/README.md`).
 
+**Remplacée le même jour par `auxinuxos-0.2.0-20261008-2-amd64.iso`**
+(commit `a6cd62d`, 2 813 270 016 octets, sha256 `bd57e236…1a32ea417`) :
+**dossiers personnels et programmes Windows**. Chaque compte a ses dossiers
+Desktop, Downloads, Documents, Music, Pictures, Videos, Templates et Public
+(noms anglais fixes, libellés traduits dans Dolphin) : les téléchargements de
+Firefox n'atterrissent plus dans son bac à sable. Wine 32 bits est inclus
+(presque tous les installateurs Windows sont des programmes 32 bits, et Wine
+ne les lançait pas). Ouvrir un `.exe` l'installe en un clic, sans la question
+« Exécuter / Annuler » de Dolphin ; Bottles est automatisé ; « alternative
+Linux » ouvre le centre sur une recherche. Les messages d'auxi et des
+assistants s'affichent en français. Paquets `auxi` et `auxinux-center` 0.2.2
+publiés dans la suite APPS (les machines installées reçoivent les correctifs
+par la mise à jour). Validée en VM : installation complète Install NOW
+jusqu'au bureau, dossiers du nouveau compte ; le parcours `.exe` (7-Zip
+installé depuis Dolphin) a été validé sur un système installé avec les mêmes
+paquets. L'ISO 20261008 a été retirée.
+
 Reste à valider : le démarrage par le chemin UEFI de secours (`EFI/BOOT`, le
 micrologiciel l'a bien choisi après suppression de l'entrée NVRAM, mais l'écran
 obtenu n'a pas pu être capturé), le démarrage sur un instantané depuis le
