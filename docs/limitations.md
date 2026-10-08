@@ -111,6 +111,23 @@ L'adresse du projet devient https://os.auxinux.ca/auxinuxos partout
 cette ISO n'a pas été démarrée en VM avant publication. L'ISO 20261006 a été
 retirée.
 
+**Remplacée le 2026-10-08 par `auxinuxos-0.2.0-20261008-amd64.iso`**
+(commit `f703d76`, 2 619 049 984 octets, sha256 `6fd27a2c…adba7cd`) :
+**noyaux et paquets**. La mise à jour du système installe désormais les
+nouveaux noyaux (`auxi osupdate`, `apt-get upgrade --with-new-pkgs` : avant,
+le nouveau noyau était mis de côté sans erreur). Nouvelles commandes
+`auxi kernel` (lister, installer, activer, désinstaller, mettre à jour,
+noyaux en essai) et vue **Noyau** dans la page Applications du centre ; le
+réglage DEB ne concerne plus que les applications. Le français du centre,
+d'auxi et des assistants a retrouvé ses accents. `auxi` et `auxinux-center`
+sont maintenant des paquets DEB (0.2.1) publiés dans la suite APPS : ils
+suivent la mise à jour du système. Validée en VM : installation complète
+Install NOW jusqu'au bureau, vue Noyau du centre ; le parcours des noyaux
+(installer le noyau d'essai, démarrer dessus, revenir au 7.2.5, désinstaller)
+a été validé sur un système installé avec les mêmes paquets. L'ISO
+20261006-2 a été retirée. Sur une installation antérieure, une seule commande
+suffit pour recevoir les paquets (voir `packages/README.md`).
+
 Reste à valider : le démarrage par le chemin UEFI de secours (`EFI/BOOT`, le
 micrologiciel l'a bien choisi après suppression de l'entrée NVRAM, mais l'écran
 obtenu n'a pas pu être capturé), le démarrage sur un instantané depuis le
