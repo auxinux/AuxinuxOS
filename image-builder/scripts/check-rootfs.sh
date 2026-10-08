@@ -274,6 +274,8 @@ need_setting /etc/xdg/kiorc '^behaviourOnLaunch=execute$' \
   "Dolphin demanderait « Executer / Annuler » (Annuler par defaut) avant d'ouvrir un .exe" "l'assistant des .exe ne recevrait aucun correctif"
 need_file /etc/skel/Downloads "les telechargements des nouveaux comptes partiraient dans le bac a sable de Firefox"
 need_file /etc/skel/.config/user-dirs.dirs "aucun dossier de telechargement declare pour les nouveaux comptes"
+need_setting /etc/xdg/user-dirs.conf '^enabled=False$' \
+  "xdg-user-dirs (tire par wine32) creerait des dossiers traduits et deplacerait le bureau"
 need_file /etc/xdg/autostart/auxinux-user-dirs.desktop "les comptes existants n'auraient jamais leurs dossiers personnels"
 need_exec /usr/bin/auxinux-windows-setup "installation de la couche Windows et jeux"
 
