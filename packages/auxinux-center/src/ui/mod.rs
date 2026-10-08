@@ -42,6 +42,18 @@ pub const APP_ID: &str = "ca.auxinux.Center";
 /// affiche (libelles: apps_page::SOURCE_LABELS).
 pub const APPS_SOURCES: [&str; 2] = [SOURCE_FLATHUB, SOURCE_DEB];
 
+/// Ce que la fenetre affiche a l'ouverture.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Ouverture {
+    /// Page Applications, suggestions.
+    Accueil,
+    /// Assistant de premier demarrage (`--premier-demarrage`, `--assistant`).
+    Assistant,
+    /// Page Applications sur une recherche (`--rechercher TERME`): l'assistant
+    /// d'ouverture des .exe y envoie quand on cherche une alternative Linux.
+    Recherche(String),
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Page {
     Apps,
@@ -400,9 +412,8 @@ impl App {
 
 impl Application for App {
     type Executor = executor::Default;
-    /// Vrai: ouvrir directement l'assistant (premier demarrage ou
-    /// `--assistant`).
-    type Flags = bool;
+    /// Ce que la fenetre affiche a l'ouverture (voir `Ouverture`).
+    type Flags = Ouverture;
     type Message = Message;
 
     const APP_ID: &'static str = APP_ID;
@@ -415,7 +426,7 @@ impl Application for App {
         &mut self.core
     }
 
-    fn init(core: Core, open_assistant: Self::Flags) -> (Self, Task<Self::Message>) {
+    fn init(core: Core, ouverture: Self::Flags) -> (Self, Task<Self::Message>) {
         let mut nav = nav_bar::Model::default();
         for (title, icon, page) in [
             // Le second nom de chaque ligne est celui que porte Breeze, qui
@@ -478,12 +489,17 @@ impl Application for App {
             busy: 0,
         };
 
-        let task = if open_assistant {
-            app.page = Page::Assistant;
-            app.nav.activate_position(6);
-            Task::none()
-        } else {
-            app.load_apps_featured()
+        let task = match ouverture {
+            Ouverture::Assistant => {
+                app.page = Page::Assistant;
+                app.nav.activate_position(6);
+                Task::none()
+            }
+            Ouverture::Recherche(terme) => {
+                app.query = terme;
+                app.update(Message::SearchSubmit)
+            }
+            Ouverture::Accueil => app.load_apps_featured(),
         };
         let title = app.set_window_title(format!("Centre de contrôle — {}", app.os_version));
         (app, Task::batch(vec![task, title]))
@@ -1189,7 +1205,7 @@ pub fn icon(name: &'static str, fallbacks: &[&'static str]) -> cosmic::widget::i
     )))
 }
 
-pub fn run(open_assistant: bool) -> Result<(), Box<dyn std::error::Error>> {
+pub fn run(ouverture: Ouverture) -> Result<(), Box<dyn std::error::Error>> {
     let mut settings = Settings::default();
     // Voir system::icon_theme(): sans cela, le theme « Cosmic », absent sous
     // Plasma, et une fenetre sans aucune icone -- boutons reduire, agrandir et
@@ -1197,6 +1213,6 @@ pub fn run(open_assistant: bool) -> Result<(), Box<dyn std::error::Error>> {
     if let Some(theme) = crate::system::icon_theme() {
         settings = settings.default_icon_theme(theme);
     }
-    cosmic::app::run::<App>(settings, open_assistant)?;
+    cosmic::app::run::<App>(settings, ouverture)?;
     Ok(())
 }

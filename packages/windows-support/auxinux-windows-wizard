@@ -11,6 +11,7 @@ set -uo pipefail
 # le moindre moyen de comprendre ni de nettoyer.
 #
 # Cette version propose trois chemins et n'utilise JAMAIS le prefixe partage.
+# Par defaut, elle INSTALLE: c'est ce qu'attend celui qui ouvre un .exe.
 
 target="${1:-}"
 
@@ -57,16 +58,47 @@ app_name="$(basename "${target}")"
 prefix_name="$(printf '%s' "${app_name%.*}" | tr -c 'A-Za-z0-9._-' '-' | sed 's/^-*//;s/-*$//')"
 [[ -n "${prefix_name}" ]] || prefix_name="application"
 
+# Terme de recherche tire du nom du fichier, pour proposer une alternative
+# Linux: « vlc-3.0.20-win64.exe » -> « vlc », « ChromeSetup.exe » -> « chrome ».
+# On retire les mots d'installateur, d'architecture et de version.
+search_term() {
+  local n="${1%.*}" word out=""
+  n="$(printf '%s' "${n}" | sed 's/\([a-z]\)\([A-Z]\)/\1 \2/g' | tr '_.()[]-' '       ' | tr 'A-Z' 'a-z')"
+  for word in ${n}; do
+    case "${word}" in
+      setup|install|installer|installation|x64|x86|x86_64|win|win32|win64|windows|amd64|arm64|portable|full|offline|online|web|release|final|bit|64bit|32bit) continue ;;
+      v[0-9]*|[0-9]*) continue ;;
+    esac
+    out="${out:+${out} }${word}"
+    [[ "${out}" == *" "* ]] && break
+  done
+  printf '%s' "${out}"
+}
+
+# Programmes ajoutes au menu par l'installateur (winemenubuilder ecrit leurs
+# raccourcis dans ~/.local/share/applications/wine), depuis le repere $1.
+new_menu_entries() {
+  local dir="${XDG_DATA_HOME:-${HOME}/.local/share}/applications/wine"
+  [[ -d "${dir}" ]] || return 0
+  find "${dir}" -name '*.desktop' -newer "$1" -print0 2>/dev/null \
+    | xargs -0 -r sed -n 's/^Name=//p' | sort -u | head -n 5
+}
+
+# PANNE RAPPORTEE LE 2026-10-08 (aporler): le choix par defaut etait
+# « Chercher une alternative Linux », qui ouvrait le centre de controle sur sa
+# page d'accueil, sans rapport avec le fichier: « rien ne se passe ». Bottles
+# s'ouvrait avec une consigne a suivre a la main, et n'installait rien. Seul
+# Wine installait vraiment. Desormais le choix par defaut INSTALLE, en un clic.
 choice="$(zenity --list --radiolist \
   --title "$(t "Application Windows détectée" "Windows application detected")" \
   --width 720 --height 340 \
   --text "$(t \
-      "« ${app_name} » est un programme conçu pour Windows.\n\nUne alternative Linux est souvent plus rapide, plus sûre et mieux intégrée. Si vous avez vraiment besoin de ce programme, choisissez de l'installer dans un espace isolé." \
-      "'${app_name}' is a program built for Windows.\n\nA Linux alternative is usually faster, safer and better integrated. If you really need this program, install it in an isolated space.")" \
+      "« ${app_name} » est un programme conçu pour Windows.\n\nAuxiNux OS peut l'installer dans un espace qui lui est propre : s'il pose problème, rien d'autre n'est touché." \
+      "'${app_name}' is a program built for Windows.\n\nAuxiNux OS can install it in a space of its own: if it misbehaves, nothing else is affected.")" \
   --column "" --column "$(t "Que voulez-vous faire ?" "What would you like to do?")" \
-  TRUE  "$(t "Chercher une alternative Linux (recommandé)" "Look for a Linux alternative (recommended)")" \
-  FALSE "$(t "Installer dans un espace isolé avec Bottles" "Install in an isolated space with Bottles")" \
-  FALSE "$(t "Lancer directement avec Wine (dernier recours)" "Run directly with Wine (last resort)")" \
+  TRUE  "$(t "Installer ce programme (recommandé)" "Install this program (recommended)")" \
+  FALSE "$(t "Installer avec Bottles (jeux, logiciels exigeants)" "Install with Bottles (games, demanding software)")" \
+  FALSE "$(t "Chercher une alternative Linux" "Look for a Linux alternative")" \
   2>/dev/null)"
 
 # Annulation ou fermeture de la fenetre: on ne fait rien, sans message
@@ -75,9 +107,13 @@ choice="$(zenity --list --radiolist \
 
 case "${choice}" in
   *"alternative"*|*"Alternative"*)
-    # Le centre de controle est le point d'entree des installations: y
-    # renvoyer evite d'apprendre une deuxieme interface a l'utilisateur.
+    # Le centre de controle s'ouvre SUR une recherche tiree du nom du
+    # fichier, et non sur sa page d'accueil.
     if command -v auxinux-center >/dev/null 2>&1; then
+      term="$(search_term "${app_name}")"
+      if [[ -n "${term}" ]]; then
+        exec auxinux-center --rechercher "${term}"
+      fi
       exec auxinux-center
     fi
     die "$(t "Le centre de contrôle est introuvable. Ouvrez « AuxiNux OS Center » depuis le menu des applications." \
@@ -95,19 +131,46 @@ case "${choice}" in
       # La progression de flatpak est affichee dans une fenetre d'attente:
       # une installation de plusieurs centaines de Mo sans retour visuel
       # passe pour un plantage.
-      if ! flatpak install -y --noninteractive flathub "${BOTTLES_ID}" 2>&1 \
+      flatpak install -y --noninteractive flathub "${BOTTLES_ID}" 2>&1 \
         | zenity --progress --pulsate --auto-close --no-cancel \
                  --title "Bottles" \
-                 --text "$(t "Installation de Bottles…" "Installing Bottles…")" 2>/dev/null; then
-        die "$(t "L'installation de Bottles a échoué." "Installing Bottles failed.")" 70
-      fi
+                 --text "$(t "Installation de Bottles…" "Installing Bottles…")" 2>/dev/null
+      flatpak info "${BOTTLES_ID}" >/dev/null 2>&1 \
+        || die "$(t "L'installation de Bottles a échoué." "Installing Bottles failed.")" 70
     fi
 
+    # Une bouteille par programme, creee et utilisee par bottles-cli: avant,
+    # Bottles s'ouvrait avec une consigne a suivre a la main. Le dossier du
+    # fichier est ouvert en LECTURE SEULE au bac a sable de Bottles, pour cette
+    # execution seulement (rien n'est ajoute a ses permissions permanentes).
+    bottle="${prefix_name}"
+    bottle_dir="${HOME}/.var/app/${BOTTLES_ID}/data/bottles/bottles/${bottle}"
+    bottles_cli() {
+      flatpak run --filesystem="$(dirname "${target}")":ro \
+        --command=bottles-cli "${BOTTLES_ID}" "$@"
+    }
+    if [[ ! -d "${bottle_dir}" ]]; then
+      bottles_cli new --bottle-name "${bottle}" --environment application 2>&1 \
+        | zenity --progress --pulsate --auto-close --no-cancel --title "Bottles" \
+                 --text "$(t "Préparation de l'espace « ${bottle} »…\nLa première fois, Bottles télécharge ses composants : comptez quelques minutes." \
+                             "Preparing the '${bottle}' space…\nThe first time, Bottles downloads its components: allow a few minutes.")" 2>/dev/null
+    fi
+    if [[ ! -d "${bottle_dir}" ]]; then
+      # Repli: Bottles n'a pas pu creer la bouteille seul (premier lancement
+      # jamais fait, composants absents). On ouvre Bottles avec la marche a
+      # suivre, comme avant.
+      zenity --info --no-wrap --title "Bottles" \
+        --text "$(t \
+          "Bottles n'a pas pu préparer l'espace automatiquement.\n\nIl va s'ouvrir : créez une bouteille, puis utilisez « Exécuter un fichier » et choisissez :\n${target}" \
+          "Bottles could not prepare the space automatically.\n\nIt will now open: create a bottle, then use 'Run executable' and pick:\n${target}")" 2>/dev/null
+      exec flatpak run "${BOTTLES_ID}"
+    fi
+    bottles_cli run -b "${bottle}" -e "${target}" >/dev/null 2>&1
     zenity --info --no-wrap --title "Bottles" \
       --text "$(t \
-        "Bottles va s'ouvrir.\n\nCréez une bouteille, puis utilisez « Exécuter un fichier » et choisissez :\n${target}" \
-        "Bottles will now open.\n\nCreate a bottle, then use 'Run executable' and pick:\n${target}")" 2>/dev/null
-    exec flatpak run "${BOTTLES_ID}"
+        "« ${app_name} » a été lancé dans Bottles, espace « ${bottle} ».\n\nPour retrouver le programme : ouvrez Bottles, puis cet espace." \
+        "'${app_name}' was run in Bottles, space '${bottle}'.\n\nTo find the program again: open Bottles, then that space.")" 2>/dev/null
+    exit 0
     ;;
 
   *)
@@ -116,41 +179,45 @@ case "${choice}" in
     fi
 
     prefix="${PREFIX_ROOT}/${prefix_name}"
-    if ! zenity --question --no-wrap --title "Wine" \
-      --text "$(t \
-        "« ${app_name} » sera lancé dans un espace Wine qui lui est propre :\n${prefix}\n\nCet espace n'est partagé avec aucune autre application. Pour tout annuler plus tard, il suffit de supprimer ce dossier.\n\nContinuer ?" \
-        "'${app_name}' will run in its own Wine space:\n${prefix}\n\nThis space is not shared with any other application. To undo everything later, just delete that folder.\n\nContinue?")" 2>/dev/null; then
-      exit 0
-    fi
-
     if ! mkdir -p "${prefix}"; then
       die "$(t "Impossible de créer l'espace Wine :" "Could not create the Wine space:")
 ${prefix}" 73
     fi
 
-    # WINEPREFIX par application: c'est TOUTE la difference avec la version
-    # precedente. WINEDLLOVERRIDES desactive l'installateur automatique de
-    # mono/gecko, qui ouvre sinon deux fenetres incomprehensibles au premier
-    # lancement.
+    # WINEPREFIX par application: JAMAIS le prefixe partage ~/.wine.
+    # WINEDLLOVERRIDES desactive l'installateur automatique de mono/gecko, qui
+    # ouvre sinon deux fenetres incomprehensibles au premier lancement.
     export WINEPREFIX="${prefix}"
     export WINEDLLOVERRIDES="mscoree,mshtml="
 
+    marker="${prefix}/.auxinux-debut"
+    : > "${marker}"
+    log="${prefix}/auxinux-wine.log"
+
     # Chaque format s'ouvre avec la commande qui lui correspond. `wine
     # fichier.msi` ECHOUE: un paquet MSI n'est pas un executable, il doit
-    # passer par msiexec. Idem pour un raccourci .lnk, qui doit etre resolu
-    # par `start`. Ces deux types sont pourtant associes a cet assistant dans
-    # /etc/xdg/mimeapps.list: les ouvrir menait droit a une erreur Wine
-    # incomprehensible.
+    # passer par msiexec. Idem pour un raccourci .lnk, resolu par `start`.
     case "${target,,}" in
-      *.msi)
-        exec wine msiexec /i "${target}"
-        ;;
-      *.lnk)
-        exec wine start /unix "${target}"
-        ;;
-      *)
-        exec wine "${target}"
-        ;;
+      *.msi) wine msiexec /i "${target}" >"${log}" 2>&1 ;;
+      *.lnk) wine start /unix "${target}" >"${log}" 2>&1 ;;
+      *)     wine "${target}" >"${log}" 2>&1 ;;
     esac
+    # L'installateur lance souvent un second processus et rend la main tout de
+    # suite: on attend que TOUT ce qui tourne dans cet espace soit termine.
+    wineserver -w 2>/dev/null || true
+
+    installed="$(new_menu_entries "${marker}")"
+    if [[ -n "${installed}" ]]; then
+      zenity --info --no-wrap --title "$(t "Installation terminée" "Installation complete")" \
+        --text "$(t \
+          "C'est installé. Vous trouverez dans le menu des applications (catégorie Wine) :\n\n${installed}" \
+          "Installed. You will find in the applications menu (Wine category):\n\n${installed}")" 2>/dev/null
+    else
+      zenity --info --no-wrap --title "$(t "Terminé" "Done")" \
+        --text "$(t \
+          "« ${app_name} » s'est terminé.\n\nS'il s'agissait d'un installateur, le programme installé apparaît dans le menu des applications, catégorie Wine." \
+          "'${app_name}' has finished.\n\nIf it was an installer, the installed program appears in the applications menu, Wine category.")" 2>/dev/null
+    fi
+    exit 0
     ;;
 esac

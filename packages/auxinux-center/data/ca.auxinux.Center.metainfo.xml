@@ -38,6 +38,23 @@
   </developer>
   <content_rating type="oars-1.1" />
   <releases>
+    <release version="0.2.2" date="2026-10-08">
+      <description>
+        <p>
+          Standard personal folders (Downloads, Documents...) are created: downloads
+          no longer vanish into the Firefox sandbox. Opening a Windows program now
+          installs it by default; Bottles is automated; looking for a Linux
+          alternative opens the Center on a matching search.
+        </p>
+        <p xml:lang="fr">
+          Les dossiers personnels standard (Downloads, Documents…) sont créés : les
+          téléchargements ne disparaissent plus dans le bac à sable de Firefox.
+          Ouvrir un programme Windows l'installe désormais par défaut ; Bottles est
+          automatisé ; chercher une alternative Linux ouvre le Center sur une
+          recherche correspondante.
+        </p>
+      </description>
+    </release>
     <release version="0.2.1" date="2026-10-07">
       <description>
         <p>

@@ -13,7 +13,7 @@ if [[ ! -x "${ROOTFS}/usr/bin/auxi" ]]; then
   echo "auxi absent du rootfs: install-auxinux-center.sh doit passer avant ce script" >&2
   exit 70
 fi
-sudo install -D -m 0755 "${PROJECT_DIR}/packages/windows-support/auxinux-windows-wizard" "${ROOTFS}/usr/bin/auxinux-windows-wizard"
+# auxinux-windows-wizard (ouverture des .exe) vient du paquet auxinux-center.
 sudo install -D -m 0755 "${PROJECT_DIR}/packages/windows-support/auxinux-windows-setup" "${ROOTFS}/usr/bin/auxinux-windows-setup"
 sudo install -D -m 0755 "${PROJECT_DIR}/packages/welcome/auxinux-welcome" "${ROOTFS}/usr/bin/auxinux-welcome"
 sudo install -D -m 0755 "${PROJECT_DIR}/packages/welcome/auxinux-install-launcher" "${ROOTFS}/usr/lib/auxinux/auxinux-install-launcher"

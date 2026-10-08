@@ -9,7 +9,8 @@
 #
 #   auxi_<V>_all.deb            /usr/bin/auxi, le bouclier apt, le hook
 #                               d'instantane
-#   auxinux-center_<V>_amd64.deb  le Center, ses deux helpers, son action polkit
+#   auxinux-center_<V>_amd64.deb  le Center, ses deux helpers, son action polkit,
+#                               l'assistant des .exe, les dossiers personnels
 #
 # Une seule version pour les deux, celle de packages/auxinux-center/Cargo.toml:
 # le Center appelle des commandes d'auxi (auxi kernel...) et exige le auxi de la
@@ -117,8 +118,19 @@ install -D -m 0755 "${CENTER_DIR}/helper/auxinux-assistant-apply" \
   "${CENTER_ROOT}/usr/libexec/auxinux/auxinux-assistant-apply"
 install -D -m 0644 "${CENTER_DIR}/helper/ca.auxinux.center.policy" \
   "${CENTER_ROOT}/usr/share/polkit-1/actions/ca.auxinux.center.policy"
+# Assistant d'ouverture des .exe et dossiers personnels (depuis la 0.2.2): en
+# paquet, leurs correctifs atteignent aussi les machines deja installees.
+install -D -m 0755 "${SCRIPT_DIR}/windows-support/auxinux-windows-wizard" \
+  "${CENTER_ROOT}/usr/bin/auxinux-windows-wizard"
+install -D -m 0644 "${SCRIPT_DIR}/windows-support/auxinux-windows-wizard.desktop" \
+  "${CENTER_ROOT}/usr/share/applications/auxinux-windows-wizard.desktop"
+install -D -m 0755 "${SCRIPT_DIR}/user-dirs/auxinux-user-dirs" \
+  "${CENTER_ROOT}/usr/lib/auxinux/auxinux-user-dirs"
+install -D -m 0644 "${SCRIPT_DIR}/user-dirs/auxinux-user-dirs.desktop" \
+  "${CENTER_ROOT}/etc/xdg/autostart/auxinux-user-dirs.desktop"
 install -d -m 0755 "${CENTER_ROOT}/DEBIAN"
-printf '/etc/xdg/autostart/auxinux-assistant.desktop\n' >"${CENTER_ROOT}/DEBIAN/conffiles"
+printf '%s\n' /etc/xdg/autostart/auxinux-assistant.desktop \
+  /etc/xdg/autostart/auxinux-user-dirs.desktop >"${CENTER_ROOT}/DEBIAN/conffiles"
 
 # Bibliotheques liees au binaire (libc, libgcc, libssl...), calculees par
 # dpkg-shlibdeps quand il est la. libwayland-client et libxkbcommon sont
@@ -132,7 +144,7 @@ if command -v dpkg-shlibdeps >/dev/null 2>&1; then
   SHLIBS="$(cd "${WORK}/shlibs" && dpkg-shlibdeps -O "${CENTER_ROOT}/usr/bin/auxinux-center" 2>/dev/null \
     | sed -n 's/^shlibs:Depends=//p')"
 fi
-DEPENDS="auxi (= ${VERSION}), pkexec, flatpak, libwayland-client0, libxkbcommon0"
+DEPENDS="auxi (= ${VERSION}), pkexec, flatpak, zenity, libwayland-client0, libxkbcommon0"
 [[ -n "${SHLIBS}" ]] && DEPENDS="${DEPENDS}, ${SHLIBS}"
 
 cat >"${CENTER_ROOT}/DEBIAN/control" <<EOF

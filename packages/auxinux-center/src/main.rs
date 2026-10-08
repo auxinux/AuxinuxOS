@@ -49,11 +49,21 @@ fn main() {
         std::process::exit(0);
     }
     #[cfg(feature = "gui")]
-    let open_assistant = first_run || args.get(1).map(|s| s == "--assistant").unwrap_or(false);
+    let ouverture = if first_run || args.get(1).map(|s| s == "--assistant").unwrap_or(false) {
+        ui::Ouverture::Assistant
+    } else {
+        match (args.get(1).map(String::as_str), args.get(2)) {
+            // Ouvert par l'assistant des .exe, sur une alternative Linux.
+            (Some("--rechercher"), Some(terme)) if !terme.trim().is_empty() => {
+                ui::Ouverture::Recherche(terme.trim().to_string())
+            }
+            _ => ui::Ouverture::Accueil,
+        }
+    };
 
     #[cfg(feature = "gui")]
     {
-        if let Err(e) = ui::run(open_assistant) {
+        if let Err(e) = ui::run(ouverture) {
             eprintln!("auxinux-center: {e}");
             std::process::exit(70);
         }
