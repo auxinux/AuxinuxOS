@@ -180,4 +180,4 @@ case "${1:-}" in
 esac
 
 "$(apt_get_bin)" update >/dev/null 2>&1 || true
-echo "depot configure"
+echo "dépôt configuré"

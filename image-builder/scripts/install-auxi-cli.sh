@@ -4,8 +4,15 @@ set -euo pipefail
 ROOTFS="${1:?usage: install-auxi-cli.sh ROOTFS}"
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
-sudo install -D -m 0755 "${PROJECT_DIR}/packages/auxi-cli/auxi" "${ROOTFS}/usr/bin/auxi"
-sudo install -D -m 0755 "${PROJECT_DIR}/packages/auxi-cli/apt-wrapper" "${ROOTFS}/usr/lib/auxinux/wrappers/apt-wrapper"
+# /usr/bin/auxi, le bouclier apt (/usr/lib/auxinux/wrappers/apt-wrapper) et le
+# hook d'instantane viennent du paquet `auxi`, installe par
+# install-auxinux-center.sh (appele AVANT ce script par build-image.sh). Seules
+# les diversions d'apt/apt-get vers le bouclier restent posees ici, en fin de
+# script.
+if [[ ! -x "${ROOTFS}/usr/bin/auxi" ]]; then
+  echo "auxi absent du rootfs: install-auxinux-center.sh doit passer avant ce script" >&2
+  exit 70
+fi
 sudo install -D -m 0755 "${PROJECT_DIR}/packages/windows-support/auxinux-windows-wizard" "${ROOTFS}/usr/bin/auxinux-windows-wizard"
 sudo install -D -m 0755 "${PROJECT_DIR}/packages/windows-support/auxinux-windows-setup" "${ROOTFS}/usr/bin/auxinux-windows-setup"
 sudo install -D -m 0755 "${PROJECT_DIR}/packages/welcome/auxinux-welcome" "${ROOTFS}/usr/bin/auxinux-welcome"
@@ -60,13 +67,9 @@ sudo rm -f "${ROOTFS}/etc/systemd/system/multi-user.target.wants/auxinux-profile
 sudo ln -sf /etc/systemd/system/auxinux-profile.service \
   "${ROOTFS}/etc/systemd/system/graphical.target.wants/auxinux-profile.service"
 
-# Hook d'instantane branche sur dpkg (voir etc/apt/apt.conf.d/80auxinux-snapshot).
-sudo install -D -m 0755 "${PROJECT_DIR}/packages/auxi-cli/apt-snapshot-hook" "${ROOTFS}/usr/lib/auxinux/apt-snapshot-hook"
-
-# Assistant privilegie du centre de controle + son action polkit.
-sudo install -D -m 0755 "${PROJECT_DIR}/packages/auxinux-center/helper/auxinux-source-helper" "${ROOTFS}/usr/libexec/auxinux/auxinux-source-helper"
-sudo install -D -m 0755 "${PROJECT_DIR}/packages/auxinux-center/helper/auxinux-assistant-apply" "${ROOTFS}/usr/libexec/auxinux/auxinux-assistant-apply"
-sudo install -D -m 0644 "${PROJECT_DIR}/packages/auxinux-center/helper/ca.auxinux.center.policy" "${ROOTFS}/usr/share/polkit-1/actions/ca.auxinux.center.policy"
+# Le hook d'instantane branche sur dpkg (voir etc/apt/apt.conf.d/80auxinux-
+# snapshot) vient du paquet `auxi`; les helpers du centre de controle et leur
+# action polkit, du paquet auxinux-center.
 
 # Script de nettoyage post-installation, appele par le module Calamares
 # shellprocess@cleanup (voir image-builder/overlays/etc/calamares/).

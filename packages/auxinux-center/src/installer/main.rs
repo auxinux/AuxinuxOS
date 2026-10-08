@@ -29,7 +29,7 @@ use ecrans::{App, Sortie};
 
 fn main() {
     if util::run("id", &["-u"]).stdout.trim() != "0" {
-        eprintln!("auxinux-installer: doit etre lance en root / must run as root");
+        eprintln!("auxinux-installer: doit être lancé en root / must run as root");
         std::process::exit(77);
     }
     let mut terminal = ratatui::init();

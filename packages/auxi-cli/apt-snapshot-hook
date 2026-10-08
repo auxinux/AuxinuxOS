@@ -91,7 +91,7 @@ case "${1:-}" in
       --userdata "auxi=1" 2>/dev/null)" || exit 0
     if [[ "${number}" =~ ^[0-9]+$ ]]; then
       printf '%s\n' "${number}" >"${STATE_FILE}" 2>/dev/null || true
-      echo "AuxiNuxOS: instantane de securite ${number} cree avant cette operation."
+      echo "AuxiNuxOS: instantané de sécurité ${number} créé avant cette opération."
     fi
     ;;
   post)

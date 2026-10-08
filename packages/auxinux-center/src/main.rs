@@ -11,6 +11,7 @@ mod apps;
 mod assistant;
 mod cli;
 mod health;
+mod kernel;
 mod model;
 mod progress;
 mod profile;
@@ -27,6 +28,13 @@ mod ui;
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
+
+    // Lu par packages/build-debs.sh (le binaire empaquete est-il celui de la
+    // version annoncee?) et utile a quiconque rapporte un probleme.
+    if args.get(1).map(|s| s == "--version").unwrap_or(false) {
+        println!("auxinux-center {}", env!("CARGO_PKG_VERSION"));
+        return;
+    }
 
     if args.get(1).map(|s| s == "--cli").unwrap_or(false) {
         std::process::exit(cli::run(&args[2..]));
@@ -54,7 +62,7 @@ fn main() {
     #[cfg(not(feature = "gui"))]
     {
         eprintln!(
-            "auxinux-center a ete compile sans interface (--no-default-features).\n\
+            "auxinux-center a été compilé sans interface (--no-default-features).\n\
              Utilisez « auxinux-center --cli <commande> »."
         );
         std::process::exit(64);

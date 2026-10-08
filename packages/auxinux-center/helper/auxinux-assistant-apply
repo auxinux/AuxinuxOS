@@ -79,7 +79,7 @@ TOTAL=0
 [[ -n "${PROFIL}" ]] && TOTAL=$((TOTAL + 1))
 [[ "${#DEBS[@]}" -gt 0 ]] && TOTAL=$((TOTAL + 1))
 TOTAL=$((TOTAL + ${#FLATPAKS[@]}))
-[[ "${TOTAL}" -gt 0 ]] || { echo "Rien a installer."; exit 0; }
+[[ "${TOTAL}" -gt 0 ]] || { echo "Rien à installer."; exit 0; }
 
 STEP=0
 FAILED=()
@@ -94,7 +94,7 @@ if [[ -n "${PROFIL}" ]]; then
 fi
 
 if [[ "${#DEBS[@]}" -gt 0 ]]; then
-  step "Paquets systeme: ${DEBS[*]}"
+  step "Paquets système: ${DEBS[*]}"
   deb_ok=1
   if [[ "${BRAVE}" -eq 1 && -e "${SOURCES_DIR}/${BRAVE_SOURCE}.disabled" ]]; then
     mv -f "${SOURCES_DIR}/${BRAVE_SOURCE}.disabled" "${SOURCES_DIR}/${BRAVE_SOURCE}" \
@@ -120,8 +120,8 @@ for app in "${FLATPAKS[@]}"; do
 done
 
 if [[ "${#FAILED[@]}" -gt 0 ]]; then
-  echo "Echec pour: ${FAILED[*]}" >&2
+  echo "Échec pour: ${FAILED[*]}" >&2
   exit 1
 fi
-echo "Toutes les applications choisies sont installees."
+echo "Toutes les applications choisies sont installées."
 exit 0

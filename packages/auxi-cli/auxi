@@ -45,6 +45,12 @@ Usage:
   auxi [--yes] [--progress] COMMAND ...
   auxi update [--deb|--flatpak]
   auxi upgrade [--deb|--flatpak]
+  auxi osupdate
+  auxi kernel [list [--porcelain]]
+  auxi kernel install|activate|remove VERSION
+  auxi kernel activate latest
+  auxi kernel update
+  auxi kernel dev on|off
   auxi search [--deb|--flatpak] TERM
   auxi install [--deb|--flatpak] PACKAGE_OR_APP...
   auxi uninstall [--deb|--flatpak] PACKAGE_OR_APP
@@ -63,6 +69,9 @@ Applications are installed from Flatpak (Flathub). DEB installation is only
 used when enabled (auxi set deb=true), and even then only when no Flatpak
 exists for the requested application.
 
+The system (osupdate: every installed DEB package, kernels included) and the
+AuxiNux kernels (kernel) never depend on that setting.
+
 Global options (before the command):
   --yes       answer yes to every question, keep modified configuration files
   --progress  also print machine-readable progress lines (apt Status-Fd)
@@ -75,6 +84,12 @@ Usage:
   auxi [--yes] [--progress] COMMANDE ...
   auxi update [--deb|--flatpak]
   auxi upgrade [--deb|--flatpak]
+  auxi osupdate
+  auxi kernel [list [--porcelain]]
+  auxi kernel install|activate|remove VERSION
+  auxi kernel activate latest
+  auxi kernel update
+  auxi kernel dev on|off
   auxi search [--deb|--flatpak] TERME
   auxi install [--deb|--flatpak] PAQUET_OU_APP...
   auxi uninstall [--deb|--flatpak] PAQUET_OU_APP
@@ -83,19 +98,22 @@ Usage:
   auxi autoclean
   auxi snapshot [DESCRIPTION]
   auxi snapshots
-  auxi rollback [NUMERO] [--yes]
+  auxi rollback [NUMÉRO] [--yes]
   auxi rollback-cleanup [--yes]
   auxi set apt=true|false
   auxi set deb=true|false
   auxi status
 
 Les applications s'installent depuis Flatpak (Flathub). L'installation DEB
-n'est utilisee que si elle est activee (auxi set deb=true), et meme alors
-seulement quand aucun Flatpak n'existe pour l'application demandee.
+n'est utilisée que si elle est activée (auxi set deb=true), et même alors
+seulement quand aucun Flatpak n'existe pour l'application demandée.
+
+Le système (osupdate: tous les paquets DEB installés, noyaux compris) et les
+noyaux AuxiNux (kernel) ne dépendent jamais de ce réglage.
 
 Options globales (avant la commande):
-  --yes       repond oui a toutes les questions, garde les fichiers de
-              configuration modifies
+  --yes       répond oui à toutes les questions, garde les fichiers de
+              configuration modifiés
   --progress  ajoute des lignes d'avancement lisibles par un programme
               (Status-Fd d'apt)
 EOF
@@ -105,7 +123,7 @@ EOF
 require_root_for_config() {
   if [[ "${EUID}" -ne 0 ]]; then
     say_err \
-      "Cette action doit etre executee avec sudo: sudo auxi $*" \
+      "Cette action doit être exécutée avec sudo: sudo auxi $*" \
       "This action must be run with sudo: sudo auxi $*"
     exit 1
   fi
@@ -114,7 +132,7 @@ require_root_for_config() {
 require_root_for_deb() {
   if [[ "${EUID}" -ne 0 ]]; then
     say_err \
-      "Les operations DEB doivent etre executees avec sudo." \
+      "Les opérations DEB doivent être exécutées avec sudo." \
       "DEB operations must be run with sudo."
     say_err \
       "Exemple: sudo auxi $*" \
@@ -135,9 +153,21 @@ apt_real() {
       "Binaire APT introuvable: ${APT_REAL_DIR}/${name}" \
       "APT binary not found: ${APT_REAL_DIR}/${name}"
     say_err \
-      "Installation auxi incomplete; verifiez install-auxi-cli.sh." \
+      "Installation auxi incomplète; vérifiez install-auxi-cli.sh." \
       "Incomplete auxi installation; check install-auxi-cli.sh."
     exit 70
+  fi
+}
+
+# apt-cache N'EST PLUS detourne (lecture seule, voir install-auxi-cli.sh):
+# /usr/lib/auxinux/apt-real/apt-cache n'existe pas sur un systeme installe, et
+# `apt_real apt-cache` y sortait en 70 -- `auxi search --deb` echouait donc
+# toujours. On garde le binaire detourne s'il existe (rootfs ancien).
+apt_cache() {
+  if [[ -x "${APT_REAL_DIR}/apt-cache" ]]; then
+    "${APT_REAL_DIR}/apt-cache" "$@"
+  else
+    command apt-cache "$@"
   fi
 }
 
@@ -200,13 +230,13 @@ set_deb_apps() {
     true|1|yes)
       printf 'DEB_APPS=1\n' >"${APPS_CONF}"
       say \
-        "Installation DEB activee. Flatpak reste prioritaire: le DEB ne sert que si aucun Flatpak n'existe." \
+        "Installation DEB activée. Flatpak reste prioritaire: le DEB ne sert que si aucun Flatpak n'existe." \
         "DEB installation enabled. Flatpak stays first: DEB is used only when no Flatpak exists."
       ;;
     false|0|no)
       printf 'DEB_APPS=0\n' >"${APPS_CONF}"
       say \
-        "Installation DEB desactivee: les applications s'installent depuis Flatpak." \
+        "Installation DEB désactivée: les applications s'installent depuis Flatpak." \
         "DEB installation disabled: applications are installed from Flatpak."
       ;;
     *)
@@ -222,7 +252,7 @@ deb_installed() {
 
 deb_disabled_hint() {
   say_err \
-    "L'installation DEB est desactivee. Pour l'activer: sudo auxi set deb=true (ou Reglages du centre AuxiNux)." \
+    "L'installation DEB est désactivée. Pour l'activer: sudo auxi set deb=true (ou Réglages du centre AuxiNux)." \
     "DEB installation is disabled. To enable it: sudo auxi set deb=true (or the AuxiNux Center settings)."
 }
 
@@ -297,13 +327,13 @@ set_apt() {
     true|1|yes)
       printf 'APT_ENABLED=1\n' >"${APT_CONF}"
       say \
-        "APT direct reactive. La commande recommandee reste auxi." \
+        "APT direct réactivé. La commande recommandée reste auxi." \
         "Direct APT re-enabled. The recommended command remains auxi."
       ;;
     false|0|no)
       printf 'APT_ENABLED=0\n' >"${APT_CONF}"
       say \
-        "APT direct masque. Utilisez auxi pour les operations utilisateur." \
+        "APT direct masqué. Utilisez auxi pour les opérations utilisateur." \
         "Direct APT hidden. Use auxi for user package operations."
       ;;
     *)
@@ -354,10 +384,10 @@ require_snapshots() {
     return 0
   fi
   say_err \
-    "Les instantanes ne sont pas disponibles sur ce systeme." \
+    "Les instantanés ne sont pas disponibles sur ce système." \
     "Snapshots are not available on this system."
   say_err \
-    "Ils exigent une racine BTRFS avec snapper configure (voir docs/rollback.md)." \
+    "Ils exigent une racine BTRFS avec snapper configuré (voir docs/rollback.md)." \
     "They require a BTRFS root with snapper configured (see docs/rollback.md)."
   exit 69
 }
@@ -378,14 +408,14 @@ require_snapshots() {
 run_snapshot() {
   require_snapshots
   require_root_for_config snapshot "$@"
-  local description="${*:-Instantane manuel}"
+  local description="${*:-Instantané manuel}"
   local number
   number="$(snapper -c "${SNAPPER_CONFIG}" create \
     --type single --print-number --cleanup-algorithm number \
     --description "${description}" \
     --userdata "auxi=1")"
   say \
-    "Instantane ${number} cree: ${description}" \
+    "Instantané ${number} créé: ${description}" \
     "Snapshot ${number} created: ${description}"
 }
 
@@ -439,13 +469,13 @@ run_rollback() {
   if [[ -z "${number}" ]]; then
     run_snapshot_list
     say \
-      "Choisissez un numero, puis: sudo auxi rollback NUMERO" \
+      "Choisissez un numéro, puis: sudo auxi rollback NUMÉRO" \
       "Pick a number, then run: sudo auxi rollback NUMBER"
     return 0
   fi
 
   if [[ ! "${number}" =~ ^[0-9]+$ ]]; then
-    say_err "Numero d'instantane invalide: ${number}" "Invalid snapshot number: ${number}"
+    say_err "Numéro d'instantané invalide: ${number}" "Invalid snapshot number: ${number}"
     exit 64
   fi
 
@@ -454,7 +484,7 @@ run_rollback() {
   # findmnt rend "/dev/sda2[/@]" sur un sous-volume: on retire le suffixe.
   root_device="${root_source%%\[*}"
   if [[ -z "${root_device}" ]]; then
-    say_err "Peripherique racine introuvable." "Could not determine root device."
+    say_err "Périphérique racine introuvable." "Could not determine root device."
     exit 69
   fi
 
@@ -481,7 +511,7 @@ run_rollback() {
   done
 
   if [[ -z "${snapshot_src}" ]]; then
-    say_err "Instantane ${number} introuvable." "Snapshot ${number} not found."
+    say_err "Instantané ${number} introuvable." "Snapshot ${number} not found."
     exit 69
   fi
 
@@ -490,13 +520,13 @@ run_rollback() {
   saved="@.rollback-${stamp}"
 
   say \
-    "Restauration de l'instantane ${number}." \
+    "Restauration de l'instantané ${number}." \
     "Restoring snapshot ${number}."
   say \
-    "Le systeme actuel est conserve sous ${saved} et /home n'est pas touche." \
+    "Le système actuel est conservé sous ${saved} et /home n'est pas touché." \
     "The current system is kept as ${saved} and /home is left untouched."
   say \
-    "Le changement prend effet au prochain demarrage." \
+    "Le changement prend effet au prochain démarrage." \
     "The change takes effect on next boot."
 
   if [[ "${assume_yes}" -ne 1 ]]; then
@@ -506,7 +536,7 @@ run_rollback() {
     case "${answer}" in
       o|O|oui|OUI|y|Y|yes|YES) ;;
       *)
-        say "Restauration annulee." "Rollback cancelled."
+        say "Restauration annulée." "Rollback cancelled."
         return 0
         ;;
     esac
@@ -514,7 +544,7 @@ run_rollback() {
 
   if ! mv "${BTRFS_TOPLEVEL_MNT}/@" "${BTRFS_TOPLEVEL_MNT}/${saved}"; then
     say_err \
-      "Mise de cote du systeme actuel impossible; rien n'a ete modifie." \
+      "Mise de côté du système actuel impossible; rien n'a été modifié." \
       "Could not move the current system aside; nothing was changed."
     exit 69
   fi
@@ -524,7 +554,7 @@ run_rollback() {
     # et ne redemarrerait pas. C'est le seul point vraiment dangereux.
     mv "${BTRFS_TOPLEVEL_MNT}/${saved}" "${BTRFS_TOPLEVEL_MNT}/@" || true
     say_err \
-      "Restauration echouee; le systeme d'origine a ete remis en place." \
+      "Restauration échouée; le système d'origine a été remis en place." \
       "Rollback failed; the original system has been restored."
     exit 69
   fi
@@ -532,13 +562,13 @@ run_rollback() {
   reset_boot_state "${BTRFS_TOPLEVEL_MNT}/@" "${number}"
 
   say \
-    "Restauration prete. Redemarrez pour l'appliquer: sudo reboot" \
+    "Restauration prête. Redémarrez pour l'appliquer: sudo reboot" \
     "Rollback ready. Reboot to apply it: sudo reboot"
   say \
-    "Ancien systeme conserve sous le sous-volume ${saved}." \
+    "Ancien système conservé sous le sous-volume ${saved}." \
     "Previous system kept as subvolume ${saved}."
   say \
-    "Une fois le redemarrage valide, vous pouvez le supprimer:" \
+    "Une fois le redémarrage validé, vous pouvez le supprimer:" \
     "Once the reboot is confirmed working, you can delete it:"
   printf '  sudo auxi rollback-cleanup\n'
 }
@@ -565,7 +595,7 @@ run_rollback_cleanup() {
   root_source="$(findmnt -no SOURCE "$(root_mount_ref)" 2>/dev/null || true)"
   root_device="${root_source%%\[*}"
   if [[ -z "${root_device}" ]]; then
-    say_err "Peripherique racine introuvable." "Could not determine root device."
+    say_err "Périphérique racine introuvable." "Could not determine root device."
     exit 69
   fi
 
@@ -587,29 +617,29 @@ run_rollback_cleanup() {
 
   if [[ "${#saved[@]}" -eq 0 ]]; then
     say \
-      "Aucun systeme mis de cote par une restauration." \
+      "Aucun système mis de côté par une restauration." \
       "No system set aside by a rollback."
     return 0
   fi
 
   say \
-    "Systemes conserves par une restauration precedente:" \
+    "Systèmes conservés par une restauration précédente:" \
     "Systems kept by a previous rollback:"
   for candidate in "${saved[@]}"; do
     printf '  %s\n' "$(basename "${candidate}")"
   done
   say \
-    "Ne les supprimez qu'apres avoir verifie que le systeme restaure demarre." \
+    "Ne les supprimez qu'après avoir vérifié que le système restauré démarre." \
     "Only delete these once you have confirmed the restored system boots."
 
   if [[ "${assume_yes}" -ne 1 ]]; then
     local answer
-    say "Supprimer definitivement? [o/N]" "Delete permanently? [y/N]"
+    say "Supprimer définitivement? [o/N]" "Delete permanently? [y/N]"
     read -r answer
     case "${answer}" in
       o|O|oui|OUI|y|Y|yes|YES) ;;
       *)
-        say "Suppression annulee." "Deletion cancelled."
+        say "Suppression annulée." "Deletion cancelled."
         return 0
         ;;
     esac
@@ -618,7 +648,7 @@ run_rollback_cleanup() {
   local failures=0
   for candidate in "${saved[@]}"; do
     if btrfs subvolume delete "${candidate}" >/dev/null 2>&1; then
-      say "Supprime: $(basename "${candidate}")" "Deleted: $(basename "${candidate}")"
+      say "Supprimé: $(basename "${candidate}")" "Deleted: $(basename "${candidate}")"
     else
       failures=$((failures + 1))
       say_err \
@@ -658,6 +688,27 @@ run_update() {
   fi
 }
 
+# Mise a jour du SYSTEME: tous les paquets DEB installes, noyaux compris.
+#
+# PANNE A L'ORIGINE (2026-10-07): `auxi upgrade` lancait un `apt-get upgrade`
+# simple. Quand kernel-auxinuxos passe a une nouvelle version, il depend d'un
+# NOUVEAU paquet linux-image-<version>; apt-get upgrade refuse d'installer un
+# paquet nouveau, met kernel-auxinuxos de cote (« kept back ») et sort en 0.
+# Le noyau ne se serait donc jamais mis a jour, sans aucun message d'erreur.
+#
+# --with-new-pkgs accepte les paquets nouveaux TIRES PAR des paquets installes
+# (le nouveau noyau), mais n'ajoute jamais une application que rien ne demande
+# et ne retire jamais rien -- contrairement a full-upgrade.
+#
+# Le reglage DEB (auxi set deb=...) ne concerne que les APPLICATIONS: il n'est
+# pas consulte ici, le systeme doit toujours pouvoir se mettre a jour.
+run_osupdate() {
+  require_root_for_deb osupdate "$@"
+  apt_get update
+  apt_get upgrade --with-new-pkgs
+  kernel_update_channels
+}
+
 run_upgrade() {
   select_mode "$@"
   flatpak_opts
@@ -669,15 +720,456 @@ run_upgrade() {
     if ! flatpak update "${FLATPAK_OPTS[@]}"; then
       failed=1
       say_err \
-        "La mise a jour des applications Flatpak a echoue; les paquets systeme sont mis a jour quand meme." \
+        "La mise à jour des applications Flatpak a échoué; les paquets système sont mis à jour quand même." \
         "Flatpak application update failed; system packages are updated anyway."
     fi
   fi
   if [[ "${MODE}" == "both" || "${MODE}" == "deb" ]]; then
-    require_root_for_deb upgrade "$@"
-    apt_get upgrade
+    run_osupdate "$@"
   fi
   return "${failed}"
+}
+
+# --- Noyaux AuxiNux ----------------------------------------------------------
+#
+# Le noyau d'essai n'est PAS une version plus recente du meme paquet: c'est un
+# paquet distinct (kernel-auxinuxos-dev -> linux-image-7.2.9-dev-auxinuxos-amd64)
+# servi par la suite kernel-dev. Activer la source n'installait donc rien, et
+# `auxi install --deb` refuse tout paquet nouveau quand le reglage DEB est
+# coupe. D'ou des commandes dediees.
+#
+# Elles ne consultent PAS le reglage DEB, et ce n'est pas une porte derobee:
+# seuls les paquets linux-image-<v> / linux-headers-<v> dont <v> se termine par
+# -auxinuxos-amd64 sont acceptes (voir kernel_valid).
+#
+# Chemins reglables UNIQUEMENT pour les tests (tests/test-auxi-kernel.sh).
+GRUB_CFG="${AUXI_GRUB_CFG:-/boot/grub/grub.cfg}"
+GRUBENV="${AUXI_GRUBENV:-/boot/grub/grubenv}"
+GRUB_DEFAULT_D="${AUXI_GRUB_DEFAULT_D:-/etc/default/grub.d}"
+SOURCES_D="${AUXI_SOURCES_D:-/etc/apt/sources.list.d}"
+KERNEL_PIN_FILE="50-auxinux-noyau.cfg"
+KERNEL_DEV_SOURCE="auxinuxos-kernel-dev.sources"
+
+kernel_valid() {
+  [[ "$1" =~ ^[0-9][0-9a-z.+~-]*-auxinuxos-amd64$ ]]
+}
+
+kernel_channel() {
+  if [[ "$1" == *-dev-* ]]; then printf 'dev'; else printf 'stable'; fi
+}
+
+kernel_running() {
+  uname -r
+}
+
+# Noyaux AuxiNux installes, un par ligne, du plus ancien au plus recent.
+kernels_installed() {
+  dpkg-query -W -f='${Package}\t${Status}\n' 'linux-image-*' 2>/dev/null \
+    | while IFS=$'\t' read -r pkg status; do
+        [[ "${status}" == "install ok installed" ]] || continue
+        local v="${pkg#linux-image-}"
+        kernel_valid "${v}" && printf '%s\n' "${v}"
+      done | sort -V || true
+}
+
+# Noyaux AuxiNux installables depuis les depots (non installes), du plus
+# ancien au plus recent. `apt-cache show` ecarte les noms que dpkg connait
+# encore (fichiers de configuration restants) mais qu'aucun depot ne sert.
+kernels_available() {
+  local installed v
+  installed="$(kernels_installed)"
+  apt_cache pkgnames linux-image- 2>/dev/null \
+    | while read -r pkg; do
+        v="${pkg#linux-image-}"
+        kernel_valid "${v}" || continue
+        grep -Fxq -- "${v}" <<<"${installed}" && continue
+        apt_cache show --no-all-versions "linux-image-${v}" >/dev/null 2>&1 || continue
+        printf '%s\n' "${v}"
+      done | sort -V || true
+}
+
+kernel_dev_enabled() {
+  [[ -f "${SOURCES_D}/${KERNEL_DEV_SOURCE}" ]]
+}
+
+kernel_pinned() {
+  [[ -f "${GRUB_DEFAULT_D}/${KERNEL_PIN_FILE}" ]]
+}
+
+# Noyau qui demarrera par defaut. Epingle: l'entree enregistree dans grubenv.
+# Sinon (GRUB_DEFAULT=0): la premiere entree de grub.cfg, c'est-a-dire le noyau
+# que grub-mkconfig a classe le plus recent.
+kernel_default() {
+  local v=""
+  if kernel_pinned && [[ -r "${GRUBENV}" ]]; then
+    v="$(sed -n 's/^saved_entry=.*>gnulinux-\(.*\)-advanced-.*$/\1/p' "${GRUBENV}" | head -n1 || true)"
+  fi
+  if [[ -z "${v}" && -r "${GRUB_CFG}" ]]; then
+    v="$(grep -m1 -oE 'vmlinuz-[^[:space:]]+' "${GRUB_CFG}" | sed 's/^vmlinuz-//' || true)"
+  fi
+  # grub.cfg est en 0600: le centre de controle, qui lit cet etat SANS droits,
+  # ne pouvait pas savoir quel noyau demarrerait (constate en VM le
+  # 2026-10-07: « Activer » propose sur le noyau deja par defaut). grub-mkconfig
+  # classe les noyaux par version (version_sort): le premier est le plus
+  # recent installe.
+  if [[ -z "${v}" ]]; then
+    v="$(kernels_installed | tail -n1)"
+  fi
+  printf '%s' "${v}"
+}
+
+# Identifiant GRUB complet (« sous-menu>entree ») du noyau $1, lu dans grub.cfg.
+kernel_grub_id() {
+  local v="$1" submenu entry id
+  [[ -r "${GRUB_CFG}" ]] || return 1
+  submenu="$(grep -oE "'gnulinux-advanced-[^']+'" "${GRUB_CFG}" | head -n1 | tr -d "'" || true)"
+  entry=""
+  while read -r id; do
+    if [[ "${id}" == "gnulinux-${v}-advanced-"* ]]; then
+      entry="${id}"
+      break
+    fi
+  done < <(grep -oE "'gnulinux-[^']+-advanced-[^']+'" "${GRUB_CFG}" | tr -d "'" || true)
+  [[ -n "${submenu}" && -n "${entry}" ]] || return 1
+  printf '%s>%s' "${submenu}" "${entry}"
+}
+
+kernel_require_valid() {
+  if [[ -z "${1:-}" ]] || ! kernel_valid "$1"; then
+    say_err \
+      "Version de noyau invalide: ${1:-(vide)}. Exemple: 7.2.5-auxinuxos-amd64 (voir auxi kernel list)." \
+      "Invalid kernel version: ${1:-(empty)}. Example: 7.2.5-auxinuxos-amd64 (see auxi kernel list)."
+    exit 64
+  fi
+}
+
+# Here-string et non `kernels_installed | grep -q`: avec pipefail, grep -q qui
+# sort a la premiere ligne peut valoir un SIGPIPE a la commande d'amont, et le
+# test echouerait alors que le noyau est bien la.
+kernel_is_installed() {
+  grep -Fxq -- "$1" <<<"$(kernels_installed)"
+}
+
+run_kernel_list() {
+  local porcelain=0
+  [[ "${1:-}" == "--porcelain" ]] && porcelain=1
+  local running default installed available v states
+  running="$(kernel_running)"
+  default="$(kernel_default)"
+  installed="$(kernels_installed)"
+  available="$(kernels_available)"
+
+  if [[ "${porcelain}" -eq 1 ]]; then
+    printf 'actif\t%s\n' "${running}"
+    printf 'defaut\t%s\t%s\n' "${default}" "$(kernel_pinned && echo epingle || echo auto)"
+    printf 'source-dev\t%s\n' "$(kernel_dev_enabled && echo on || echo off)"
+    while read -r v; do
+      [[ -n "${v}" ]] || continue
+      states="installe"
+      [[ "${v}" == "${running}" ]] && states+=",actif"
+      [[ "${v}" == "${default}" ]] && states+=",defaut"
+      printf 'noyau\t%s\t%s\t%s\n' "${v}" "$(kernel_channel "${v}")" "${states}"
+    done <<<"${installed}"
+    while read -r v; do
+      [[ -n "${v}" ]] || continue
+      printf 'noyau\t%s\t%s\tdisponible\n' "${v}" "$(kernel_channel "${v}")"
+    done <<<"${available}"
+    return 0
+  fi
+
+  say "Noyau actif: ${running}" "Running kernel: ${running}"
+  if kernel_pinned; then
+    say "Démarrage par défaut: ${default:-?} (choisi avec auxi kernel activate)" \
+        "Default boot: ${default:-?} (chosen with auxi kernel activate)"
+  else
+    say "Démarrage par défaut: ${default:-?} (le plus récent)" \
+        "Default boot: ${default:-?} (the newest)"
+  fi
+  if kernel_dev_enabled; then
+    say "Noyaux en essai (kernel-dev): activés" "Test kernels (kernel-dev): enabled"
+  else
+    say "Noyaux en essai (kernel-dev): désactivés (sudo auxi kernel dev on)" \
+        "Test kernels (kernel-dev): disabled (sudo auxi kernel dev on)"
+  fi
+  say "Installés:" "Installed:"
+  while read -r v; do
+    [[ -n "${v}" ]] || continue
+    printf '  %-36s %s%s\n' "${v}" "$(kernel_channel "${v}")" \
+      "$([[ "${v}" == "${running}" ]] && echo ' *')"
+  done <<<"${installed}"
+  if [[ -n "${available}" ]]; then
+    say "Disponibles (sudo auxi kernel install VERSION):" "Available (sudo auxi kernel install VERSION):"
+    while read -r v; do
+      [[ -n "${v}" ]] || continue
+      printf '  %-36s %s\n' "${v}" "$(kernel_channel "${v}")"
+    done <<<"${available}"
+  fi
+}
+
+# Paquets a installer pour le noyau $1: l'image, et les en-tetes s'ils existent
+# (DKMS: pilotes NVIDIA, VirtualBox...).
+kernel_packages() {
+  local v="$1"
+  printf 'linux-image-%s\n' "${v}"
+  if apt_cache show --no-all-versions "linux-headers-${v}" >/dev/null 2>&1; then
+    printf 'linux-headers-%s\n' "${v}"
+  fi
+}
+
+kernel_install_version() {
+  local v="$1"
+  local pkgs=()
+  mapfile -t pkgs < <(kernel_packages "${v}")
+  apt_get install -- "${pkgs[@]}"
+  if [[ "$(kernel_default)" == "${v}" ]]; then
+    say "Noyau ${v} installé: il sera utilisé au prochain démarrage." \
+        "Kernel ${v} installed: it will be used on next boot."
+  else
+    say "Noyau ${v} installé. Pour démarrer dessus: sudo auxi kernel activate ${v}" \
+        "Kernel ${v} installed. To boot it: sudo auxi kernel activate ${v}"
+  fi
+}
+
+run_kernel_install() {
+  local v="${1:-}"
+  kernel_require_valid "${v}"
+  require_root_for_deb kernel install "${v}"
+  if kernel_is_installed "${v}"; then
+    say "Le noyau ${v} est déjà installé." "Kernel ${v} is already installed."
+    return 0
+  fi
+  if [[ "$(kernel_channel "${v}")" == "dev" ]] && ! kernel_dev_enabled; then
+    say_err \
+      "Les noyaux en essai sont désactivés. Pour les activer: sudo auxi kernel dev on" \
+      "Test kernels are disabled. To enable them: sudo auxi kernel dev on"
+    exit 1
+  fi
+  if ! grep -Fxq -- "${v}" <<<"$(kernels_available)"; then
+    say_err \
+      "Noyau ${v} introuvable dans les dépôts AuxiNux (voir auxi kernel list)." \
+      "Kernel ${v} not found in the AuxiNux repositories (see auxi kernel list)."
+    exit 1
+  fi
+  kernel_install_version "${v}"
+}
+
+# Pour chaque canal deja present sur la machine, installe la version la plus
+# recente si elle manque. Le canal stable suit aussi kernel-auxinuxos (voir
+# run_osupdate); le canal d'essai n'a que ce chemin-ci. Les anciens noyaux sont
+# gardes: c'est le recours si le nouveau ne demarre pas.
+kernel_update_channels() {
+  local installed available channel newest_installed newest_available
+  installed="$(kernels_installed)"
+  [[ -n "${installed}" ]] || return 0
+  available="$(kernels_available)"
+  for channel in stable dev; do
+    if [[ "${channel}" == "dev" ]] && ! kernel_dev_enabled; then
+      continue
+    fi
+    newest_installed=""
+    newest_available=""
+    local v
+    while read -r v; do
+      [[ -n "${v}" && "$(kernel_channel "${v}")" == "${channel}" ]] && newest_installed="${v}"
+    done <<<"${installed}"
+    [[ -n "${newest_installed}" ]] || continue
+    while read -r v; do
+      [[ -n "${v}" && "$(kernel_channel "${v}")" == "${channel}" ]] && newest_available="${v}"
+    done <<<"${available}"
+    [[ -n "${newest_available}" ]] || continue
+    if [[ "$(printf '%s\n%s\n' "${newest_installed}" "${newest_available}" | sort -V | tail -n1)" == "${newest_available}" ]]; then
+      say "Nouveau noyau $([[ ${channel} == dev ]] && echo "en essai "): ${newest_available}" \
+          "New $([[ ${channel} == dev ]] && echo "test ")kernel: ${newest_available}"
+      kernel_install_version "${newest_available}"
+    fi
+  done
+}
+
+run_kernel_update() {
+  require_root_for_deb kernel update
+  apt_get update
+  kernel_update_channels
+}
+
+# Choix du noyau de demarrage, par l'entree enregistree de GRUB.
+#
+# GRUB_DEFAULT=0 (overlays/etc/default/grub) demarre toujours la premiere
+# entree, donc le noyau le plus recent. Epingler un noyau passe GRUB_DEFAULT a
+# « saved » par un fichier de /etc/default/grub.d -- le fichier principal, lui,
+# est reecrit par l'installateur -- puis enregistre l'entree voulue.
+kernel_set_default() {
+  local v="$1" id
+  if ! id="$(kernel_grub_id "${v}")"; then
+    say_err \
+      "Entrée GRUB du noyau ${v} introuvable dans ${GRUB_CFG}; rien n'a été modifié." \
+      "GRUB entry for kernel ${v} not found in ${GRUB_CFG}; nothing was changed."
+    exit 69
+  fi
+  install -d -m 0755 "${GRUB_DEFAULT_D}"
+  cat >"${GRUB_DEFAULT_D}/${KERNEL_PIN_FILE}" <<'EOF'
+# Ecrit par `auxi kernel activate`: demarrer sur le noyau choisi (entree
+# enregistree par grub-set-default) plutot que sur le plus recent.
+# Pour revenir au plus recent: sudo auxi kernel activate latest
+GRUB_DEFAULT=saved
+EOF
+  update-grub
+  # Relu APRES update-grub: l'identifiant ne change pas, mais c'est le fichier
+  # regenere qui sera lu au demarrage.
+  id="$(kernel_grub_id "${v}")" || {
+    rm -f "${GRUB_DEFAULT_D}/${KERNEL_PIN_FILE}"
+    update-grub
+    say_err "Entrée GRUB du noyau ${v} disparue après update-grub." \
+            "GRUB entry for kernel ${v} vanished after update-grub."
+    exit 69
+  }
+  grub-set-default "${id}"
+}
+
+kernel_unpin() {
+  kernel_pinned || return 0
+  rm -f "${GRUB_DEFAULT_D}/${KERNEL_PIN_FILE}"
+  update-grub
+  grub-editenv "${GRUBENV}" unset saved_entry 2>/dev/null || true
+}
+
+run_kernel_activate() {
+  local v="${1:-}"
+  if [[ "${v}" == "latest" ]]; then
+    require_root_for_deb kernel activate latest
+    kernel_unpin
+    say "Le noyau le plus récent sera utilisé au prochain démarrage." \
+        "The newest kernel will be used on next boot."
+    return 0
+  fi
+  kernel_require_valid "${v}"
+  require_root_for_deb kernel activate "${v}"
+  if ! kernel_is_installed "${v}"; then
+    say_err "Le noyau ${v} n'est pas installé." "Kernel ${v} is not installed."
+    exit 1
+  fi
+  kernel_set_default "${v}"
+  say "Le noyau ${v} sera utilisé au prochain démarrage." \
+      "Kernel ${v} will be used on next boot."
+}
+
+run_kernel_remove() {
+  local v="${1:-}"
+  kernel_require_valid "${v}"
+  require_root_for_deb kernel remove "${v}"
+  if ! kernel_is_installed "${v}"; then
+    say_err "Le noyau ${v} n'est pas installé." "Kernel ${v} is not installed."
+    exit 1
+  fi
+  if [[ "${v}" == "$(kernel_running)" ]]; then
+    say_err \
+      "Le noyau ${v} est celui qui tourne: redémarrez sur un autre noyau avant de le désinstaller." \
+      "Kernel ${v} is the running kernel: reboot into another kernel before removing it."
+    exit 1
+  fi
+  local k stables=0
+  while read -r k; do
+    [[ -n "${k}" && "$(kernel_channel "${k}")" == "stable" ]] && stables=$((stables + 1))
+  done < <(kernels_installed)
+  if [[ "$(kernel_channel "${v}")" == "stable" && "${stables}" -le 1 ]]; then
+    say_err \
+      "Le noyau ${v} est le dernier noyau stable installé: il est gardé." \
+      "Kernel ${v} is the last installed stable kernel: it is kept."
+    exit 1
+  fi
+
+  local pkgs=("linux-image-${v}")
+  if deb_installed "linux-headers-${v}"; then
+    pkgs+=("linux-headers-${v}")
+  fi
+
+  # Simulation d'abord: apt retire aussi ce qui DEPEND du noyau. Si c'est
+  # kernel-auxinuxos (le noyau que suit la mise a jour du systeme), on refuse:
+  # sans lui, plus aucun noyau stable n'arriverait. kernel-auxinuxos-dev peut
+  # partir avec son noyau d'essai.
+  local sim pkg blocked=()
+  sim="$("$(apt_real apt-get)" -s purge -- "${pkgs[@]}" 2>&1)" || {
+    printf '%s\n' "${sim}" >&2
+    exit 1
+  }
+  while read -r pkg; do
+    case "${pkg}" in
+      linux-image-*) kernel_valid "${pkg#linux-image-}" || blocked+=("${pkg}") ;;
+      linux-headers-*) kernel_valid "${pkg#linux-headers-}" || blocked+=("${pkg}") ;;
+      kernel-auxinuxos-dev) ;;
+      *) blocked+=("${pkg}") ;;
+    esac
+  done < <(sed -n 's/^Purg \([^ ]*\).*/\1/p' <<<"${sim}")
+  if [[ "${#blocked[@]}" -gt 0 ]]; then
+    say_err \
+      "Désinstaller ${v} retirerait aussi: ${blocked[*]}. C'est le noyau que suit la mise à jour du système: il est gardé." \
+      "Removing ${v} would also remove: ${blocked[*]}. The system update follows this kernel: it is kept."
+    exit 1
+  fi
+
+  local was_default=0
+  kernel_pinned && [[ "$(kernel_default)" == "${v}" ]] && was_default=1
+  apt_get purge -- "${pkgs[@]}"
+  if [[ "${was_default}" -eq 1 ]]; then
+    kernel_unpin
+    say "Le noyau le plus récent sera utilisé au prochain démarrage." \
+        "The newest kernel will be used on next boot."
+  fi
+  say "Noyau ${v} désinstallé." "Kernel ${v} removed."
+}
+
+run_kernel_dev() {
+  local base="${SOURCES_D}/${KERNEL_DEV_SOURCE}"
+  case "${1:-}" in
+    on)
+      require_root_for_deb kernel dev on
+      if [[ ! -f "${base}" ]]; then
+        if [[ ! -f "${base}.disabled" ]]; then
+          say_err "Source kernel-dev introuvable: ${base}.disabled" \
+                  "kernel-dev source not found: ${base}.disabled"
+          exit 69
+        fi
+        mv -f "${base}.disabled" "${base}"
+      fi
+      apt_get update
+      say "Noyaux en essai activés. Pour en installer un: auxi kernel list, puis sudo auxi kernel install VERSION" \
+          "Test kernels enabled. To install one: auxi kernel list, then sudo auxi kernel install VERSION"
+      ;;
+    off)
+      require_root_for_deb kernel dev off
+      if [[ -f "${base}" ]]; then
+        mv -f "${base}" "${base}.disabled"
+      fi
+      apt_get update
+      say "Noyaux en essai désactivés." "Test kernels disabled."
+      if grep -q -- '-dev-' <<<"$(kernels_installed)"; then
+        say "Les noyaux en essai déjà installés sont gardés; ils ne recevront plus de mise à jour." \
+            "Test kernels already installed are kept; they will no longer be updated."
+      fi
+      ;;
+    *)
+      say_err "Usage: auxi kernel dev on|off" "Usage: auxi kernel dev on|off"
+      exit 64
+      ;;
+  esac
+}
+
+run_kernel() {
+  local sub="${1:-list}"
+  [[ $# -gt 0 ]] && shift
+  case "${sub}" in
+    list) run_kernel_list "$@" ;;
+    install) run_kernel_install "$@" ;;
+    update) run_kernel_update ;;
+    activate) run_kernel_activate "$@" ;;
+    remove|uninstall) run_kernel_remove "$@" ;;
+    dev) run_kernel_dev "$@" ;;
+    *)
+      say_err "Sous-commande inconnue: kernel ${sub}" "Unknown subcommand: kernel ${sub}"
+      say_err "Usage: auxi kernel list|install|update|activate|remove|dev" \
+              "Usage: auxi kernel list|install|update|activate|remove|dev"
+      exit 64
+      ;;
+  esac
 }
 
 run_search() {
@@ -695,7 +1187,7 @@ run_search() {
   # activee: ailleurs, on les listerait sans pouvoir les installer.
   if [[ "${MODE}" == "deb" ]] || { [[ "${MODE}" == "both" ]] && deb_apps_enabled; }; then
     echo "== DEB =="
-    "$(apt_real apt-cache)" search -- "${term}" || true
+    apt_cache search -- "${term}" || true
   fi
 }
 
@@ -704,7 +1196,7 @@ run_install() {
   local item="${ARGS[0]:-}"
   if [[ -z "${item}" ]]; then
     say_err \
-      "Element a installer manquant." \
+      "Élément à installer manquant." \
       "Missing package or application to install."
     exit 64
   fi
@@ -727,7 +1219,7 @@ run_install() {
       local pkg
       for pkg in "${ARGS[@]}"; do
         if ! deb_installed "${pkg}"; then
-          say_err "Paquet DEB non installe: ${pkg}" "DEB package not installed: ${pkg}"
+          say_err "Paquet DEB non installé: ${pkg}" "DEB package not installed: ${pkg}"
           deb_disabled_hint
           exit 1
         fi
@@ -747,13 +1239,13 @@ run_install() {
         flatpak install "${FLATPAK_OPTS[@]}" flathub -- "${id}"
       elif deb_apps_enabled; then
         say \
-          "Aucun Flatpak trouve pour ${item}; installation DEB." \
+          "Aucun Flatpak trouvé pour ${item}; installation DEB." \
           "No Flatpak found for ${item}; using DEB installation."
         require_root_for_deb install "${item}"
         apt_get install -- "${item}"
       else
         say_err \
-          "Aucune application Flatpak nommee ${item}." \
+          "Aucune application Flatpak nommée ${item}." \
           "No Flatpak application named ${item}."
         show_flatpak_suggestions "${item}"
         deb_disabled_hint
@@ -768,7 +1260,7 @@ run_uninstall() {
   local item="${ARGS[0]:-}"
   if [[ -z "${item}" ]]; then
     say_err \
-      "Element a desinstaller manquant." \
+      "Élément à désinstaller manquant." \
       "Missing package or application to uninstall."
     exit 64
   fi
@@ -811,6 +1303,12 @@ case "${1:-}" in
     ;;
   upgrade)
     shift; run_upgrade "$@"
+    ;;
+  osupdate)
+    shift; run_osupdate "$@"
+    ;;
+  kernel)
+    shift; run_kernel "$@"
     ;;
   search)
     shift; run_search "$@"
@@ -859,19 +1357,19 @@ case "${1:-}" in
     if apt_enabled; then
       say "APT direct: actif" "Direct APT: enabled"
     else
-      say "APT direct: masque, utilisez auxi" "Direct APT: hidden, use auxi"
+      say "APT direct: masqué, utilisez auxi" "Direct APT: hidden, use auxi"
     fi
     if deb_apps_enabled; then
-      say "Installation DEB: active (Flatpak reste prioritaire)" "DEB installation: enabled (Flatpak stays first)"
+      say "Installation DEB: activée (Flatpak reste prioritaire)" "DEB installation: enabled (Flatpak stays first)"
     else
-      say "Installation DEB: desactivee, applications Flatpak seulement" "DEB installation: disabled, Flatpak applications only"
+      say "Installation DEB: désactivée, applications Flatpak seulement" "DEB installation: disabled, Flatpak applications only"
     fi
     if snapshots_available; then
-      say "Rollback systeme: actif (BTRFS + snapper)" \
+      say "Rollback système: actif (BTRFS + snapper)" \
           "System rollback: enabled (BTRFS + snapper)"
       snapper -c "${SNAPPER_CONFIG}" list 2>/dev/null | tail -n 5 || true
     else
-      say "Rollback systeme: indisponible sur ce systeme" \
+      say "Rollback système: indisponible sur ce système" \
           "System rollback: unavailable on this system"
     fi
     ;;

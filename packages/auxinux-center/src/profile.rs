@@ -68,15 +68,15 @@ pub fn describe(name: &str) -> (&'static str, &'static str) {
     match name {
         "bureautique" => (
             "Bureautique",
-            "Reactivite du bureau, autonomie preservee.",
+            "Réactivité du bureau, autonomie préservée.",
         ),
         "multimedia" => (
-            "Multimedia",
-            "Latence audio basse, priorite temps reel, plein regime.",
+            "Multimédia",
+            "Latence audio basse, priorité temps réel, plein régime.",
         ),
         "gaming" => (
             "Jeu",
-            "Limites relevees pour Proton, mitigation split-lock levee, plein regime.",
+            "Limites relevées pour Proton, mitigation split-lock levée, plein régime.",
         ),
         _ => ("Inconnu", ""),
     }
@@ -93,7 +93,7 @@ pub fn set(name: &str) -> ActionResult {
     } else {
         let msg = out.stderr.trim();
         ActionResult::err(if msg.is_empty() {
-            "Changement de profil refuse ou annule".to_string()
+            "Changement de profil refusé ou annulé".to_string()
         } else {
             msg.to_string()
         })

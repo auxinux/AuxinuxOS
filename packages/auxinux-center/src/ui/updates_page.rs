@@ -15,7 +15,7 @@ pub fn view(app: &App) -> Element<'_, Message> {
     let idle = !app.op_running();
 
     let header = widgets::header(
-        "Mises a jour",
+        "Mises à jour",
         app.os_version.clone(),
         vec![
             widget::button::standard("Actualiser les listes")
@@ -30,13 +30,13 @@ pub fn view(app: &App) -> Element<'_, Message> {
     let body: Element<Message> = match &app.updates {
         Loading::Idle | Loading::Busy => {
             widgets::loading(
-                "Recherche des mises a jour…",
+                "Recherche des mises à jour…",
                 widgets::stage_or_start(&app.updates_stage),
             )
         }
         Loading::Ready(list) if list.is_empty() => widgets::empty(
-            "Votre systeme est a jour",
-            "Rien a installer pour le moment.",
+            "Votre système est à jour",
+            "Rien à installer pour le moment.",
         ),
         Loading::Ready(list) => {
             let mut col = widget::Column::new().spacing(8);
@@ -63,7 +63,7 @@ pub fn view(app: &App) -> Element<'_, Message> {
                             .align_y(iced::Alignment::Center)
                             .push(info)
                             .push(
-                                widget::button::standard("Mettre a jour")
+                                widget::button::standard("Mettre à jour")
                                     .on_press_maybe(idle.then_some(Message::UpdateOne(index))),
                             ),
                     )
@@ -82,17 +82,17 @@ pub fn view(app: &App) -> Element<'_, Message> {
         widget::Column::new()
             .spacing(6)
             .push(widget::text::heading(if count == 0 {
-                "Tout mettre a jour".to_string()
+                "Tout mettre à jour".to_string()
             } else {
-                format!("Tout mettre a jour ({count})")
+                format!("Tout mettre à jour ({count})")
             }))
             .push(widget::text::caption(
-                "Un point de restauration est cree automatiquement avant la mise a \
-                 jour des paquets systeme. En cas de probleme, l'onglet Restauration \
-                 permet de revenir a l'etat precedent.",
+                "Un point de restauration est créé automatiquement avant la mise à \
+                 jour des paquets système. En cas de problème, l'onglet Restauration \
+                 permet de revenir à l'état précédent.",
             ))
             .push(
-                widget::button::suggested("Mettre a jour le systeme")
+                widget::button::suggested("Mettre à jour le système")
                     .on_press_maybe(idle.then_some(Message::UpgradeAll)),
             ),
     )

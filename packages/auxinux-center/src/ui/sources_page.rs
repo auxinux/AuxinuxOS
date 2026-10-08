@@ -11,23 +11,23 @@ use crate::ui::{widgets, App, Loading, Message};
 pub fn view(app: &App) -> Element<'_, Message> {
     let header = widgets::header(
         "Sources de logiciels",
-        "D'ou proviennent les applications et les mises a jour",
+        "D'où proviennent les applications et les mises à jour",
         vec![widget::button::standard("Actualiser")
             .on_press(Message::RefreshSources)
             .into()],
     );
 
     let body: Element<Message> = match &app.apt_sources {
-        Loading::Idle | Loading::Busy => widgets::busy("Lecture des depots…"),
+        Loading::Idle | Loading::Busy => widgets::busy("Lecture des dépôts…"),
         Loading::Ready(sources) => {
             let mut col = widget::Column::new().spacing(16);
 
             // --- Depots APT ---
             let mut apt = widget::Column::new()
                 .spacing(8)
-                .push(widget::text::heading("Depots APT (paquets DEB)"));
+                .push(widget::text::heading("Dépôts APT (paquets DEB)"));
             if sources.is_empty() {
-                apt = apt.push(widget::text::caption("Aucun depot configure."));
+                apt = apt.push(widget::text::caption("Aucun dépôt configuré."));
             }
             for source in sources {
                 let mut actions = widget::Row::new()
@@ -55,7 +55,7 @@ pub fn view(app: &App) -> Element<'_, Message> {
                     )));
                 if !source.removable {
                     info = info.push(widget::text::caption(
-                        "Depot systeme AuxiNux — protege contre la suppression.",
+                        "Dépôt système AuxiNux — protégé contre la suppression.",
                     ));
                 }
 
@@ -78,16 +78,16 @@ pub fn view(app: &App) -> Element<'_, Message> {
             let mut presets = widget::Column::new().spacing(8).push(
                 widget::Column::new()
                     .spacing(2)
-                    .push(widget::text::heading("Depots connus"))
+                    .push(widget::text::heading("Dépôts connus"))
                     .push(widget::text::caption(
-                        "Ajout en un clic. La cle de signature est telechargee depuis le \
-                         domaine officiel de l'editeur, verifiee comme cle OpenPGP valide, \
-                         puis epinglee: un changement ulterieur est refuse.",
+                        "Ajout en un clic. La clé de signature est téléchargée depuis le \
+                         domaine officiel de l'éditeur, vérifiée comme clé OpenPGP valide, \
+                         puis épinglée: un changement ultérieur est refusé.",
                     )),
             );
             for preset in &app.presets {
                 let action: Element<Message> = if preset.installed {
-                    widget::text::caption("Deja ajoute").into()
+                    widget::text::caption("Déjà ajouté").into()
                 } else {
                     widget::button::standard("Ajouter")
                         .on_press(Message::AddPreset(preset.id.clone()))
@@ -117,7 +117,7 @@ pub fn view(app: &App) -> Element<'_, Message> {
             // --- Remotes Flatpak ---
             let mut remotes = widget::Column::new()
                 .spacing(8)
-                .push(widget::text::heading("Depots Flatpak"));
+                .push(widget::text::heading("Dépôts Flatpak"));
             for remote in &app.remotes {
                 remotes = remotes.push(
                     widget::container(
@@ -161,10 +161,10 @@ fn custom_form(app: &App) -> Element<'_, Message> {
     widget::container(
         widget::Column::new()
             .spacing(8)
-            .push(widget::text::heading("Ajouter un depot personnalise"))
+            .push(widget::text::heading("Ajouter un dépôt personnalisé"))
             .push(widget::text::caption(
                 "Format deb822. Seuls les champs Types, URIs, Suites, Components, \
-                 Architectures, Signed-By et Enabled sont acceptes.",
+                 Architectures, Signed-By et Enabled sont acceptés.",
             ))
             .push(
                 widget::text_input("Nom (ex. mon-depot)", &app.custom_name)
@@ -179,13 +179,13 @@ fn custom_form(app: &App) -> Element<'_, Message> {
             )
             .push(
                 widget::text_input(
-                    "URL de la cle GPG (https://…, facultatif)",
+                    "URL de la clé GPG (https://…, facultatif)",
                     &app.custom_key_url,
                 )
                 .on_input(Message::CustomKeyUrl),
             )
             .push(
-                widget::button::suggested("Ajouter le depot")
+                widget::button::suggested("Ajouter le dépôt")
                     .on_press(Message::AddCustomSource),
             ),
     )

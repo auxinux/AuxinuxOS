@@ -126,6 +126,14 @@ fn deb822_enabled(path: &Path) -> bool {
     }
 }
 
+/// Source des noyaux en essai. Son interrupteur passe par `auxi kernel dev`
+/// (voir kernel.rs) et non par un simple renommage: l'operation est suivie en
+/// direct, et un echec du rafraichissement des index est montre au lieu d'etre
+/// ignore.
+pub fn is_kernel_dev_source(file: &str) -> bool {
+    file.trim_end_matches(".disabled") == "auxinuxos-kernel-dev.sources"
+}
+
 pub fn set_apt_source_enabled(file: &str, enabled: bool) -> ActionResult {
     if file.contains('/') || file.contains("..") {
         return ActionResult::err("nom de fichier invalide");
@@ -137,12 +145,12 @@ pub fn set_apt_source_enabled(file: &str, enabled: bool) -> ActionResult {
         (format!("{SOURCES_DIR}/{base}"), format!("{SOURCES_DIR}/{base}.disabled"))
     };
     if !Path::new(&from).exists() {
-        return ActionResult::ok("deja dans l'etat demande");
+        return ActionResult::ok("déjà dans l'état demandé");
     }
     let out = run_pkexec(&["mv", "-f", &from, &to]);
     if out.ok {
         let _ = run_pkexec(&["auxi", "update"]);
-        ActionResult::ok(if enabled { "Depot active" } else { "Depot desactive" })
+        ActionResult::ok(if enabled { "Dépôt activé" } else { "Dépôt désactivé" })
     } else {
         ActionResult::err(out.stderr)
     }
@@ -154,7 +162,7 @@ pub fn remove_apt_source(file: &str) -> ActionResult {
     }
     let base = file.trim_end_matches(".disabled");
     if is_protected(base) {
-        return ActionResult::err("Depot systeme protege (non supprimable)");
+        return ActionResult::err("Dépôt système protégé (non supprimable)");
     }
     let mut removed = false;
     for f in [format!("{SOURCES_DIR}/{base}"), format!("{SOURCES_DIR}/{base}.disabled")] {
@@ -168,9 +176,9 @@ pub fn remove_apt_source(file: &str) -> ActionResult {
     }
     if removed {
         let _ = run_pkexec(&["auxi", "update"]);
-        ActionResult::ok("Depot retire")
+        ActionResult::ok("Dépôt retiré")
     } else {
-        ActionResult::ok("rien a retirer")
+        ActionResult::ok("rien à retirer")
     }
 }
 
@@ -191,23 +199,23 @@ fn preset_defs() -> Vec<(&'static str, PresetDef)> {
     vec![
         ("vscode", PresetDef {
             name: "Visual Studio Code",
-            desc: "Editeur de code Microsoft, tres populaire.",
+            desc: "Éditeur de code Microsoft, très populaire.",
         }),
         ("docker", PresetDef {
             name: "Docker CE",
-            desc: "Moteur de conteneurs Docker (depot officiel).",
+            desc: "Moteur de conteneurs Docker (dépôt officiel).",
         }),
         ("mozilla", PresetDef {
             name: "Mozilla Firefox",
-            desc: "Firefox officiel par Mozilla, mises a jour rapides.",
+            desc: "Firefox officiel par Mozilla, mises à jour rapides.",
         }),
         ("mullvad", PresetDef {
             name: "Mullvad VPN",
-            desc: "VPN axe vie privee, sans journaux, paiement anonyme possible.",
+            desc: "VPN axé vie privée, sans journaux, paiement anonyme possible.",
         }),
         ("signal", PresetDef {
             name: "Signal Desktop",
-            desc: "Messagerie chiffree de bout en bout, orientee vie privee.",
+            desc: "Messagerie chiffrée de bout en bout, orientée vie privée.",
         }),
     ]
 }
@@ -233,7 +241,7 @@ pub fn add_source_preset(preset: &str) -> ActionResult {
     };
     let out = run_pkexec(&[SOURCE_HELPER, "preset", id]);
     if out.ok {
-        ActionResult::ok(format!("Depot '{}' ajoute", d.name))
+        ActionResult::ok(format!("Dépôt '{}' ajouté", d.name))
     } else {
         ActionResult::err(helper_error(&out.stderr))
     }
@@ -250,7 +258,7 @@ fn helper_error(stderr: &str) -> String {
         .trim()
         .to_string();
     if msg.is_empty() {
-        "Ajout du depot impossible (authentification refusee ?)".into()
+        "Ajout du dépôt impossible (authentification refusée ?)".into()
     } else {
         msg
     }
@@ -269,19 +277,19 @@ pub fn add_custom_apt_source(name: &str, sources_body: &str, key_url: &str) -> A
     // qui s'execute en root.
     if !is_safe_sources_body(sources_body) {
         return ActionResult::err(
-            "corps de depot invalide (champs deb822 attendus, sans caractere special)",
+            "corps de dépôt invalide (champs deb822 attendus, sans caractère spécial)",
         );
     }
     let key_trimmed = key_url.trim();
     if !key_trimmed.is_empty() && !is_safe_key_url(key_trimmed) {
-        return ActionResult::err("URL de cle invalide (https:// requis)");
+        return ActionResult::err("URL de clé invalide (https:// requis)");
     }
 
     // argv, jamais un script: ni le corps ni l'URL ne sont interpretes par un
     // shell a un quelconque moment.
     let out = run_pkexec(&[SOURCE_HELPER, "custom", &safe, key_trimmed, sources_body]);
     if out.ok {
-        ActionResult::ok(format!("Depot '{safe}' ajoute"))
+        ActionResult::ok(format!("Dépôt '{safe}' ajouté"))
     } else {
         ActionResult::err(helper_error(&out.stderr))
     }
@@ -323,7 +331,7 @@ pub fn set_flatpak_remote_enabled(name: &str, enabled: bool) -> ActionResult {
     let flag = if enabled { "--enable" } else { "--disable" };
     let out = run_pkexec(&["flatpak", "remote-modify", flag, name]);
     if out.ok {
-        ActionResult::ok("Remote mis a jour")
+        ActionResult::ok("Remote mis à jour")
     } else {
         ActionResult::err(out.stderr)
     }
@@ -344,7 +352,7 @@ pub fn set_apt_wrapper(enabled: bool) -> ActionResult {
     let val = if enabled { "apt=true" } else { "apt=false" };
     let out = run_pkexec(&["auxi", "set", val]);
     if out.ok {
-        ActionResult::ok("Politique APT mise a jour")
+        ActionResult::ok("Politique APT mise à jour")
     } else {
         ActionResult::err(out.stderr)
     }
@@ -365,9 +373,9 @@ pub fn set_deb_apps(enabled: bool) -> ActionResult {
     let out = run_pkexec(&["auxi", "set", val]);
     if out.ok {
         ActionResult::ok(if enabled {
-            "Installation DEB activee (Flatpak reste prioritaire)"
+            "Installation DEB activée (Flatpak reste prioritaire)"
         } else {
-            "Installation DEB desactivee: Flatpak seulement"
+            "Installation DEB désactivée: Flatpak seulement"
         })
     } else {
         ActionResult::err(out.stderr)
@@ -377,6 +385,14 @@ pub fn set_deb_apps(enabled: bool) -> ActionResult {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn kernel_dev_source_is_recognized_in_both_states() {
+        assert!(is_kernel_dev_source("auxinuxos-kernel-dev.sources"));
+        assert!(is_kernel_dev_source("auxinuxos-kernel-dev.sources.disabled"));
+        assert!(!is_kernel_dev_source("auxinuxos-kernel.list"));
+        assert!(!is_kernel_dev_source("auxinux-apps.sources"));
+    }
 
     #[test]
     fn deb_apps_needs_the_explicit_line() {

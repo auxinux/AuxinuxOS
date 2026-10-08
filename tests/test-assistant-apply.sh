@@ -67,7 +67,7 @@ reset
 out="$(bash "${HELPER}" --flatpak org.absent.App --flatpak org.videolan.VLC 2>&1)"
 check "echec rendu" "$?" "1"
 check "la suivante est quand meme installee" "$(grep -c 'install --flatpak org.videolan.VLC' "${CALLS}")" "1"
-check "l'echec est nomme" "$(grep -c 'Echec pour: org.absent.App' <<<"${out}")" "1"
+check "l'echec est nomme" "$(grep -c 'Échec pour: org.absent.App' <<<"${out}")" "1"
 
 echo "== 4. Arguments refuses AVANT toute action =="
 reset
@@ -81,7 +81,7 @@ check "rien n'a ete execute" "$(wc -l <"${CALLS}" | tr -d ' ')" "0"
 
 echo "== 5. Rien a faire =="
 reset
-check "sans argument" "$(bash "${HELPER}" 2>&1)" "Rien a installer."
+check "sans argument" "$(bash "${HELPER}" 2>&1)" "Rien à installer."
 
 if [[ "${fail}" -eq 0 ]]; then echo "TOUS LES TESTS PASSENT"; else echo "ECHEC"; fi
 exit "${fail}"

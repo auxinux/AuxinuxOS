@@ -3,7 +3,7 @@ Type=Application
 Name=AuxiNux OS Setup Assistant
 Name[fr]=Assistant de configuration AuxiNux OS
 Comment=Choose the applications to install
-Comment[fr]=Choisir les applications a installer
+Comment[fr]=Choisir les applications à installer
 # --premier-demarrage ne fait RIEN si l'assistant a deja ete termine ou passe
 # (~/.config/auxinux/assistant-termine), ni dans la session live: c'est le
 # programme qui decide, pour que la regle soit testee avec lui.

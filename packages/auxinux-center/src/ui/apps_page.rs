@@ -20,10 +20,13 @@ pub fn view(app: &App) -> Element<'_, Message> {
         .on_submit(|_| Message::SearchSubmit)
         .width(iced::Length::Fill);
 
+    let kernel_view = app.apps_view == AppsView::Kernel;
     let header = widgets::header(
         "Applications",
-        if app.deb_apps {
-            "Flatpak par defaut; paquets DEB au choix dans la liste"
+        if kernel_view {
+            "Noyaux AuxiNux: le noyau actif, les autres versions, les noyaux en essai"
+        } else if app.deb_apps {
+            "Flatpak par défaut; paquets DEB au choix dans la liste"
         } else {
             "Applications Flatpak (Flathub)"
         },
@@ -31,24 +34,36 @@ pub fn view(app: &App) -> Element<'_, Message> {
             widget::button::standard("Suggestions")
                 .on_press(Message::ShowFeatured)
                 .into(),
-            widget::button::standard("Installees")
+            widget::button::standard("Installées")
                 .on_press(Message::ShowInstalled)
+                .into(),
+            widget::button::standard("Noyau")
+                .on_press(Message::ShowKernel)
                 .into(),
         ],
     );
+
+    // Vue Noyau: ni recherche ni source Flatpak/DEB, qui n'ont pas de sens ici.
+    if kernel_view {
+        return widget::Column::new()
+            .spacing(16)
+            .push(header)
+            .push(super::kernel_view::view(app))
+            .into();
+    }
 
     let body: Element<Message> = match &app.apps {
         Loading::Busy => widgets::loading(
             match app.apps_view {
                 AppsView::Search(_) => "Recherche en cours…",
-                AppsView::Installed => "Lecture des applications installees…",
-                AppsView::Featured => "Chargement des suggestions…",
+                AppsView::Installed => "Lecture des applications installées…",
+                AppsView::Featured | AppsView::Kernel => "Chargement des suggestions…",
             },
             widgets::stage_or_start(&app.apps_stage),
         ),
         Loading::Idle => widgets::loading("Chargement…", ""),
         Loading::Ready(list) if list.is_empty() => widgets::empty(
-            "Aucune application trouvee",
+            "Aucune application trouvée",
             "Essayez un autre terme, ou parcourez les suggestions.",
         ),
         Loading::Ready(list) => {
@@ -65,7 +80,7 @@ pub fn view(app: &App) -> Element<'_, Message> {
             }
             if shown == 0 {
                 widgets::empty(
-                    "Aucune application trouvee dans cette source",
+                    "Aucune application trouvée dans cette source",
                     "Essayez un autre terme, ou l'autre source de la liste.",
                 )
             } else {
@@ -127,9 +142,9 @@ fn card<'a>(app: &'a App, index: usize, entry: &'a AppEntry) -> Element<'a, Mess
     // installee ne rendait qu'un message d'erreur d'apt.
     if entry.is_installed(&source) {
         actions = actions
-            .push(widget::text::caption("Installee"))
+            .push(widget::text::caption("Installée"))
             .push(
-                widget::button::destructive("Desinstaller")
+                widget::button::destructive("Désinstaller")
                     .on_press_maybe(idle.then_some(Message::Remove(index))),
             );
     } else {

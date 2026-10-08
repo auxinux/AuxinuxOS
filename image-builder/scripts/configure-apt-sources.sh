@@ -137,15 +137,21 @@ Signed-By: /usr/share/keyrings/auxinuxos-archive-keyring.gpg
 EOF
 
 # Noyaux en essai (suite kernel-dev). Livre DESACTIVE: c'est un choix de ceux
-# qui veulent tester un noyau avant sa sortie, pas le cas general. Active, ses
-# noyaux plus recents seraient installes a la prochaine mise a jour. Le centre
-# de controle l'active d'un clic (page Sources): il renomme le fichier, comme
-# pour Brave.
+# qui veulent tester un noyau avant sa sortie, pas le cas general.
+#
+# ACTIVER LA SOURCE N'INSTALLE RIEN (corrige le 2026-10-07; ce commentaire
+# affirmait le contraire). Le noyau d'essai est un paquet DISTINCT
+# (kernel-auxinuxos-dev -> linux-image-<v>-dev-auxinuxos-amd64), qu'aucun paquet
+# installe ne demande. On l'installe explicitement: `auxi kernel install
+# VERSION`, ou la vue Noyau de la page Applications du centre de controle.
+# Ensuite, la mise a jour du systeme suit les nouveaux noyaux d'essai.
+# `auxi kernel dev on|off` renomme ce fichier.
 sudo rm -f "${ROOTFS}/etc/apt/sources.list.d/auxinuxos-kernel-dev.sources"
 sudo tee "${ROOTFS}/etc/apt/sources.list.d/auxinuxos-kernel-dev.sources.disabled" >/dev/null <<'EOF'
-# Noyaux d'AuxiNuxOS en cours d'essai. Pour l'activer: centre de controle, page Sources,
-# ou renommer ce fichier sans « .disabled ». En cas de probleme, choisir
-# l'ancien noyau dans le menu GRUB « Options avancees ».
+# Noyaux d'AuxiNuxOS en cours d'essai. Pour l'activer: sudo auxi kernel dev on,
+# ou centre de controle, Applications > Noyau. Puis: auxi kernel list, et
+# sudo auxi kernel install VERSION. En cas de probleme, choisir l'ancien noyau
+# dans le menu GRUB « Options avancees », ou sudo auxi kernel activate VERSION.
 Types: deb
 URIs: https://dep.auxinux.ca/AUXINUXOS
 Suites: kernel-dev

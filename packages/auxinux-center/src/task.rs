@@ -69,8 +69,8 @@ where
             // l'interface, ni la laisser croire que l'operation tourne encore.
             let result = result.unwrap_or_else(|_| {
                 crate::model::ActionResult::err(
-                    "L'operation s'est interrompue de facon inattendue. Le detail \
-                     ci-dessous montre ce qu'elle a eu le temps d'ecrire.",
+                    "L'opération s'est interrompue de façon inattendue. Le détail \
+                     ci-dessous montre ce qu'elle a eu le temps d'écrire.",
                 )
             });
             let _ = tx.unbounded_send(Message::OpFinished(result));

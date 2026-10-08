@@ -1405,7 +1405,7 @@ fn etape_lisible(l: Langue, cle: &str) -> String {
 /// Libelles d'avancement de progress.rs, dans la langue choisie.
 fn traduire(l: Langue, libelle: &str) -> &str {
     match libelle {
-        "Telechargement" => tr(l, "Téléchargement", "Downloading"),
+        "Téléchargement" => tr(l, "Téléchargement", "Downloading"),
         "Application des modifications" => tr(l, "Installation des paquets", "Installing packages"),
         "Copie des fichiers" => tr(l, "Copie des fichiers", "Copying files"),
         autre => autre,
