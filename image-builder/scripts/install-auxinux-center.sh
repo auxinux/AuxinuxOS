@@ -51,8 +51,10 @@ sudo cp "${AUXI_DEB}" "${CENTER_DEB}" "${ROOTFS}/tmp/auxinux-debs/"
 # existe deja, copie a la main par une construction precedente et inconnu de
 # dpkg. Le conffile du paquet en differe: dpkg POSE UNE QUESTION, lit une fin
 # de fichier et echoue (constate en VM le 2026-10-07 sur un systeme installe).
+# PAS --force-confdef avec: il l'emporte, et dpkg garde alors l'ancien fichier
+# (« Keeping old config file as default », construction du 2026-10-08).
 sudo chroot "${ROOTFS}" env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-  -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confnew \
+  -o Dpkg::Options::=--force-confnew \
   "/tmp/auxinux-debs/$(basename "${AUXI_DEB}")" \
   "/tmp/auxinux-debs/$(basename "${CENTER_DEB}")"
 sudo rm -rf "${ROOTFS}/tmp/auxinux-debs"
