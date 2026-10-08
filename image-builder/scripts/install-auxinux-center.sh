@@ -53,10 +53,19 @@ sudo cp "${AUXI_DEB}" "${CENTER_DEB}" "${ROOTFS}/tmp/auxinux-debs/"
 # de fichier et echoue (constate en VM le 2026-10-07 sur un systeme installe).
 # PAS --force-confdef avec: il l'emporte, et dpkg garde alors l'ancien fichier
 # (« Keeping old config file as default », construction du 2026-10-08).
-sudo chroot "${ROOTFS}" env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-  -o Dpkg::Options::=--force-confnew \
+#
+# dpkg -i et non apt-get install: sur un rootfs reutilise, la mise a jour des
+# paquets a pu installer la MEME version depuis la suite APPS (publiee avant la
+# construction), avec un contenu different (binaire recompile). apt refuse
+# alors le fichier local (« DOWNGRADED ... without --allow-downgrades »,
+# construction du 2026-10-08); dpkg reinstalle sans discuter. apt-get -f
+# complete ensuite une dependance manquante, s'il y en a une.
+if ! sudo chroot "${ROOTFS}" env DEBIAN_FRONTEND=noninteractive dpkg -i --force-confnew \
   "/tmp/auxinux-debs/$(basename "${AUXI_DEB}")" \
-  "/tmp/auxinux-debs/$(basename "${CENTER_DEB}")"
+  "/tmp/auxinux-debs/$(basename "${CENTER_DEB}")"; then
+  sudo chroot "${ROOTFS}" env DEBIAN_FRONTEND=noninteractive apt-get install -f -y \
+    --no-install-recommends -o Dpkg::Options::=--force-confnew
+fi
 sudo rm -rf "${ROOTFS}/tmp/auxinux-debs"
 
 # Installateur console « Install NOW » (entree GRUB par defaut du live):
