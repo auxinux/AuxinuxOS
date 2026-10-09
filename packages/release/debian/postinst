@@ -1,0 +1,12 @@
+#!/bin/sh
+# Les fichiers de /etc/systemd sont des « drop-in »: systemd les relit au
+# daemon-reload, et ils s'appliquent au prochain demarrage de chaque service.
+set -e
+case "$1" in
+  configure)
+    if [ -d /run/systemd/system ]; then
+      systemctl daemon-reload >/dev/null 2>&1 || true
+    fi
+    ;;
+esac
+exit 0

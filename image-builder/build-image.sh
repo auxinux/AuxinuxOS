@@ -47,6 +47,13 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+# Edition d'AuxiNux OS construite: 0.2.0+AAAAMMJJ[.N]. Fixee UNE fois ici et
+# exportee: le paquet auxinuxos-release (packages/build-debs.sh) la porte, l'ISO
+# l'enregistre dans /.disk/auxinux-release, et publish-iso.sh en tire le nom
+# publie. Une seconde ISO le meme jour: AUXINUX_RELEASE=0.2.0+AAAAMMJJ.2.
+export AUXINUX_RELEASE="${AUXINUX_RELEASE:-0.2.0+$(date +%Y%m%d)}"
+echo "==> Edition: ${AUXINUX_RELEASE}"
+
 for tool in mmdebstrap mksquashfs grub-mkrescue xorriso rsync curl mformat; do
   if ! command -v "${tool}" >/dev/null 2>&1; then
     echo "missing required tool: ${tool}" >&2
@@ -650,6 +657,9 @@ Live password: auxinux
 EOF
 
 echo "==> Creating ISO"
+# L'edition, lisible sans monter le squashfs (publish-iso.sh la lit avec xorriso).
+mkdir -p "${ISO_ROOT}/.disk"
+printf '%s\n' "${AUXINUX_RELEASE}" > "${ISO_ROOT}/.disk/auxinux-release"
 # grub-mkrescue a ete ABANDONNE ici le 2026-09-13. Il fabrique lui-meme l'image
 # EFI avec un GRUB qu'il compile sur place, donc NON SIGNE: sur une machine a
 # Secure Boot actif -- la configuration d'usine de la quasi-totalite des

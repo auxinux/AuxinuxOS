@@ -713,7 +713,38 @@ run_osupdate() {
   require_root_for_deb osupdate "$@"
   apt_get update
   apt_get upgrade --with-new-pkgs
+  release_ensure_installed
   kernel_update_channels
+}
+
+# Version d'AuxiNux OS (paquet auxinuxos-release, une edition par ISO publiee).
+#
+# Une installation faite avant le 2026-10-09 n'a pas ce paquet, et
+# `upgrade --with-new-pkgs` n'installe jamais un paquet que rien ne demande:
+# sans cette etape, elle ne verrait aucune nouvelle version. Une fois installe,
+# chaque nouvelle edition arrive par la mise a jour ordinaire, et tire les
+# versions minimales d'auxi, du centre de controle et du noyau.
+release_ensure_installed() {
+  deb_installed auxinuxos-release && return 0
+  apt_cache show --no-all-versions auxinuxos-release >/dev/null 2>&1 || return 0
+  say "Installation de la version d'AuxiNux OS (auxinuxos-release)." \
+      "Installing the AuxiNux OS release (auxinuxos-release)."
+  apt_get install -- auxinuxos-release
+}
+
+# « AuxiNux OS 0.2.0, edition du 2026-10-09 » (os-release, champ BUILD_ID).
+os_release_label() {
+  local file="${AUXI_OS_RELEASE:-/etc/os-release}" name build day n
+  name="$(sed -n 's/^PRETTY_NAME="\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' "${file}" 2>/dev/null | head -n1)"
+  build="$(sed -n 's/^BUILD_ID="\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' "${file}" 2>/dev/null | head -n1)"
+  printf '%s' "${name:-AuxiNux OS}"
+  if [[ "${build}" =~ ^([0-9]{4})([0-9]{2})([0-9]{2})(\.([0-9]+))?$ ]]; then
+    day="${BASH_REMATCH[1]}-${BASH_REMATCH[2]}-${BASH_REMATCH[3]}"
+    n="${BASH_REMATCH[5]:+ (${BASH_REMATCH[5]})}"
+    if is_english; then printf ', %s build%s' "${day}" "${n}"
+    else printf ', édition du %s%s' "${day}" "${n}"; fi
+  fi
+  printf '\n'
 }
 
 run_upgrade() {
@@ -1360,7 +1391,7 @@ case "${1:-}" in
     esac
     ;;
   status)
-    echo "AuxiNux OS 0.2.0"
+    os_release_label
     if apt_enabled; then
       say "APT direct: actif" "Direct APT: enabled"
     else

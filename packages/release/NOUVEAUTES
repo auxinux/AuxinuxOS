@@ -1,0 +1,5 @@
+Les nouvelles versions d'AuxiNux OS sont annoncées dans le centre de contrôle et s'installent en un clic.
+Dossiers personnels standard (Downloads, Documents…) : les téléchargements de Firefox ne disparaissent plus.
+Programmes Windows : un double-clic sur un .exe l'installe (Wine 32 bits, sans question de Dolphin) ; Bottles est automatisé.
+Les messages d'auxi s'affichent en français.
+Le nom « AuxiNux OS » n'est plus remplacé par « Debian » lors des mises à jour de Debian.

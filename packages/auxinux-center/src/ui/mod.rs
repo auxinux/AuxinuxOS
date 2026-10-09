@@ -134,6 +134,8 @@ pub enum Message {
     RefreshIndexes,
     UpdatesStage(u64, String),
     UpdatesLoaded(u64, Vec<AppEntry>),
+    /// Nouvelle version d'AuxiNux OS disponible (paquet auxinuxos-release).
+    OsUpdateLoaded(Option<crate::updates::OsUpdate>),
     UpgradeAll,
     UpdateOne(usize),
 
@@ -223,6 +225,8 @@ pub struct App {
     updates_stage: String,
     updates_generation: u64,
     os_version: String,
+    /// Nouvelle version d'AuxiNux OS, annoncee en tete de la page Mises a jour.
+    os_update: Option<crate::updates::OsUpdate>,
 
     // Sante
     health: Loading<HealthReport>,
@@ -361,11 +365,15 @@ impl App {
         self.updates_generation += 1;
         let generation = self.updates_generation;
         self.start();
-        staged(
+        // Second chargement en parallele: la version d'AuxiNux OS disponible.
+        self.start();
+        let os_update = background(crate::updates::os_update_available, Message::OsUpdateLoaded);
+        let list = staged(
             crate::apps::list_updates_with,
             move |label| Message::UpdatesStage(generation, label),
             move |list| Message::UpdatesLoaded(generation, list),
-        )
+        );
+        Task::batch(vec![list, os_update])
     }
 
     fn load_health(&mut self) -> Task<Message> {
@@ -465,6 +473,7 @@ impl Application for App {
             updates_stage: String::new(),
             updates_generation: 0,
             os_version: crate::updates::os_version(),
+            os_update: None,
             health: Loading::Idle,
             system: Loading::Idle,
             recovery: Loading::Idle,
@@ -678,6 +687,11 @@ impl Application for App {
                 if generation == self.updates_generation {
                     self.updates_stage = label;
                 }
+                Task::none()
+            }
+            Message::OsUpdateLoaded(update) => {
+                self.finish();
+                self.os_update = update;
                 Task::none()
             }
             Message::UpdatesLoaded(generation, list) => {
@@ -956,6 +970,9 @@ impl Application for App {
                 // Le Center est un paquet DEB depuis la 0.2.1: une mise a jour
                 // du systeme peut l'avoir remplace pendant qu'il tourne. Le
                 // binaire en memoire reste l'ancien jusqu'a sa reouverture.
+                // Une nouvelle version d'AuxiNux OS a pu etre installee:
+                // os-release a change.
+                self.os_version = crate::updates::os_version();
                 if let Some(version) = crate::updates::center_updated() {
                     self.toast = Some(ActionResult::ok(format!(
                         "AuxiNux OS Center a été mis à jour (version {version}). \

@@ -19,7 +19,7 @@
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-OS_RELEASE="${ROOT}/image-builder/overlays/usr/lib/os-release"
+OS_RELEASE="${ROOT}/packages/release/root/usr/lib/os-release"
 
 fail=0
 check() {
@@ -95,7 +95,7 @@ hits="$(cd "${ROOT}" && git ls-files \
 check "aucun lien vers auxinux.ca au lieu de os.auxinux.ca/auxinuxos" \
   "$([[ -z ${hits} ]] && echo aucun || echo "${hits}")" "aucun"
 check "os-release: HOME_URL" \
-  "$(grep -c '^HOME_URL="https://os.auxinux.ca/auxinuxos"$' "${ROOT}/image-builder/overlays/usr/lib/os-release")" "1"
+  "$(grep -c '^HOME_URL="https://os.auxinux.ca/auxinuxos"$' "${ROOT}/packages/release/root/usr/lib/os-release")" "1"
 
 echo
 if [[ "${fail}" -eq 0 ]]; then echo "TOUS LES TESTS PASSENT"; else echo "DES TESTS ECHOUENT"; fi
