@@ -72,6 +72,20 @@ check() {
   if [[ "$2" == "$3" ]]; then echo "  OK   $1"; else echo "  ECHEC $1: attendu [$3] obtenu [$2]"; fail=1; fi
 }
 
+echo "== 0. Description: la commande apt, pas le « sh -c » qu'apt intercale =="
+# Chaine reelle: apt-get -> sh -c -- 'hook pre || true' -> hook. Le parent
+# direct est le sh; la description doit etre la commande d'apt.
+reset_env
+cat > "${WORK}/faux-apt-get" <<STUB
+#!/usr/bin/env bash
+PATH="${STUBS}:\${PATH}" sh -c -- '"${HOOK}" pre || true'
+STUB
+chmod +x "${WORK}/faux-apt-get"
+"${WORK}/faux-apt-get" install -y zenity >/dev/null 2>&1
+check "description = commande apt" \
+  "$(grep -c -- '--description .*faux-apt-get install -y zenity' "${SNAPPER_LOG}")" "1"
+check "pas le sh intercale" "$(grep -c -- '--description sh -c' "${SNAPPER_LOG}")" "0"
+
 echo "== 1. Transaction nominale: paire pre/post =="
 reset_env
 run_hook pre >/dev/null 2>&1
