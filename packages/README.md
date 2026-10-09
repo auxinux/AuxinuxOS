@@ -58,7 +58,7 @@ telles quelles, une ligne par point). L'édition est fixée par `build-image.sh`
 publiée, et vérifie après coup l'index servi (y compris la présence
 d'`auxinux-office`) et l'empreinte de chaque paquet téléchargé.
 
-### Installations faites avant la 0.2.1
+### Installations faites avant l'ISO 20261008
 
 Leur `auxi` et leur Center ont été copiés par l'image, sans paquet : la mise à
 jour du système n'installe pas un paquet que rien ne demande. Une seule fois :
@@ -66,7 +66,7 @@ jour du système n'installe pas un paquet que rien ne demande. Une seule fois :
 ```bash
 sudo auxi set apt=true
 sudo apt update
-sudo apt install -o Dpkg::Options::=--force-confnew auxi auxinux-center
+sudo apt install -o Dpkg::Options::=--force-confnew auxi auxinux-center auxinuxos-release
 sudo auxi set apt=false
 ```
 

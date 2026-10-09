@@ -68,7 +68,7 @@ check "hook initramfs executable" \
 ctrl="$(dpkg-deb --ctrl-tarfile "${DEB}" | tar -t | sort | tr '\n' ' ')"
 check "scripts de maintenance" "${ctrl}" "./ ./conffiles ./control ./md5sums ./postinst ./postrm ./preinst ./triggers "
 check "preinst detourne os-release de base-files" \
-  "$(dpkg-deb --ctrl-tarfile "${DEB}" | tar -xO ./preinst | grep -c 'dpkg-divert --package auxinuxos-release --add --rename')" "1"
+  "$(dpkg-deb --ctrl-tarfile "${DEB}" | tar -xO ./preinst | grep -c 'dpkg-divert --package auxinuxos-release --add --no-rename')" "1"
 
 preinst="$(dpkg-deb --ctrl-tarfile "${DEB}" | tar -xO ./preinst)"
 check "preinst: plus de marqueur @CONFFILES@" "$(grep -c '@CONFFILES@' <<<"${preinst}")" "0"
