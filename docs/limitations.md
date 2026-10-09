@@ -145,6 +145,23 @@ jusqu'au bureau, dossiers du nouveau compte ; le parcours `.exe` (7-Zip
 installé depuis Dolphin) a été validé sur un système installé avec les mêmes
 paquets. L'ISO 20261008 a été retirée.
 
+**Remplacée le 2026-10-09 par `auxinuxos-0.2.1-20261009-1-amd64.iso`**
+(commit `ed20acf`, édition `0.2.1+20261009.1`, 2 813 767 680 octets, sha256
+`cea7b247…5ca7d1291`) : **AuxiNux OS 0.2.1**. Les versions d'AuxiNux OS sont
+désormais annoncées : page Mises à jour du centre de contrôle (bandeau avec les
+nouveautés), ou `auxi os update` en ligne de commande. `sudo auxi os upgrade`
+ou le bouton du centre les installent, après un **instantané nommé** (« Avant
+AuxiNux OS 0.2.1, édition du … ») ; s'il échoue, la mise à jour est annulée.
+Le paquet `auxinuxos-release` porte la version et les réglages du système
+installé (ils arrivent par la mise à jour), et protège le nom « AuxiNux OS »
+contre les mises à jour de `base-files`. Les instantanés ne sont plus créés en
+double à chaque transaction (hook apt de snapper coupé). Paquets publiés :
+`auxi` et `auxinux-center` 0.2.3, `auxinuxos-release` 0.2.1+20261009 puis
+.1. Validée en VM : installation complète jusqu'au bureau, centre à
+« AuxiNux OS 0.2.1, édition du 2026-10-09 (1) » ; montée de version validée sur
+le vrai dépôt (0.2.0 → 0.2.1 → .1, instantanés nommés). L'ISO 0.2.0
+20261008-2 a été retirée.
+
 Reste à valider : le démarrage par le chemin UEFI de secours (`EFI/BOOT`, le
 micrologiciel l'a bien choisi après suppression de l'entrée NVRAM, mais l'écran
 obtenu n'a pas pu être capturé), le démarrage sur un instantané depuis le
