@@ -162,6 +162,22 @@ double à chaque transaction (hook apt de snapper coupé). Paquets publiés :
 le vrai dépôt (0.2.0 → 0.2.1 → .1, instantanés nommés). L'ISO 0.2.0
 20261008-2 a été retirée.
 
+**Remplacée le 2026-10-09 par `auxinuxos-0.2.1-20261009-2-amd64.iso`**
+(commit `df8f5fe`, édition `0.2.1+20261009.2`, 2 813 767 680 octets, sha256
+`4b892730…a4905bd4dd`) : les **mises à jour passent toujours**. Dans le centre,
+« Actualiser les listes » ne demande plus de mot de passe et la mise à jour du
+système affiche une demande claire en français (avant : invite générique de
+pkexec, en anglais ; fermée, elle donnait « Not authorized »). `apt update` et
+`apt upgrade` passent par auxi même apt masqué ; `auxi update` lancé sans sudo
+demande lui-même le mot de passe. AuxiText suit le thème clair/sombre
+(`auxinux-color-sync` recopie le choix du portail dans gsettings) ; il le lit
+à son ouverture seulement. Paquets publiés : `auxi` et `auxinux-center` 0.2.4,
+`auxinuxos-release` 0.2.1+20261009.2. Validée en VM : installation complète
+jusqu'au bureau ; actualisation sans mot de passe, mise à jour avec DEB
+désactivé, `apt update`/`apt upgrade` et synchronisation du thème validés sur
+un système installé avec les mêmes paquets. Non vérifié : le thème dans la
+session AuxiNux Shell. L'ISO 20261009-1 a été retirée.
+
 Reste à valider : le démarrage par le chemin UEFI de secours (`EFI/BOOT`, le
 micrologiciel l'a bien choisi après suppression de l'entrée NVRAM, mais l'écran
 obtenu n'a pas pu être capturé), le démarrage sur un instantané depuis le
