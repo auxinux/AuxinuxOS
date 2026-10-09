@@ -74,6 +74,9 @@ if ! sudo chroot "${ROOTFS}" env DEBIAN_FRONTEND=noninteractive dpkg -i --force-
     --no-install-recommends -o Dpkg::Options::=--force-confnew
 fi
 sudo rm -rf "${ROOTFS}/tmp/auxinux-debs"
+# Sur un rootfs reutilise, le preinst d'auxinuxos-release range ici les copies
+# laissees par une construction precedente: rien a garder dans l'ISO.
+sudo rm -rf "${ROOTFS}/var/backups/auxinuxos-release"
 
 # Installateur console « Install NOW » (entree GRUB par defaut du live):
 # programme, moteur et unite qui le lance sur la premiere console. Tous trois
