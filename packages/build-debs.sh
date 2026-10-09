@@ -206,6 +206,9 @@ install -m 0755 "${RELEASE_DIR}/debian/preinst" "${RELEASE_DIR}/debian/postinst"
   "${RELEASE_DIR}/debian/postrm" "${REL_ROOT}/DEBIAN/"
 install -m 0644 "${RELEASE_DIR}/debian/triggers" "${REL_ROOT}/DEBIAN/"
 (cd "${REL_ROOT}" && find etc -type f | sort | sed 's|^|/|') >"${REL_ROOT}/DEBIAN/conffiles"
+# Le preinst met de cote, a la premiere installation, les copies laissees par
+# l'image: il lui faut la liste exacte des conffiles.
+sed -i "s|@CONFFILES@|$(tr '\n' ' ' <"${REL_ROOT}/DEBIAN/conffiles" | sed 's/ $//')|" "${REL_ROOT}/DEBIAN/preinst"
 # Description longue = nouveautes, une ligne par paragraphe (format deb822).
 NOTES="$(sed -e '/^[[:space:]]*$/d' -e 's/^/ /' "${RELEASE_DIR}/NOUVEAUTES")"
 cat >"${REL_ROOT}/DEBIAN/control" <<EOF

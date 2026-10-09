@@ -70,6 +70,12 @@ check "scripts de maintenance" "${ctrl}" "./ ./conffiles ./control ./md5sums ./p
 check "preinst detourne os-release de base-files" \
   "$(dpkg-deb --ctrl-tarfile "${DEB}" | tar -xO ./preinst | grep -c 'dpkg-divert --package auxinuxos-release --add --rename')" "1"
 
+preinst="$(dpkg-deb --ctrl-tarfile "${DEB}" | tar -xO ./preinst)"
+check "preinst: plus de marqueur @CONFFILES@" "$(grep -c '@CONFFILES@' <<<"${preinst}")" "0"
+check "preinst: met de cote les copies de l'image (ex. mimeapps.list)" \
+  "$(grep -c '/etc/xdg/mimeapps.list' <<<"${preinst}")" "1"
+check "preinst: syntaxe" "$(sh -n <<<"${preinst}" && echo ok)" "ok"
+
 echo "== 3. Kiorc quitte le paquet du centre =="
 CDEB="${WORK}/out/auxinux-center_${VERSION}_amd64.deb"
 check "plus de /etc/xdg/kiorc dans auxinux-center" "$(dpkg-deb -c "${CDEB}" | grep -c 'etc/xdg/kiorc')" "0"

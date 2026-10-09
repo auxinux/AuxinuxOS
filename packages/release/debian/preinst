@@ -1,15 +1,31 @@
 #!/bin/sh
-# /usr/lib/os-release (« AuxiNux OS 0.2.0 ») appartient a base-files, et HORS
-# de /etc: ce n'est pas un fichier de configuration, donc une mise a jour de
-# base-files (chaque version intermediaire de Debian 13) l'aurait remplace par
-# « Debian GNU/Linux 13 » -- partout: centre de controle, connexion, a propos.
-# Le paquet le detourne: la version de Debian est gardee sous
-# /usr/lib/os-release.debian, et rendue si ce paquet est retire.
 set -e
 case "$1" in
   install|upgrade)
+    # /usr/lib/os-release (« AuxiNux OS 0.2.0 ») appartient a base-files, et
+    # HORS de /etc: ce n'est pas un fichier de configuration, donc une mise a
+    # jour de base-files (chaque version intermediaire de Debian 13) l'aurait
+    # remplace par « Debian GNU/Linux 13 » -- partout: centre de controle,
+    # connexion, a propos. Il est detourne: la version de Debian est gardee
+    # sous /usr/lib/os-release.debian, et rendue si ce paquet est retire.
     dpkg-divert --package auxinuxos-release --add --rename \
       --divert /usr/lib/os-release.debian /usr/lib/os-release
+    ;;
+esac
+case "$1" in
+  install)
+    # Premiere installation sur une machine dont l'IMAGE avait copie ces
+    # reglages dans /etc, sans paquet. Laisses en place, dpkg les tiendrait
+    # pour modifies par l'utilisateur: avec --force-confold (auxi --yes), il
+    # les garderait, et ne les mettrait PLUS JAMAIS a jour -- ce pour quoi ce
+    # paquet existe. Un fichier sans proprietaire est donc mis de cote
+    # (.auxinux-image); un fichier qui appartient deja a un paquet (kiorc du
+    # centre 0.2.2, repris par Replaces) n'est pas touche.
+    for f in @CONFFILES@; do
+      if [ -e "$f" ] && ! dpkg-query -S "$f" >/dev/null 2>&1; then
+        mv -f "$f" "$f.auxinux-image"
+      fi
+    done
     ;;
 esac
 exit 0
