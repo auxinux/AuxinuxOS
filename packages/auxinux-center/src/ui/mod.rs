@@ -137,6 +137,8 @@ pub enum Message {
     /// Nouvelle version d'AuxiNux OS disponible (paquet auxinuxos-release).
     OsUpdateLoaded(Option<crate::updates::OsUpdate>),
     UpgradeAll,
+    /// Nouvelle version d'AuxiNux OS (`auxi os upgrade`, avec instantane).
+    UpgradeOs,
     UpdateOne(usize),
 
     // Sante
@@ -704,6 +706,10 @@ impl Application for App {
             Message::UpgradeAll => {
                 self.launch("Mise à jour du système".into(), crate::updates::upgrade_all)
             }
+            Message::UpgradeOs => self.launch(
+                "Mise à jour d'AuxiNux OS".into(),
+                crate::updates::upgrade_os,
+            ),
             Message::UpdateOne(index) => match self.updates.ready().and_then(|l| l.get(index)) {
                 Some(app) => {
                     let source = app.default_source.clone();

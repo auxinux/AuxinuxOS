@@ -5,7 +5,7 @@
 # POURQUOI LA SUITE APPS: elle est deja active sur toutes les installations
 # (/etc/apt/sources.list.d/auxinux-apps.sources) et signee par la meme cle que
 # le noyau. Une nouvelle version y est donc recue par la mise a jour du systeme
-# (`auxi osupdate`, bouton « Mettre a jour le systeme »), sans rien configurer.
+# (`auxi os upgrade`, boutons du centre de controle), sans rien configurer.
 #
 # La suite est geree par le script de publication d'AuxiNux Office, sur l'hote
 # de depot: ~/auxinuxos-apps-pub/publish-repo.sh. Il est utilise TEL QUEL, comme
@@ -159,4 +159,4 @@ done
 [[ "${fail}" -eq 0 ]] || exit 70
 echo
 echo "Publie dans la suite APPS: ${PKGS[*]} (edition ${RELEASE})."
-echo "Les machines le recoivent par « auxi osupdate » / « Mettre a jour le systeme »."
+echo "Les machines le recoivent par « auxi os upgrade » / le centre de controle."

@@ -109,9 +109,9 @@ pub fn view(app: &App) -> Element<'_, Message> {
 }
 
 /// Nouvelle version d'AuxiNux OS (une edition par ISO publiee): ce qu'elle
-/// apporte, et la mise a jour en un clic. Le bouton lance la meme operation
-/// que « Mettre a jour le systeme »: `auxi upgrade` installe ou met a jour le
-/// paquet auxinuxos-release, qui tire le reste.
+/// apporte, et la mise a jour en un clic: `auxi os upgrade` pose un instantane
+/// nomme, puis installe ou met a jour le paquet auxinuxos-release, qui tire le
+/// reste.
 fn os_update_card<'a>(
     app: &'a App,
     update: &'a crate::updates::OsUpdate,
@@ -131,8 +131,12 @@ fn os_update_card<'a>(
     }
     col = col.push(
         widget::button::suggested("Mettre à jour vers cette version")
-            .on_press_maybe(idle.then_some(Message::UpgradeAll)),
+            .on_press_maybe(idle.then_some(Message::UpgradeOs)),
     );
+    col = col.push(widget::text::caption(
+        "Un point de restauration est créé avant la mise à jour : en cas de problème, \
+         l'onglet Restauration permet de revenir à la version actuelle.",
+    ));
     widget::container(col)
         .class(cosmic::theme::Container::Card)
         .padding(14)

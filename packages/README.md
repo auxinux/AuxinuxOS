@@ -34,7 +34,7 @@ Chaque ISO publiée est une **édition** d'AuxiNux OS : `0.2.0+AAAAMMJJ`, ou
 - détourne `/usr/lib/os-release` de `base-files` : sans cela, une mise à jour de
   Debian remettait « Debian GNU/Linux » partout.
 
-`auxi osupdate` l'installe s'il manque (machines d'avant le 2026-10-09).
+`auxi os upgrade` l'installe s'il manque (machines d'avant le 2026-10-09), après un instantané nommé.
 
 Avant chaque ISO : écrire les nouveautés dans `release/NOUVEAUTES` (affichées
 telles quelles, une ligne par point). L'édition est fixée par `build-image.sh`

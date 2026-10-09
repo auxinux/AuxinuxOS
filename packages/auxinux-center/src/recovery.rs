@@ -208,7 +208,9 @@ pub fn points(snapshots: &[Snapshot]) -> Vec<Point> {
 fn origine(s: &Snapshot) -> Origine {
     if s.description.starts_with("Installation initiale") {
         Origine::Installation
-    } else if s.kind == "pre" {
+    } else if s.kind == "pre" || s.description.starts_with("Avant AuxiNux OS") {
+        // « Avant AuxiNux OS 0.2.1, édition du … »: pose par `auxi os upgrade`
+        // avant une montee de version (type single, mais automatique).
         // Le type, et non la marque auxi=1: `auxi snapshot` -- donc le bouton
         // « Creer » du centre -- pose aussi cette marque sur les points faits
         // a la main, qui s'affichaient alors « Avant une modification ».
@@ -226,6 +228,9 @@ fn titre(s: &Snapshot, origine: Origine) -> String {
         Origine::Quotidien => "Sauvegarde automatique du jour".into(),
         Origine::Manuel if s.description.is_empty() => format!("Point de restauration {}", s.number),
         Origine::Manuel => s.description.clone(),
+        Origine::AvantModification if s.description.starts_with("Avant AuxiNux OS") => {
+            s.description.clone()
+        }
         Origine::AvantModification => avant(&s.description),
     }
 }
@@ -413,6 +418,23 @@ mod tests {
         let p = points(&snaps);
         assert_eq!(p[0].origine, Origine::Manuel);
         assert_eq!(p[0].titre, "avant essai pilote");
+    }
+
+    #[test]
+    fn an_os_version_upgrade_point_shows_the_version() {
+        // Pose par `auxi os upgrade` (type single, marque auxi=1): automatique,
+        // et titre = la version d'AuxiNux OS quittee pour la suivante.
+        let snaps = vec![snap(
+            9,
+            "single",
+            "2026-10-09 08:00:00",
+            "Avant AuxiNux OS 0.2.1, édition du 2026-10-09",
+            true,
+            "number",
+        )];
+        let p = points(&snaps);
+        assert_eq!(p[0].origine, Origine::AvantModification);
+        assert_eq!(p[0].titre, "Avant AuxiNux OS 0.2.1, édition du 2026-10-09");
     }
 
     #[test]

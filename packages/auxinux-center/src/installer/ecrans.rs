@@ -852,7 +852,7 @@ impl App {
         .areas(f.area());
 
         let titre = Paragraph::new(Line::from(vec![
-            Span::styled(" AuxiNux OS 0.2.0 ", Style::new().fg(Color::Black).bg(Color::Yellow).add_modifier(Modifier::BOLD)),
+            Span::styled(" AuxiNux OS 0.2.1 ", Style::new().fg(Color::Black).bg(Color::Yellow).add_modifier(Modifier::BOLD)),
             Span::raw("  "),
             Span::styled(self.t("Installation", "Installation"), Style::new().add_modifier(Modifier::BOLD)),
             Span::raw(format!("  —  {}", self.titre_ecran())),

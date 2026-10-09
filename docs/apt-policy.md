@@ -14,7 +14,8 @@ Exemples:
 ```bash
 auxi update
 auxi upgrade                      # applications Flatpak + système
-sudo auxi osupdate                # système seul: tous les paquets DEB, noyaux compris
+auxi os update                    # une nouvelle version d'AuxiNux OS est-elle disponible?
+sudo auxi os upgrade              # l'installer: instantané nommé, puis tous les paquets DEB
 auxi kernel                       # noyaux installés et disponibles
 auxi search firefox
 auxi install gimp                 # Flatpak org.gimp.GIMP
@@ -54,7 +55,7 @@ vouloir des applications DEB tout en gardant `apt` et `apt-get` renvoyés vers
 
 ## Mise à jour du système
 
-`sudo auxi osupdate` rafraîchit les index puis met à jour **tous** les paquets
+`sudo auxi os upgrade` rafraîchit les index puis met à jour **tous** les paquets
 DEB installés (`apt-get upgrade --with-new-pkgs`). Les paquets nouveaux tirés
 par un paquet installé sont acceptés — c'est le cas de chaque nouveau noyau :
 `kernel-auxinuxos` 7.2.6 dépend du nouveau paquet `linux-image-7.2.6-…`. Rien
@@ -66,6 +67,18 @@ dans le centre de contrôle.
 Avant le 2026-10-07, `auxi upgrade` lançait un `apt-get upgrade` simple : le
 nouveau noyau était mis de côté (« kept back ») et la commande réussissait
 quand même.
+
+## Versions d'AuxiNux OS
+
+Chaque ISO publiée est une édition (`0.2.1+AAAAMMJJ`), portée par le paquet
+`auxinuxos-release`. `auxi os update` dit si une édition plus récente est
+disponible (sans rien installer ; en root, rafraîchit d'abord les listes).
+`sudo auxi os upgrade` l'installe : **un instantané nommé** (« Avant AuxiNux OS
+0.2.1, édition du … », marqué important) est posé d'abord ; s'il échoue sur un
+système qui sait en faire, la mise à jour est annulée. Le bouton « Mettre à jour
+vers cette version » du centre de contrôle fait la même chose, et « Mettre à
+jour le système » (`auxi upgrade`) aussi dès qu'une nouvelle version arrive.
+`auxi osupdate` reste accepté (ancien nom de `auxi os upgrade`).
 
 ## Noyaux
 

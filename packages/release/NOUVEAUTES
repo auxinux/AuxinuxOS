@@ -1,5 +1,6 @@
-Les nouvelles versions d'AuxiNux OS sont annoncées dans le centre de contrôle et s'installent en un clic.
+AuxiNux OS 0.2.1 : les nouvelles versions sont annoncées ici et s'installent en un clic, après un point de restauration automatique (en ligne de commande : auxi os update, puis sudo auxi os upgrade).
+Noyaux : vue Noyau dans Applications (installer, activer, désinstaller, noyaux en essai) ; la mise à jour du système installe désormais les nouveaux noyaux.
 Dossiers personnels standard (Downloads, Documents…) : les téléchargements de Firefox ne disparaissent plus.
-Programmes Windows : un double-clic sur un .exe l'installe (Wine 32 bits, sans question de Dolphin) ; Bottles est automatisé.
-Les messages d'auxi s'affichent en français.
+Programmes Windows : un double-clic sur un .exe l'installe (Wine 32 bits) ; Bottles est automatisé.
+Le centre de contrôle et auxi sont en français, avec les accents, et se mettent à jour avec le système.
 Le nom « AuxiNux OS » n'est plus remplacé par « Debian » lors des mises à jour de Debian.

@@ -14,12 +14,19 @@ pub fn refresh_indexes(on_line: &mut dyn FnMut(&str)) -> ActionResult {
     progress::auxi(&["update"], on_line, "Listes de paquets à jour")
 }
 
-/// Met a jour tout le systeme: applications Flatpak, puis `auxi osupdate`
+/// Met a jour tout le systeme: applications Flatpak, puis `auxi os upgrade`
 /// (index rafraichis, tous les paquets DEB AVEC les paquets nouveaux qu'ils
 /// tirent -- un nouveau noyau --, noyaux d'essai). L'instantane est pose par le
 /// hook dpkg avant la partie DEB.
 pub fn upgrade_all(on_line: &mut dyn FnMut(&str)) -> ActionResult {
     progress::auxi(&["upgrade"], on_line, "Mise à jour du système terminée")
+}
+
+/// Installe la nouvelle version d'AuxiNux OS (`auxi os upgrade`): instantane
+/// NOMME d'abord (« Avant AuxiNux OS 0.2.1, édition du … »), puis tous les
+/// paquets DEB du systeme et le paquet auxinuxos-release.
+pub fn upgrade_os(on_line: &mut dyn FnMut(&str)) -> ActionResult {
+    progress::auxi(&["os", "upgrade"], on_line, "AuxiNux OS est à jour")
 }
 
 /// Version du paquet auxinux-center installee, si elle differe du binaire en
@@ -43,7 +50,7 @@ fn newer_than_running(installed: &str, running: &str) -> Option<String> {
 
 /// Version du systeme telle qu'affichee a l'utilisateur.
 ///
-/// « AuxiNux OS 0.2.0, édition du 2026-10-09 »: l'edition vient du champ
+/// « AuxiNux OS 0.2.1, édition du 2026-10-09 »: l'edition vient du champ
 /// BUILD_ID d'os-release, ecrit par le paquet auxinuxos-release.
 pub fn os_version() -> String {
     let out = run(
@@ -62,7 +69,7 @@ pub fn os_version() -> String {
 /// Nouvelle version d'AuxiNux OS disponible (paquet auxinuxos-release).
 #[derive(Clone, Debug, PartialEq)]
 pub struct OsUpdate {
-    /// « AuxiNux OS 0.2.0, édition du 2026-10-09 »
+    /// « AuxiNux OS 0.2.1, édition du 2026-10-09 »
     pub available: String,
     /// Nouveautes, une par ligne (description longue du paquet).
     pub notes: Vec<String>,
@@ -72,7 +79,7 @@ pub struct OsUpdate {
 /// que celle installee.
 ///
 /// Une machine installee avant le 2026-10-09 n'a pas le paquet: la version
-/// disponible lui est quand meme annoncee, et `auxi osupdate` l'installe.
+/// disponible lui est quand meme annoncee, et `auxi os upgrade` l'installe (instantane nomme d'abord).
 /// Les listes de paquets doivent etre a jour: le paquet auxinuxos-release
 /// active leur rafraichissement quotidien (apt-daily).
 pub fn os_update_available() -> Option<OsUpdate> {
