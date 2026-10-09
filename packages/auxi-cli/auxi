@@ -131,7 +131,34 @@ EOF
   fi
 }
 
+# Dans un terminal, une commande qui exige root se relance d'elle-meme par
+# sudo au lieu d'echouer.
+#
+# PANNE A L'ORIGINE (2026-10-09, aporler): « que ce soit en ligne de commande
+# ou dans l'interface, les mises a jour doivent fonctionner ». Le message
+# d'apt propose `auxi update` et `auxi upgrade` SANS sudo; ces commandes
+# faisaient la partie Flatpak puis s'arretaient sur « Les operations DEB
+# doivent etre executees avec sudo ». Le systeme n'etait pas mis a jour.
+#
+# Seulement avec un terminal (sudo y demande le mot de passe) et la meme ligne
+# de commande, options globales comprises. Le centre de controle passe par
+# pkexec et n'est pas concerne. AUXI_NO_SUDO=1 coupe ce relais (tests).
+AUXI_ARGS=("$@")
+elevate_or_continue() {
+  [[ "${EUID}" -ne 0 ]] || return 0
+  [[ "${AUXI_NO_SUDO:-0}" != "1" ]] || return 0
+  [[ -t 0 && -t 2 ]] || return 0
+  command -v sudo >/dev/null 2>&1 || return 0
+  local self
+  self="$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || printf '%s' "${BASH_SOURCE[0]}")"
+  say_err \
+    "Droits administrateur nécessaires: sudo auxi ${AUXI_ARGS[*]}" \
+    "Administrator rights needed: sudo auxi ${AUXI_ARGS[*]}"
+  exec sudo -- "${self}" "${AUXI_ARGS[@]}"
+}
+
 require_root_for_config() {
+  elevate_or_continue
   if [[ "${EUID}" -ne 0 ]]; then
     say_err \
       "Cette action doit être exécutée avec sudo: sudo auxi $*" \
@@ -141,6 +168,7 @@ require_root_for_config() {
 }
 
 require_root_for_deb() {
+  elevate_or_continue
   if [[ "${EUID}" -ne 0 ]]; then
     say_err \
       "Les opérations DEB doivent être exécutées avec sudo." \
@@ -690,11 +718,15 @@ select_mode() {
 run_update() {
   select_mode "$@"
   flatpak_opts
+  # Droits verifies AVANT la partie Flatpak: sinon, sans sudo, elle tournait
+  # puis la commande echouait, et le relais par sudo la referait.
+  if [[ "${MODE}" == "both" || "${MODE}" == "deb" ]]; then
+    require_root_for_deb update "$@"
+  fi
   if [[ "${MODE}" == "both" || "${MODE}" == "flatpak" ]]; then
     flatpak update --appstream "${FLATPAK_OPTS[@]}" || true
   fi
   if [[ "${MODE}" == "both" || "${MODE}" == "deb" ]]; then
-    require_root_for_deb update "$@"
     apt_get update
   fi
 }
@@ -871,6 +903,9 @@ run_upgrade() {
   select_mode "$@"
   flatpak_opts
   local failed=0
+  if [[ "${MODE}" == "both" || "${MODE}" == "deb" ]]; then
+    require_root_for_deb upgrade "$@"
+  fi
   if [[ "${MODE}" == "both" || "${MODE}" == "flatpak" ]]; then
     # Un echec Flatpak (Flathub injoignable, runtime retire) ne doit pas priver
     # le systeme de ses correctifs de securite DEB: on continue, et l'echec est

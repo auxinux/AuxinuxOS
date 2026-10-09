@@ -21,14 +21,49 @@ if [[ -r "${conf}" ]] && grep -Eq '^APT_ENABLED=1$' "${conf}"; then
   exec "${real}" "$@"
 fi
 
+# Les MISES A JOUR passent toujours, meme apt masque: `apt update` et
+# `apt upgrade` sont confies a auxi (exigence d'aporler, 2026-10-09: « en
+# ligne de commande ou dans l'interface, meme si DEB est desactive, les mises
+# a jour doivent fonctionner »). `upgrade`, `full-upgrade` et `dist-upgrade`
+# deviennent `auxi os upgrade`: point de restauration nomme si la version
+# d'AuxiNux OS change, nouveaux noyaux acceptes, rien n'est retire.
+# Avec des noms de paquets (`apt upgrade firefox`), ce n'est plus la mise a
+# jour du systeme: refus habituel ci-dessous.
+auxi_bin="/usr/bin/auxi"
+# Banc d'essai seulement: jamais en root.
+if [[ "${EUID}" -ne 0 && -n "${AUXI_BIN:-}" ]]; then auxi_bin="${AUXI_BIN}"; fi
+subcmd=""
+extra=0
+yes=0
+for arg in "$@"; do
+  case "${arg}" in
+    -y|--yes|--assume-yes) yes=1 ;;
+    -*) ;;
+    *) if [[ -z "${subcmd}" ]]; then subcmd="${arg}"; else extra=1; fi ;;
+  esac
+done
+if [[ "${extra}" -eq 0 && -x "${auxi_bin}" ]]; then
+  global=()
+  [[ "${yes}" -eq 0 ]] || global=(--yes)
+  case "${subcmd}" in
+    update)
+      echo "AuxiNux OS: ${name} update -> auxi update --deb" >&2
+      exec "${auxi_bin}" "${global[@]}" update --deb ;;
+    upgrade|full-upgrade|dist-upgrade)
+      if is_english; then echo "AuxiNux OS: ${name} ${subcmd} -> auxi os upgrade (system update, restore point included)" >&2
+      else echo "AuxiNux OS: ${name} ${subcmd} -> auxi os upgrade (mise à jour du système, point de restauration compris)" >&2; fi
+      exec "${auxi_bin}" "${global[@]}" os upgrade ;;
+  esac
+fi
+
 if is_english; then
 cat >&2 <<EOF
 AuxiNux OS uses the user-facing auxi command to manage applications and packages.
 
 Examples:
-  auxi update
-  auxi upgrade
-  sudo auxi osupdate           (system update: every DEB package, kernels included)
+  auxi update                  (apt update works too)
+  auxi upgrade                 (Flatpak applications + system)
+  auxi os upgrade              (system update, kernels included; apt upgrade works too)
   auxi kernel                  (installed and available kernels)
   auxi search firefox
   auxi install org.mozilla.firefox
@@ -43,9 +78,9 @@ cat >&2 <<EOF
 AuxiNux OS utilise la commande utilisateur auxi pour gérer les applications et paquets.
 
 Exemples:
-  auxi update
-  auxi upgrade
-  sudo auxi osupdate           (mise à jour du système: tous les paquets DEB, noyaux compris)
+  auxi update                  (apt update fonctionne aussi)
+  auxi upgrade                 (applications Flatpak + système)
+  auxi os upgrade              (mise à jour du système, noyaux compris; apt upgrade fonctionne aussi)
   auxi kernel                  (noyaux installés et disponibles)
   auxi search firefox
   auxi install org.mozilla.firefox

@@ -56,7 +56,7 @@ echo "== 2. Reglages du systeme installe: dans le paquet, en conffiles =="
 contents="$(dpkg-deb -c "${DEB}" | awk '{print $6}')"
 for f in etc/xdg/mimeapps.list etc/xdg/kiorc etc/xdg/kscreenlockerrc etc/sddm.conf.d/10-auxinux.conf \
          etc/apt/apt.conf.d/80auxinux-snapshot etc/apt/apt.conf.d/20auxinux-periodic \
-         etc/brave/policies/managed/auxinux-privacy.json; do
+         etc/brave/policies/managed/auxinux-privacy.json etc/xdg/autostart/auxinux-color-sync.desktop; do
   check "contient /${f}" "$(grep -cx "./${f}" <<<"${contents}")" "1"
 done
 conffiles="$(dpkg-deb --ctrl-tarfile "${DEB}" | tar -xO ./conffiles)"
@@ -65,6 +65,8 @@ check "chaque fichier de /etc est un conffile" \
 check "os-release N'EST PAS un conffile (detourne)" "$(grep -c os-release <<<"${conffiles}")" "0"
 check "hook initramfs executable" \
   "$(dpkg-deb -c "${DEB}" | awk '$6 == "./etc/initramfs-tools/hooks/auxinux-snapshot-overlay" {print $1}')" "-rwxr-xr-x"
+check "synchro clair/sombre executable" \
+  "$(dpkg-deb -c "${DEB}" | awk '$6 == "./usr/lib/auxinux/auxinux-color-sync" {print $1}')" "-rwxr-xr-x"
 ctrl="$(dpkg-deb --ctrl-tarfile "${DEB}" | tar -t | sort | tr '\n' ' ')"
 check "scripts de maintenance" "${ctrl}" "./ ./conffiles ./control ./md5sums ./postinst ./postrm ./preinst ./triggers "
 check "preinst detourne os-release de base-files" \

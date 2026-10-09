@@ -505,6 +505,10 @@ need_exec /usr/libexec/auxinux/auxinux-assistant-apply \
   "l'assistant de premier demarrage ne pourrait rien installer"
 need_file /etc/xdg/autostart/auxinux-assistant.desktop \
   "l'assistant ne s'ouvrirait pas au premier demarrage"
+need_exec /usr/libexec/auxinux/auxinux-refresh-helper \
+  "« Actualiser les listes » du centre echouerait (pkexec: programme absent)"
+need_exec /usr/libexec/auxinux/auxinux-update-helper \
+  "les mises a jour du systeme depuis le centre echoueraient (pkexec: programme absent)"
 
 echo "-- Session live: rien qui ressemble a un ecran noir"
 # Le live ne doit NI se verrouiller NI eteindre l'ecran: un visiteur qui laisse

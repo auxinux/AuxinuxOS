@@ -9,9 +9,20 @@ use crate::model::ActionResult;
 use crate::progress;
 use crate::util::run;
 
-/// Rafraichit les index de paquets (equivalent de `auxi update`).
+/// Programmes appeles par pkexec pour les mises a jour, chacun sous son action
+/// polkit (helper/ca.auxinux.center.policy).
+///
+/// Avant le 2026-10-09, `pkexec auxi ...` passait par l'action generique de
+/// pkexec: invite en anglais (« run /usr/bin/auxi --yes --progress update as
+/// the super user »), mot de passe exige meme pour actualiser les listes, et
+/// une invite fermee affichait « Not authorized » dans la page Mises a jour.
+pub const REFRESH_HELPER: &str = "/usr/libexec/auxinux/auxinux-refresh-helper";
+pub const UPDATE_HELPER: &str = "/usr/libexec/auxinux/auxinux-update-helper";
+
+/// Rafraichit les index de paquets (`auxi update`), sans mot de passe pour la
+/// session active.
 pub fn refresh_indexes(on_line: &mut dyn FnMut(&str)) -> ActionResult {
-    progress::auxi(&["update"], on_line, "Listes de paquets à jour")
+    progress::privileged(&[REFRESH_HELPER], on_line, "Listes de paquets à jour")
 }
 
 /// Met a jour tout le systeme: applications Flatpak, puis `auxi os upgrade`
@@ -19,14 +30,14 @@ pub fn refresh_indexes(on_line: &mut dyn FnMut(&str)) -> ActionResult {
 /// tirent -- un nouveau noyau --, noyaux d'essai). L'instantane est pose par le
 /// hook dpkg avant la partie DEB.
 pub fn upgrade_all(on_line: &mut dyn FnMut(&str)) -> ActionResult {
-    progress::auxi(&["upgrade"], on_line, "Mise à jour du système terminée")
+    progress::privileged(&[UPDATE_HELPER, "system"], on_line, "Mise à jour du système terminée")
 }
 
 /// Installe la nouvelle version d'AuxiNux OS (`auxi os upgrade`): instantane
 /// NOMME d'abord (« Avant AuxiNux OS 0.2.1, édition du … »), puis tous les
 /// paquets DEB du systeme et le paquet auxinuxos-release.
 pub fn upgrade_os(on_line: &mut dyn FnMut(&str)) -> ActionResult {
-    progress::auxi(&["os", "upgrade"], on_line, "AuxiNux OS est à jour")
+    progress::privileged(&[UPDATE_HELPER, "os"], on_line, "AuxiNux OS est à jour")
 }
 
 /// Version du paquet auxinux-center installee, si elle differe du binaire en

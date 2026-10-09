@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# Actualise les listes de paquets (DEB et Flatpak), en root, SANS mot de passe.
+#
+# PANNE A L'ORIGINE (2026-10-09, aporler): « Actualiser les listes » lancait
+# `pkexec auxi --yes --progress update`, donc l'action generique de pkexec.
+# L'invite, en anglais, annoncait « run /usr/bin/auxi --yes --progress update
+# as the super user »; fermee ou laissee de cote, elle donnait « Error
+# executing command as another user: Not authorized ».
+#
+# Telecharger des listes signees depuis les sources deja configurees ne
+# modifie aucun logiciel installe: l'action ca.auxinux.center.refresh est
+# accordee sans mot de passe a la session locale active, comme le
+# rafraichissement de PackageKit. Ce programme n'accepte AUCUN argument: rien
+# de ce que l'appelant transmet ne peut elargir ce qu'il fait.
+set -uo pipefail
+
+AUXI="/usr/bin/auxi"
+if [[ "${EUID}" -ne 0 && -n "${AUXINUX_UPDATE_TEST_ROOT:-}" ]]; then
+  AUXI="${AUXINUX_UPDATE_TEST_ROOT}/auxi"
+fi
+
+if [[ $# -ne 0 ]]; then
+  echo "auxinux-refresh-helper: aucun argument attendu" >&2
+  exit 64
+fi
+exec "${AUXI}" --yes --progress update

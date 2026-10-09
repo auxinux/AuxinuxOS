@@ -38,6 +38,18 @@
   </developer>
   <content_rating type="oars-1.1" />
   <releases>
+    <release version="0.2.4" date="2026-10-09">
+      <description>
+        <p>
+          Refreshing the package lists no longer asks for a password, and system
+          updates show a clear authorization prompt.
+        </p>
+        <p xml:lang="fr">
+          Actualiser les listes de paquets ne demande plus de mot de passe, et la
+          mise à jour du système affiche une demande d'autorisation claire.
+        </p>
+      </description>
+    </release>
     <release version="0.2.3" date="2026-10-09">
       <description>
         <p>

@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+# Recopie le choix clair/sombre de la session dans le reglage GNOME
+# org.gnome.desktop.interface color-scheme, pour les applications qui ne lisent
+# que celui-la.
+#
+# PANNE A L'ORIGINE (2026-10-09, aporler): « AuxiText et AuxiOffice doivent
+# respecter le theme clair ou sombre, sous Plasma comme dans AuxiNux Shell ».
+# Constate en VM: Plasma en Breeze sombre, le portail XDG annonce bien
+# « sombre » (org.freedesktop.appearance color-scheme = 1) -- AuxiNux Office le
+# lit et suit --, mais gsettings reste a 'default': le module GTK de Plasma 6.3
+# ne le met pas a jour. AuxiText, qui lit gsettings, restait clair. Avec
+# gsettings a 'prefer-dark', il s'ouvre en sombre.
+#
+# Le portail est la source: Plasma l'alimente depuis kdeglobals, et AuxiNux
+# Shell depuis son kdeglobals de session (0.1.2). Ce programme suit ses
+# changements (signal SettingChanged) pendant toute la session.
+set -uo pipefail
+
+GDBUS="${AUXI_GDBUS:-gdbus}"
+GSETTINGS="${AUXI_GSETTINGS:-gsettings}"
+SCHEMA="org.gnome.desktop.interface"
+
+# « (<uint32 1>,) » ou une ligne de SettingChanged -> valeur gsettings.
+wanted() {
+  case "$1" in
+    *"uint32 1>"*) echo "prefer-dark" ;;
+    *"uint32 2>"*) echo "prefer-light" ;;
+    *"uint32 0>"*) echo "default" ;;
+  esac
+}
+
+apply() {
+  local want cur
+  want="$(wanted "$1")"
+  [[ -n "${want}" ]] || return 0
+  cur="$("${GSETTINGS}" get "${SCHEMA}" color-scheme 2>/dev/null)"
+  [[ "${cur}" == "'${want}'" ]] && return 0
+  "${GSETTINGS}" set "${SCHEMA}" color-scheme "${want}" 2>/dev/null || true
+}
+
+read_portal() {
+  "${GDBUS}" call --session -d org.freedesktop.portal.Desktop \
+    -o /org/freedesktop/portal/desktop \
+    -m org.freedesktop.portal.Settings.ReadOne \
+    org.freedesktop.appearance color-scheme 2>/dev/null
+}
+
+# Le portail est active a la demande: au tout debut de la session, il peut ne
+# pas repondre encore.
+for _ in 1 2 3 4 5 6; do
+  value="$(read_portal)" && { apply "${value}"; break; }
+  sleep 5
+done
+
+[[ "${1:-}" == "--once" ]] && exit 0
+
+# Suivre les changements. Si la surveillance s'arrete (bus de session ferme:
+# fin de session), on s'arrete aussi.
+"${GDBUS}" monitor --session -d org.freedesktop.portal.Desktop \
+    -o /org/freedesktop/portal/desktop 2>/dev/null |
+  while IFS= read -r line; do
+    case "${line}" in
+      *SettingChanged*"'org.freedesktop.appearance', 'color-scheme'"*) apply "${line}" ;;
+    esac
+  done

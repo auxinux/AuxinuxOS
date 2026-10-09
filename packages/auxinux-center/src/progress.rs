@@ -174,7 +174,13 @@ pub fn conclude(out: &Output, recent: &[String], via_pkexec: bool, success: &str
     }
     // pkexec: 126 = la fenetre d'authentification a ete fermee ou le mot de
     // passe refuse. Rien n'a ete lance; le dire evite de chercher une panne.
-    if via_pkexec && out.code == Some(126) {
+    // 127 + « Not authorized »: l'invite a ete fermee ou a echoue. pkexec
+    // l'ecrit en anglais, brut; c'est ce qu'affichait la page Mises a jour
+    // (constate en VM le 2026-10-09 en cliquant « Annuler »).
+    if via_pkexec
+        && (out.code == Some(126)
+            || (out.code == Some(127) && out.stderr.contains("Not authorized")))
+    {
         return ActionResult::err(
             "Opération annulée: l'autorisation administrateur n'a pas été donnée. \
              Rien n'a été modifié.",
@@ -322,6 +328,20 @@ mod tests {
         // Hors pkexec, 126 n'a pas ce sens.
         let r = conclude(&output(false, Some(126)), &[], false, "ok");
         assert!(r.message.contains("code 126"));
+    }
+
+    #[test]
+    fn refused_authorization_is_named_too() {
+        // Ce que pkexec rend quand l'invite est fermee (VM, 2026-10-09).
+        let mut out = output(false, Some(127));
+        out.stderr = "Error executing command as another user: Not authorized\n\
+                      This incident has been reported.\n"
+            .to_string();
+        let r = conclude(&out, &["Error executing command as another user: Not authorized".into()], true, "ok");
+        assert!(r.message.contains("autorisation"), "{}", r.message);
+        // 127 sans ce message: un vrai echec, montre tel quel.
+        let r = conclude(&output(false, Some(127)), &["E: autre".into()], true, "ok");
+        assert_eq!(r.message, "E: autre");
     }
 
     #[test]

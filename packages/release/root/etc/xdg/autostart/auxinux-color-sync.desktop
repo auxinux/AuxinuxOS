@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=AuxiNux OS color scheme sync
+Name[fr]=Synchronisation du thème clair/sombre d'AuxiNux OS
+Comment=Mirrors the light/dark choice for applications that read the GNOME setting (AuxiText)
+Comment[fr]=Transmet le choix clair/sombre aux applications qui lisent le réglage GNOME (AuxiText)
+Exec=/usr/lib/auxinux/auxinux-color-sync
+NoDisplay=true
+X-KDE-autostart-phase=1
+X-GNOME-Autostart-Phase=Initialization

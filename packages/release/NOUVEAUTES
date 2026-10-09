@@ -2,6 +2,8 @@ AuxiNux OS 0.2.1 : les nouvelles versions sont annoncées ici et s'installent en
 Noyaux : vue Noyau dans Applications (installer, activer, désinstaller, noyaux en essai) ; la mise à jour du système installe désormais les nouveaux noyaux.
 Dossiers personnels standard (Downloads, Documents…) : les téléchargements de Firefox ne disparaissent plus.
 Programmes Windows : un double-clic sur un .exe l'installe (Wine 32 bits) ; Bottles est automatisé.
+Mises à jour : « Actualiser les listes » ne demande plus de mot de passe ; la mise à jour du système demande une autorisation claire, en français ; apt update et apt upgrade fonctionnent même si DEB est désactivé, et auxi update lancé sans sudo demande lui-même le mot de passe.
+Thème : AuxiText suit le thème clair ou sombre choisi, sous Plasma comme dans AuxiNux Shell.
 Le centre de contrôle et auxi sont en français, avec les accents, et se mettent à jour avec le système.
 Le nom « AuxiNux OS » n'est plus remplacé par « Debian » lors des mises à jour de Debian.
 Les points de restauration ne sont plus créés en double à chaque installation de logiciel.

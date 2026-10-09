@@ -145,6 +145,10 @@ install -D -m 0755 "${CENTER_DIR}/helper/auxinux-source-helper" \
   "${CENTER_ROOT}/usr/libexec/auxinux/auxinux-source-helper"
 install -D -m 0755 "${CENTER_DIR}/helper/auxinux-assistant-apply" \
   "${CENTER_ROOT}/usr/libexec/auxinux/auxinux-assistant-apply"
+install -D -m 0755 "${CENTER_DIR}/helper/auxinux-refresh-helper" \
+  "${CENTER_ROOT}/usr/libexec/auxinux/auxinux-refresh-helper"
+install -D -m 0755 "${CENTER_DIR}/helper/auxinux-update-helper" \
+  "${CENTER_ROOT}/usr/libexec/auxinux/auxinux-update-helper"
 install -D -m 0644 "${CENTER_DIR}/helper/ca.auxinux.center.policy" \
   "${CENTER_ROOT}/usr/share/polkit-1/actions/ca.auxinux.center.policy"
 # Assistant d'ouverture des .exe et dossiers personnels (depuis la 0.2.2): en

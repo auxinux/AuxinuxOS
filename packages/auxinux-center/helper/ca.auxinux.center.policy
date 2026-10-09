@@ -47,4 +47,44 @@
     <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/auxinux/auxinux-assistant-apply</annotate>
     <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
   </action>
+  <!--
+    Actualiser les listes de paquets: SANS mot de passe pour la session
+    locale active. Telecharger des listes signees depuis les sources deja
+    configurees ne change aucun logiciel installe (PackageKit fait de meme).
+    Avant, l'action generique de pkexec demandait un mot de passe, en anglais
+    (« run /usr/bin/auxi ... update as the super user »), et une
+    invite fermee donnait « Not authorized » (2026-10-09).
+  -->
+  <action id="ca.auxinux.center.refresh">
+    <description>Refresh the package lists</description>
+    <description xml:lang="fr">Actualiser les listes de paquets</description>
+    <message>Authentication is required to refresh the package lists</message>
+    <message xml:lang="fr">Une authentification est requise pour actualiser les listes de paquets</message>
+    <icon_name>view-refresh</icon_name>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>yes</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/auxinux/auxinux-refresh-helper</annotate>
+  </action>
+
+  <!--
+    Mettre a jour le systeme (tout, AuxiNux OS seul, ou un paquet DEB deja
+    installe). Une invite qui dit ce qui va etre fait, gardee quelques
+    minutes pour enchainer les mises a jour.
+  -->
+  <action id="ca.auxinux.center.system-update">
+    <description>Update AuxiNux OS</description>
+    <description xml:lang="fr">Mettre à jour AuxiNux OS</description>
+    <message>Authentication is required to update AuxiNux OS (a restore point is created first)</message>
+    <message xml:lang="fr">Une authentification est requise pour mettre à jour AuxiNux OS (un point de restauration est créé avant)</message>
+    <icon_name>system-software-update</icon_name>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/auxinux/auxinux-update-helper</annotate>
+  </action>
 </policyconfig>

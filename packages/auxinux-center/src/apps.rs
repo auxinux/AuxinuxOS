@@ -693,8 +693,10 @@ pub fn update_app(id: &str, source: &str, on_line: &mut dyn FnMut(&str)) -> Acti
             on_line,
             done,
         ),
-        // update only the requested package, not the whole system.
-        _ => progress::auxi(&["install", "--deb", id], on_line, done),
+        // update only the requested package, not the whole system. Le helper
+        // n'accepte que des paquets deja installes (action polkit « Mettre a
+        // jour AuxiNux OS »), quel que soit le reglage DEB.
+        _ => progress::privileged(&[crate::updates::UPDATE_HELPER, "package", id], on_line, done),
     }
 }
 

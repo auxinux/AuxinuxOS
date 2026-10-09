@@ -23,6 +23,23 @@ auxi install org.mozilla.firefox
 sudo auxi install --deb nom-du-paquet   # seulement si deb=true (voir plus bas)
 ```
 
+Les **mises à jour** passent toujours, même `apt` masqué et même si DEB est
+désactivé :
+
+- `apt update` devient `auxi update --deb` ; `apt upgrade`, `apt full-upgrade`
+  et `apt dist-upgrade` deviennent `auxi os upgrade` (point de restauration si
+  la version d'AuxiNux OS change, nouveaux noyaux acceptés, rien n'est
+  retiré). Avec des noms de paquets (`apt upgrade firefox`), le refus habituel
+  s'applique.
+- Dans un terminal, une commande `auxi` qui exige root (`auxi update`,
+  `auxi upgrade`, `auxi os upgrade`…) se relance d'elle-même par `sudo` au
+  lieu d'échouer. Sans terminal, elle s'arrête avec un message.
+- Dans le centre, « Actualiser les listes » ne demande **pas** de mot de passe
+  (action polkit `ca.auxinux.center.refresh`, session locale active) ; les
+  mises à jour du système passent par `ca.auxinux.center.system-update`
+  (« Mettre à jour AuxiNux OS », mot de passe gardé quelques minutes). Voir
+  `packages/auxinux-center/helper/`.
+
 ## Applications: Flatpak d'abord
 
 Les applications s'installent depuis **Flatpak (Flathub)**. `auxi install NOM`

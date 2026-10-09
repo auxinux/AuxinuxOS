@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+# Met a jour le systeme, en root, depuis le centre de controle.
+#
+# Lance via pkexec sous l'action ca.auxinux.center.system-update: l'invite dit
+# « Mettre a jour AuxiNux OS » au lieu de « run /usr/bin/auxi --yes
+# --progress upgrade as the super user », et l'autorisation est gardee
+# quelques minutes (auth_admin_keep) pour enchainer les mises a jour.
+#
+# Usage:
+#   auxinux-update-helper system          # auxi upgrade (Flatpak + systeme)
+#   auxinux-update-helper os              # auxi os upgrade (systeme seul)
+#   auxinux-update-helper package PAQ...  # paquets DEB DEJA installes
+#
+# Comme les autres helpers, il vit a un emplacement fixe appartenant a root et
+# revalide tout ce qu'il recoit. `package` n'accepte que des paquets deja
+# installes: ce n'est pas une porte pour installer un logiciel quelconque,
+# quel que soit le reglage DEB (qui ne concerne que les nouvelles
+# applications).
+set -uo pipefail
+
+AUXI="/usr/bin/auxi"
+DPKG_QUERY="dpkg-query"
+if [[ "${EUID}" -ne 0 && -n "${AUXINUX_UPDATE_TEST_ROOT:-}" ]]; then
+  AUXI="${AUXINUX_UPDATE_TEST_ROOT}/auxi"
+  DPKG_QUERY="${AUXINUX_UPDATE_TEST_ROOT}/dpkg-query"
+fi
+
+die() {
+  echo "auxinux-update-helper: $*" >&2
+  exit 64
+}
+
+valid_pkg() {
+  [[ "$1" =~ ^[a-z0-9][a-z0-9.+-]{0,127}(:[a-z0-9]+)?$ ]]
+}
+
+installed() {
+  [[ "$("${DPKG_QUERY}" -W -f='${db:Status-Status}' "$1" 2>/dev/null)" == "installed" ]]
+}
+
+case "${1:-}" in
+  system)
+    [[ $# -eq 1 ]] || die "usage: system"
+    exec "${AUXI}" --yes --progress upgrade ;;
+  os)
+    [[ $# -eq 1 ]] || die "usage: os"
+    exec "${AUXI}" --yes --progress os upgrade ;;
+  package)
+    shift
+    [[ $# -ge 1 ]] || die "usage: package PAQUET..."
+    for pkg in "$@"; do
+      valid_pkg "${pkg}" || die "nom de paquet invalide: ${pkg}"
+      installed "${pkg}" || die "paquet non installé: ${pkg}"
+    done
+    exec "${AUXI}" --yes --progress install --deb "$@" ;;
+  *)
+    die "usage: system | os | package PAQUET..." ;;
+esac
