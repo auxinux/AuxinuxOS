@@ -4,3 +4,4 @@ Dossiers personnels standard (Downloads, Documents…) : les téléchargements d
 Programmes Windows : un double-clic sur un .exe l'installe (Wine 32 bits) ; Bottles est automatisé.
 Le centre de contrôle et auxi sont en français, avec les accents, et se mettent à jour avec le système.
 Le nom « AuxiNux OS » n'est plus remplacé par « Debian » lors des mises à jour de Debian.
+Les points de restauration ne sont plus créés en double à chaque installation de logiciel.

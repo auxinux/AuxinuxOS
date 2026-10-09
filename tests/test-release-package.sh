@@ -76,6 +76,17 @@ check "preinst: met de cote les copies de l'image (ex. mimeapps.list)" \
   "$(grep -c '/etc/xdg/mimeapps.list' <<<"${preinst}")" "1"
 check "preinst: syntaxe" "$(sh -n <<<"${preinst}" && echo ok)" "ok"
 
+postinst="$(dpkg-deb --ctrl-tarfile "${DEB}" | tar -xO ./postinst)"
+check "postinst: coupe le hook apt de snapper (doublons)" \
+  "$(grep -c 's/^DISABLE_APT_SNAPSHOT="no"/DISABLE_APT_SNAPSHOT="yes"/' <<<"${postinst}")" "1"
+# Le postinst lui-meme, sur une copie de /etc/default/snapper.
+mkdir -p "${WORK}/fakeroot/etc/default"
+printf 'SNAPPER_CONFIGS="root"\nDISABLE_APT_SNAPSHOT="no"\n' > "${WORK}/fakeroot/etc/default/snapper"
+sed "s|/etc/default/snapper|${WORK}/fakeroot/etc/default/snapper|g; s|systemctl|true|" <<<"${postinst}" > "${WORK}/postinst"
+sh "${WORK}/postinst" configure
+check "postinst: DISABLE_APT_SNAPSHOT passe a yes" "$(grep -c '^DISABLE_APT_SNAPSHOT="yes"$' "${WORK}/fakeroot/etc/default/snapper")" "1"
+check "postinst: le reste intact" "$(grep -c '^SNAPPER_CONFIGS="root"$' "${WORK}/fakeroot/etc/default/snapper")" "1"
+
 echo "== 3. Kiorc quitte le paquet du centre =="
 CDEB="${WORK}/out/auxinux-center_${VERSION}_amd64.deb"
 check "plus de /etc/xdg/kiorc dans auxinux-center" "$(dpkg-deb -c "${CDEB}" | grep -c 'etc/xdg/kiorc')" "0"

@@ -4,6 +4,15 @@
 set -e
 case "$1" in
   configure)
+    # Le paquet snapper de Debian a SON PROPRE hook d'apt (80snapper, paires
+    # « apt »), en plus de celui d'AuxiNux (80auxinux-snapshot, qui nomme la
+    # commande et que `auxi os upgrade` sait remplacer par un instantane
+    # nomme). Les deux actifs: deux paires par transaction, en double dans la
+    # page Restauration (constate en VM le 2026-10-09). Le reglage prevu par
+    # Debian le coupe; seule la valeur d'origine « no » est changee.
+    if [ -f /etc/default/snapper ] && grep -q '^DISABLE_APT_SNAPSHOT="no"' /etc/default/snapper; then
+      sed -i 's/^DISABLE_APT_SNAPSHOT="no"/DISABLE_APT_SNAPSHOT="yes"/' /etc/default/snapper
+    fi
     if [ -d /run/systemd/system ]; then
       systemctl daemon-reload >/dev/null 2>&1 || true
     fi
