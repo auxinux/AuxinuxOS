@@ -1,0 +1,45 @@
+#!/bin/sh
+set -e
+case "$1" in
+  install|upgrade)
+    # /usr/lib/os-release (« AuxiNux OS 0.2.0 ») appartient a base-files, et
+    # HORS de /etc: ce n'est pas un fichier de configuration, donc une mise a
+    # jour de base-files (chaque version intermediaire de Debian 13) l'aurait
+    # remplace par « Debian GNU/Linux 13 » -- partout: centre de controle,
+    # connexion, a propos. Il est detourne: la version de Debian est gardee
+    # sous /usr/lib/os-release.debian, et rendue si ce paquet est retire.
+    #
+    # --no-rename: base-files est « Essential », et dpkg deconseille de
+    # renommer ses fichiers (os-release disparaitrait un instant). La version
+    # en place est donc COPIEE sous le nom detourne, pour etre rendue si ce
+    # paquet est retire (postrm, --rename).
+    if ! dpkg-divert --list /usr/lib/os-release | grep -q auxinuxos-release; then
+      if [ -e /usr/lib/os-release ] && [ ! -e /usr/lib/os-release.debian ]; then
+        cp -p /usr/lib/os-release /usr/lib/os-release.debian
+      fi
+      dpkg-divert --package auxinuxos-release --add --no-rename \
+        --divert /usr/lib/os-release.debian /usr/lib/os-release
+    fi
+    ;;
+esac
+case "$1" in
+  install)
+    # Premiere installation sur une machine dont l'IMAGE avait copie ces
+    # reglages dans /etc, sans paquet. Laisses en place, dpkg les tiendrait
+    # pour modifies par l'utilisateur: avec --force-confold (auxi --yes), il
+    # les garderait, et ne les mettrait PLUS JAMAIS a jour -- ce pour quoi ce
+    # paquet existe. Un fichier sans proprietaire est donc mis de cote dans
+    # /var/backups/auxinuxos-release (et non a cote: apt signalerait a chaque
+    # commande un fichier « .xxx » dans apt.conf.d). Un fichier qui appartient
+    # deja a un paquet (kiorc du centre 0.2.2, repris par Replaces) n'est pas
+    # touche.
+    backup=/var/backups/auxinuxos-release
+    for f in @CONFFILES@; do
+      if [ -e "$f" ] && ! dpkg-query -S "$f" >/dev/null 2>&1; then
+        mkdir -p "${backup}$(dirname "$f")"
+        mv -f "$f" "${backup}$f"
+      fi
+    done
+    ;;
+esac
+exit 0

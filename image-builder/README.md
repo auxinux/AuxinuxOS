@@ -25,7 +25,11 @@ Depuis la racine du dépôt, sur l’hôte Linux :
 ./image-builder/build-image.sh --work-dir /mnt/build/Auxinuxos-normal
 ```
 
-La sortie est `image-builder/output/auxinuxos-0.2.0-amd64.iso`.
+La sortie est `image-builder/output/auxinuxos-0.2.1-amd64.iso`, et les paquets
+qu'elle contient (`auxi`, `auxinux-center`, `auxinuxos-release` de son édition)
+sont dans `image-builder/output/debs/`. Publication : d'abord ces paquets
+(`packages/publish-debs.sh --dir …/image-builder/output/debs --deploy`), puis
+l'ISO (`image-builder/publish-iso.sh --iso … --deploy`), qui le vérifie.
 `--force` supprime le répertoire de construction du profil avant de repartir.
 `--reuse-rootfs` réutilise un rootfs existant ; ces options sont incompatibles.
 

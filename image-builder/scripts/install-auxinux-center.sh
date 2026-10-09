@@ -38,15 +38,21 @@ fi
 # configure. A ce stade, les diversions d'apt (install-auxi-cli.sh) ne sont
 # pas encore posees: c'est le vrai apt-get.
 echo "==> Construction des paquets auxi et auxinux-center"
-DEBS_DIR="$(mktemp -d)"
-trap 'rm -rf "${DEBS_DIR}"' EXIT
+# Gardes a cote de l'ISO: ce sont CES paquets qu'il faut publier avec elle
+# (packages/publish-debs.sh --dir .../image-builder/output/debs), en
+# particulier auxinuxos-release de la meme edition.
+DEBS_DIR="${AUXINUX_DEBS_DIR:-${PROJECT_DIR}/image-builder/output/debs}"
+mkdir -p "${DEBS_DIR}"
+rm -f "${DEBS_DIR}"/*.deb
 AUXINUX_CENTER_BIN="${BIN}" "${PROJECT_DIR}/packages/build-debs.sh" --out "${DEBS_DIR}" >/dev/null
 AUXI_DEB="$(ls "${DEBS_DIR}"/auxi_*_all.deb)"
 CENTER_DEB="$(ls "${DEBS_DIR}"/auxinux-center_*_amd64.deb)"
+# Version d'AuxiNux OS et reglages du systeme installe (packages/release).
+RELEASE_DEB="$(ls "${DEBS_DIR}"/auxinuxos-release_*_all.deb)"
 
 echo "==> Installation d'AuxiNux OS Center et d'auxi dans le rootfs"
 sudo install -d -m 0755 "${ROOTFS}/tmp/auxinux-debs"
-sudo cp "${AUXI_DEB}" "${CENTER_DEB}" "${ROOTFS}/tmp/auxinux-debs/"
+sudo cp "${AUXI_DEB}" "${CENTER_DEB}" "${RELEASE_DEB}" "${ROOTFS}/tmp/auxinux-debs/"
 # --force-confnew: sur un rootfs reutilise, /etc/xdg/autostart/auxinux-assistant.desktop
 # existe deja, copie a la main par une construction precedente et inconnu de
 # dpkg. Le conffile du paquet en differe: dpkg POSE UNE QUESTION, lit une fin
@@ -62,7 +68,8 @@ sudo cp "${AUXI_DEB}" "${CENTER_DEB}" "${ROOTFS}/tmp/auxinux-debs/"
 # complete ensuite une dependance manquante, s'il y en a une.
 if ! sudo chroot "${ROOTFS}" env DEBIAN_FRONTEND=noninteractive dpkg -i --force-confnew \
   "/tmp/auxinux-debs/$(basename "${AUXI_DEB}")" \
-  "/tmp/auxinux-debs/$(basename "${CENTER_DEB}")"; then
+  "/tmp/auxinux-debs/$(basename "${CENTER_DEB}")" \
+  "/tmp/auxinux-debs/$(basename "${RELEASE_DEB}")"; then
   sudo chroot "${ROOTFS}" env DEBIAN_FRONTEND=noninteractive apt-get install -f -y \
     --no-install-recommends -o Dpkg::Options::=--force-confnew
 fi

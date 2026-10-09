@@ -52,7 +52,8 @@ Usage:
   auxi [--yes] [--progress] COMMAND ...
   auxi update [--deb|--flatpak]
   auxi upgrade [--deb|--flatpak]
-  auxi osupdate
+  auxi os update
+  auxi os upgrade
   auxi kernel [list [--porcelain]]
   auxi kernel install|activate|remove VERSION
   auxi kernel activate latest
@@ -76,8 +77,9 @@ Applications are installed from Flatpak (Flathub). DEB installation is only
 used when enabled (auxi set deb=true), and even then only when no Flatpak
 exists for the requested application.
 
-The system (osupdate: every installed DEB package, kernels included) and the
-AuxiNux kernels (kernel) never depend on that setting.
+os update tells whether a new AuxiNux OS version is available; os upgrade
+installs it with every system DEB package (kernels included), after a named
+snapshot. Neither, nor kernel, depends on that setting.
 
 Global options (before the command):
   --yes       answer yes to every question, keep modified configuration files
@@ -91,7 +93,8 @@ Usage:
   auxi [--yes] [--progress] COMMANDE ...
   auxi update [--deb|--flatpak]
   auxi upgrade [--deb|--flatpak]
-  auxi osupdate
+  auxi os update
+  auxi os upgrade
   auxi kernel [list [--porcelain]]
   auxi kernel install|activate|remove VERSION
   auxi kernel activate latest
@@ -115,8 +118,9 @@ Les applications s'installent depuis Flatpak (Flathub). L'installation DEB
 n'est utilisée que si elle est activée (auxi set deb=true), et même alors
 seulement quand aucun Flatpak n'existe pour l'application demandée.
 
-Le système (osupdate: tous les paquets DEB installés, noyaux compris) et les
-noyaux AuxiNux (kernel) ne dépendent jamais de ce réglage.
+os update dit si une nouvelle version d'AuxiNux OS est disponible; os upgrade
+l'installe avec tous les paquets DEB du système (noyaux compris), après un
+instantané nommé. Ni l'un ni l'autre, ni kernel, ne dépend de ce réglage.
 
 Options globales (avant la commande):
   --yes       répond oui à toutes les questions, garde les fichiers de
@@ -709,11 +713,158 @@ run_update() {
 #
 # Le reglage DEB (auxi set deb=...) ne concerne que les APPLICATIONS: il n'est
 # pas consulte ici, le systeme doit toujours pouvoir se mettre a jour.
+#
+# Si cette mise a jour change la VERSION d'AuxiNux OS (nouvelle edition du
+# paquet auxinuxos-release), un instantane NOMME est pose d'abord: « Avant
+# AuxiNux OS 0.2.1, edition du ... » (exigence d'aporler, 2026-10-09: une montee
+# de version de l'OS, depuis le centre ou en ligne de commande, fait TOUJOURS
+# un instantane). S'il echoue sur un systeme qui sait en faire, la mise a jour
+# est annulee. La paire pre/post du hook dpkg est alors evitee (doublon).
 run_osupdate() {
-  require_root_for_deb osupdate "$@"
+  require_root_for_deb "os upgrade" "$@"
   apt_get update
-  apt_get upgrade --with-new-pkgs
-  kernel_update_channels
+  local candidate summary snap=0
+  candidate="$(release_candidate)"
+  if [[ -n "${candidate}" ]]; then
+    summary="$(release_summary)"
+    say "Nouvelle version: ${summary:-AuxiNux OS ${candidate}}" "New version: ${summary:-AuxiNux OS ${candidate}}"
+    if os_snapshot "Avant ${summary:-AuxiNux OS ${candidate}}"; then
+      snap=1
+    fi
+  fi
+  if [[ "${snap}" -eq 1 ]]; then
+    AUXI_NO_SNAPSHOT=1 apt_get upgrade --with-new-pkgs
+    AUXI_NO_SNAPSHOT=1 release_ensure_installed
+    AUXI_NO_SNAPSHOT=1 kernel_update_channels
+  else
+    apt_get upgrade --with-new-pkgs
+    release_ensure_installed
+    kernel_update_channels
+  fi
+  if [[ -n "${candidate}" ]]; then
+    say "Système à jour: $(os_release_label)" "System up to date: $(os_release_label)"
+  fi
+}
+
+# Version d'AuxiNux OS proposee par les depots, si elle est plus recente que
+# celle installee (ou si le paquet manque: machine d'avant le 2026-10-09).
+# Vide sinon. Lit les listes deja chargees.
+release_candidate() {
+  local policy installed candidate
+  policy="$(LC_ALL=C apt_cache policy auxinuxos-release 2>/dev/null || true)"
+  candidate="$(sed -n 's/^ *Candidate: *//p' <<<"${policy}" | head -n1)"
+  installed="$(sed -n 's/^ *Installed: *//p' <<<"${policy}" | head -n1)"
+  [[ -n "${candidate}" && "${candidate}" != "(none)" ]] || return 0
+  if [[ -z "${installed}" || "${installed}" == "(none)" ]] \
+     || dpkg --compare-versions "${candidate}" gt "${installed}"; then
+    printf '%s' "${candidate}"
+  fi
+}
+
+# « AuxiNux OS 0.2.1, edition du ... » (resume du paquet candidat).
+release_summary() {
+  LC_ALL=C apt_cache show --no-all-versions auxinuxos-release 2>/dev/null \
+    | sed -n 's/^Description: *//p' | head -n1 || true
+}
+
+# Nouveautes du paquet candidat, une par ligne.
+release_notes() {
+  LC_ALL=C apt_cache show --no-all-versions auxinuxos-release 2>/dev/null \
+    | awk '/^Description:/ { d = 1; next } d && /^ / { sub(/^ /, ""); if ($0 != ".") print; next } d { exit }' || true
+}
+
+# Instantane nomme avant une montee de version de l'OS. Marque « important »:
+# le nettoyage automatique de snapper (algorithme number) ne le supprime pas
+# avec les points ordinaires. Rend 1 si aucun instantane n'a ete pose sur un
+# systeme qui n'en fait pas (la mise a jour continue, avec un avertissement);
+# ARRETE tout si l'instantane echoue sur un systeme qui sait en faire.
+os_snapshot() {
+  local description="$1" number
+  if ! snapshots_available; then
+    say_err "Attention: pas d'instantané possible sur ce système (racine non BTRFS); la mise à jour continue sans filet." \
+            "Warning: snapshots are not possible on this system (non-BTRFS root); updating without a safety net."
+    return 1
+  fi
+  if ! number="$(snapper -c "${SNAPPER_CONFIG}" create --type single --print-number \
+        --cleanup-algorithm number --description "${description}" \
+        --userdata "auxi=1,important=yes" 2>&1)"; then
+    say_err "Instantané impossible: ${number}" "Snapshot failed: ${number}"
+    say_err "Mise à jour de la version d'AuxiNux OS annulée: rien n'a été modifié." \
+            "AuxiNux OS version upgrade cancelled: nothing was changed."
+    exit 69
+  fi
+  say "Instantané ${number} créé: ${description}" "Snapshot ${number} created: ${description}"
+  return 0
+}
+
+# auxi os update: une nouvelle version d'AuxiNux OS est-elle disponible?
+# N'installe rien. En root, rafraichit d'abord les listes; sinon, lit celles du
+# systeme (rafraichies chaque jour par apt-daily, voir 20auxinux-periodic).
+run_os_update() {
+  if [[ "${EUID}" -eq 0 ]]; then
+    apt_get update >/dev/null || true
+  fi
+  say "Version installée: $(os_release_label)" "Installed version: $(os_release_label)"
+  local candidate
+  candidate="$(release_candidate)"
+  if [[ -z "${candidate}" ]]; then
+    say "AuxiNux OS est à jour." "AuxiNux OS is up to date."
+    [[ "${EUID}" -eq 0 ]] || say "(Listes du système; sudo auxi os update les rafraîchit d'abord.)" \
+                                "(System lists; sudo auxi os update refreshes them first.)"
+    return 0
+  fi
+  local summary
+  summary="$(release_summary)"
+  say "Nouvelle version disponible: ${summary:-AuxiNux OS ${candidate}}" \
+      "New version available: ${summary:-AuxiNux OS ${candidate}}"
+  local note
+  while IFS= read -r note; do
+    [[ -n "${note}" ]] && printf '  - %s\n' "${note}"
+  done < <(release_notes)
+  say "Pour l'installer (un instantané est créé avant): sudo auxi os upgrade" \
+      "To install it (a snapshot is taken first): sudo auxi os upgrade"
+  return 0
+}
+
+run_os() {
+  case "${1:-}" in
+    update) shift; run_os_update "$@" ;;
+    upgrade) shift; run_osupdate "$@" ;;
+    *)
+      say_err "Usage: auxi os update | auxi os upgrade" "Usage: auxi os update | auxi os upgrade"
+      exit 64
+      ;;
+  esac
+}
+
+# Version d'AuxiNux OS (paquet auxinuxos-release, une edition par ISO publiee).
+#
+# Une installation faite avant le 2026-10-09 n'a pas ce paquet, et
+# `upgrade --with-new-pkgs` n'installe jamais un paquet que rien ne demande:
+# sans cette etape, elle ne verrait aucune nouvelle version. Une fois installe,
+# chaque nouvelle edition arrive par la mise a jour ordinaire, et tire les
+# versions minimales d'auxi, du centre de controle et du noyau.
+release_ensure_installed() {
+  deb_installed auxinuxos-release && return 0
+  apt_cache show --no-all-versions auxinuxos-release >/dev/null 2>&1 || return 0
+  say "Installation de la version d'AuxiNux OS (auxinuxos-release)." \
+      "Installing the AuxiNux OS release (auxinuxos-release)."
+  apt_get install -- auxinuxos-release
+}
+
+# « AuxiNux OS 0.2.0, edition du 2026-10-09 » (os-release, champ BUILD_ID).
+os_release_label() {
+  local file="${AUXI_OS_RELEASE:-/etc/os-release}" name build day n
+  name="$(sed -n 's/^PRETTY_NAME="\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' "${file}" 2>/dev/null | head -n1)"
+  build="$(sed -n 's/^BUILD_ID="\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' "${file}" 2>/dev/null | head -n1)"
+  printf '%s' "${name:-AuxiNux OS}"
+  if [[ "${build}" =~ ^([0-9]{4})([0-9]{2})([0-9]{2})(\.([0-9]+))?$ ]]; then
+    day="${BASH_REMATCH[1]}-${BASH_REMATCH[2]}-${BASH_REMATCH[3]}"
+    n="${BASH_REMATCH[5]:+ (${BASH_REMATCH[5]})}"
+    if is_english; then printf ', %s build%s' "${day}" "${n}"
+    else printf ', édition du %s%s' "${day}" "${n}"; fi
+  fi
+  printf '\n'
 }
 
 run_upgrade() {
@@ -1311,7 +1462,11 @@ case "${1:-}" in
   upgrade)
     shift; run_upgrade "$@"
     ;;
+  os)
+    shift; run_os "$@"
+    ;;
   osupdate)
+    # Ancien nom de « auxi os upgrade », garde pour les scripts existants.
     shift; run_osupdate "$@"
     ;;
   kernel)
@@ -1360,7 +1515,7 @@ case "${1:-}" in
     esac
     ;;
   status)
-    echo "AuxiNux OS 0.2.0"
+    os_release_label
     if apt_enabled; then
       say "APT direct: actif" "Direct APT: enabled"
     else

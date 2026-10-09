@@ -5,7 +5,7 @@
 # POURQUOI LA SUITE APPS: elle est deja active sur toutes les installations
 # (/etc/apt/sources.list.d/auxinux-apps.sources) et signee par la meme cle que
 # le noyau. Une nouvelle version y est donc recue par la mise a jour du systeme
-# (`auxi osupdate`, bouton « Mettre a jour le systeme »), sans rien configurer.
+# (`auxi os upgrade`, boutons du centre de controle), sans rien configurer.
 #
 # La suite est geree par le script de publication d'AuxiNux Office, sur l'hote
 # de depot: ~/auxinuxos-apps-pub/publish-repo.sh. Il est utilise TEL QUEL, comme
@@ -54,8 +54,6 @@ if [[ -z "${VERSION}" ]]; then
 fi
 [[ "${VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "version invalide: ${VERSION}" >&2; exit 64; }
 
-DEBS=("auxi_${VERSION}_all.deb" "auxinux-center_${VERSION}_amd64.deb")
-
 # Version publiee d'un paquet dans l'index (vide si absent).
 published_version() {
   awk -v p="$1" '
@@ -64,14 +62,32 @@ published_version() {
   ' <<<"$2" | sort -V | tail -n1
 }
 
+# Edition d'AuxiNux OS du dossier (auxinuxos-release_<R>_all.deb, depuis le
+# 2026-10-09): une par ISO, elle doit TOUJOURS etre plus recente que celle en
+# ligne -- c'est elle qui annonce la nouvelle version aux machines installees.
+RELEASE_DEB="$(ssh "${BUILD_HOST}" "cd '${REMOTE_DIR}' && ls auxinuxos-release_*_all.deb 2>/dev/null" | sort -V | tail -n1)"
+[[ -n "${RELEASE_DEB}" ]] || { echo "ERREUR: aucun auxinuxos-release_*_all.deb dans ${BUILD_HOST}:${REMOTE_DIR}" >&2; exit 66; }
+RELEASE="${RELEASE_DEB#auxinuxos-release_}"; RELEASE="${RELEASE%_all.deb}"
+
+declare -A WANT=([auxi]="${VERSION}" [auxinux-center]="${VERSION}" [auxinuxos-release]="${RELEASE}")
+declare -A FILE=([auxi]="auxi_${VERSION}_all.deb" [auxinux-center]="auxinux-center_${VERSION}_amd64.deb" [auxinuxos-release]="${RELEASE_DEB}")
+
 echo "==> Index publie: ${PACKAGES_URL}"
 INDEX="$(curl -fsS "${PACKAGES_URL}")" || { echo "index APPS illisible" >&2; exit 69; }
-for pkg in auxi auxinux-center; do
+PKGS=()
+for pkg in auxi auxinux-center auxinuxos-release; do
   current="$(published_version "${pkg}" "${INDEX}")"
-  echo "    ${pkg}: publie ${current:-(aucun)}, a publier ${VERSION}"
-  if [[ -n "${current}" ]] && ! dpkg --compare-versions "${VERSION}" gt "${current}"; then
-    echo "ERREUR: ${pkg} ${VERSION} n'est pas plus recent que ${current} (deja publie)." >&2
-    echo "  Augmentez la version dans packages/auxinux-center/Cargo.toml (et la metainfo)." >&2
+  echo "    ${pkg}: publie ${current:-(aucun)}, a publier ${WANT[${pkg}]}"
+  if [[ -z "${current}" ]] || dpkg --compare-versions "${WANT[${pkg}]}" gt "${current}"; then
+    PKGS+=("${pkg}")
+  elif [[ "${pkg}" != auxinuxos-release && "${current}" == "${WANT[${pkg}]}" ]]; then
+    # Une nouvelle edition ne change pas forcement le centre ni auxi.
+    echo "      (deja en ligne: inchange)"
+  else
+    echo "ERREUR: ${pkg} ${WANT[${pkg}]} n'est pas plus recent que ${current} (deja publie)." >&2
+    [[ "${pkg}" == auxinuxos-release ]] \
+      && echo "  Construisez avec une nouvelle edition (AUXINUX_RELEASE=...+AAAAMMJJ.N)." >&2 \
+      || echo "  Augmentez la version dans packages/auxinux-center/Cargo.toml (et la metainfo)." >&2
     exit 73
   fi
 done
@@ -80,13 +96,15 @@ done
 
 echo "==> Paquets sur ${BUILD_HOST}:${REMOTE_DIR}"
 declare -A SHA
-for deb in "${DEBS[@]}"; do
-  read -r pkg ver sha <<<"$(ssh "${BUILD_HOST}" \
+for pkg in "${PKGS[@]}"; do
+  deb="${FILE[${pkg}]}"
+  read -r name ver sha <<<"$(ssh "${BUILD_HOST}" \
     "cd '${REMOTE_DIR}' && printf '%s %s %s' \"\$(dpkg-deb -f '${deb}' Package)\" \"\$(dpkg-deb -f '${deb}' Version)\" \"\$(sha256sum '${deb}' | cut -d' ' -f1)\"")"
   [[ -n "${sha:-}" ]] || { echo "ERREUR: ${deb} introuvable sur ${BUILD_HOST}" >&2; exit 66; }
-  [[ "${ver}" == "${VERSION}" ]] || { echo "ERREUR: ${deb} annonce la version ${ver}" >&2; exit 65; }
-  SHA["${deb}"]="${sha}"
-  echo "    ${deb}: ${pkg} ${ver}, sha256 ${sha}"
+  [[ "${name}" == "${pkg}" && "${ver}" == "${WANT[${pkg}]}" ]] \
+    || { echo "ERREUR: ${deb} annonce ${name} ${ver}" >&2; exit 65; }
+  SHA["${pkg}"]="${sha}"
+  echo "    ${deb}: sha256 ${sha}"
 done
 
 if [[ "${DEPLOY}" -ne 1 ]]; then
@@ -97,46 +115,48 @@ fi
 
 echo "==> Transfert en flux (${BUILD_HOST} -> ici -> ${REPO_HOST}:~/${PUB_DIR}/incoming)"
 ssh "${REPO_HOST}" "mkdir -p '${PUB_DIR}/incoming'"
-for deb in "${DEBS[@]}"; do
+ARGS=()
+for pkg in "${PKGS[@]}"; do
+  deb="${FILE[${pkg}]}"
   ssh "${BUILD_HOST}" "cat '${REMOTE_DIR}/${deb}'" \
     | ssh "${REPO_HOST}" "cat > '${PUB_DIR}/incoming/${deb}'"
   got="$(ssh "${REPO_HOST}" "sha256sum '${PUB_DIR}/incoming/${deb}' | cut -d' ' -f1")"
-  if [[ "${got}" != "${SHA[${deb}]}" ]]; then
+  if [[ "${got}" != "${SHA[${pkg}]}" ]]; then
     echo "ERREUR: empreinte differente apres transfert de ${deb}." >&2
     ssh "${REPO_HOST}" "rm -f '${PUB_DIR}/incoming/${deb}'"
     exit 65
   fi
+  ARGS+=("incoming/${deb}")
 done
 
 echo "==> Index, signature et deploiement (publish-repo.sh, suite APPS)"
-ssh "${REPO_HOST}" "cd '${PUB_DIR}' && ./publish-repo.sh incoming/${DEBS[0]} incoming/${DEBS[1]} --deploy"
+ssh "${REPO_HOST}" "cd '${PUB_DIR}' && ./publish-repo.sh ${ARGS[*]} --deploy"
 
 echo "==> Verification de l'index servi"
 INDEX="$(curl -fsS "${PACKAGES_URL}")"
 fail=0
-for pkg in auxi auxinux-center; do
+for pkg in auxi auxinux-center auxinuxos-release; do
   got="$(published_version "${pkg}" "${INDEX}")"
   echo "    ${pkg}: ${got:-(absent)}"
-  [[ "${got}" == "${VERSION}" ]] || fail=1
+  [[ "${got}" == "${WANT[${pkg}]}" ]] || fail=1
 done
 office="$(published_version auxinux-office "${INDEX}")"
 echo "    auxinux-office: ${office:-(absent)}"
 [[ -n "${office}" ]] || { echo "ERREUR: auxinux-office a disparu de l'index APPS" >&2; fail=1; }
 
-for deb in "${DEBS[@]}"; do
-  pkg="${deb%%_*}"
-  file="$(awk -v p="${pkg}" -v v="${VERSION}" '
+for pkg in "${PKGS[@]}"; do
+  file="$(awk -v p="${pkg}" -v v="${WANT[${pkg}]}" '
     $1 == "Package:" { cur = $2; ver = "" }
     $1 == "Version:" { ver = $2 }
     $1 == "Filename:" && cur == p && ver == v { print $2 }
   ' <<<"${INDEX}" | head -n1)"
-  [[ -n "${file}" ]] || { echo "ERREUR: ${pkg} ${VERSION} sans Filename dans l'index" >&2; fail=1; continue; }
+  [[ -n "${file}" ]] || { echo "ERREUR: ${pkg} ${WANT[${pkg}]} sans Filename dans l'index" >&2; fail=1; continue; }
   served="$(curl -fsS "${BASE_URL}/${file}" | sha256sum | cut -d' ' -f1)"
   echo "    ${BASE_URL}/${file}: sha256 ${served}"
-  [[ "${served}" == "${SHA[${deb}]}" ]] || { echo "ERREUR: ${file} servi differe de la source" >&2; fail=1; }
+  [[ "${served}" == "${SHA[${pkg}]}" ]] || { echo "ERREUR: ${file} servi differe de la source" >&2; fail=1; }
 done
 
 [[ "${fail}" -eq 0 ]] || exit 70
 echo
-echo "Publie: auxi ${VERSION} et auxinux-center ${VERSION} (suite APPS)."
-echo "Les machines le recoivent par « auxi osupdate » / « Mettre a jour le systeme »."
+echo "Publie dans la suite APPS: ${PKGS[*]} (edition ${RELEASE})."
+echo "Les machines le recoivent par « auxi os upgrade » / le centre de controle."

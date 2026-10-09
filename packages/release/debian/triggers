@@ -1,0 +1,2 @@
+# Le hook initramfs (demarrage sur un instantane) change: regenerer l initramfs.
+activate-noawait update-initramfs

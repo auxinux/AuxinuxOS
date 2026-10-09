@@ -1,0 +1,9 @@
+// Rafraichissement quotidien des listes de paquets (apt-daily.timer).
+//
+// Sans lui, le centre de controle ne voit une nouvelle version d'AuxiNux OS,
+// ou une mise a jour, qu'apres un clic sur « Actualiser les listes »
+// (rapporte le 2026-10-09: « ca me dit qu'il n'y a pas de mise a jour »).
+// Rien n'est INSTALLE automatiquement: seules les listes sont lues.
+APT::Periodic::Update-Package-Lists "1";
+APT::Periodic::Download-Upgradeable-Packages "0";
+APT::Periodic::Unattended-Upgrade "0";

@@ -134,6 +134,20 @@ has "upgrade --with-new-pkgs" "upgrade --with-new-pkgs"
 lacks "aucune application Flatpak touchee" "flatpak"
 printf 'DEB_APPS=1\n' >"${APPS_CONF}"
 
+echo "== 3d. osupdate installe la version d'AuxiNux OS si elle manque =="
+# Une machine d'avant le 2026-10-09 n'a pas auxinuxos-release, et
+# `upgrade --with-new-pkgs` n'installe jamais un paquet que rien ne demande.
+deb_installed() { return 1; }
+: >"${CALLS}"
+( set -e; run_osupdate ) </dev/null >/dev/null 2>&1
+has "installe auxinuxos-release absent" "install -- auxinuxos-release"
+deb_installed() { [[ "$1" == "auxinuxos-release" ]]; }
+: >"${CALLS}"
+( set -e; run_osupdate ) </dev/null >/dev/null 2>&1
+lacks "deja installe: suit la mise a jour ordinaire" "install -- auxinuxos-release"
+unset -f deb_installed
+source <(sed -n '/^deb_installed()/,/^}/p' "${AUXI_BIN}")
+
 echo "== 4. Le terminal garde son comportement sans --yes =="
 : >"${CALLS}"
 ASSUME_YES=0 PROGRESS=0

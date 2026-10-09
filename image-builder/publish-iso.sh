@@ -45,6 +45,32 @@ done
 [[ -n "${ISO_REMOTE}" ]] || { echo "--iso est obligatoire" >&2; exit 64; }
 
 base="$(basename "${ISO_REMOTE}")"
+
+# Edition inscrite dans l'ISO par build-image.sh (/.disk/auxinux-release):
+# 0.2.0+20261009.2. Depuis le 2026-10-09, chaque ISO publiee est une version
+# annoncee aux machines installees par le paquet auxinuxos-release du meme
+# numero: le nom publie en decoule, et ce paquet doit deja etre publie.
+RELEASE="$(ssh "${BUILD_HOST}" "t=\$(mktemp); xorriso -osirrox on -indev '${ISO_REMOTE}' -extract /.disk/auxinux-release \"\$t\" >/dev/null 2>&1; cat \"\$t\" 2>/dev/null; rm -f \"\$t\"" | tr -d '[:space:]')"
+if [[ -n "${RELEASE}" ]]; then
+  echo "==> Edition: ${RELEASE}"
+  if [[ -z "${PUBLISH_NAME}" ]]; then
+    # 0.2.0+20261009.2 -> auxinuxos-0.2.0-20261009-2-amd64.iso
+    ver="${RELEASE%%+*}"; id="${RELEASE#*+}"
+    PUBLISH_NAME="auxinuxos-${ver}-${id//./-}-amd64.iso"
+  fi
+  APPS_INDEX="${AUXINUX_APPS_INDEX:-https://dep.auxinux.ca/AUXINUXOS/dists/APPS/main/binary-amd64/Packages}"
+  if ! curl -fsS "${APPS_INDEX}" | awk -v r="${RELEASE}" '
+        $1 == "Package:" { p = $2 } $1 == "Version:" && p == "auxinuxos-release" && $2 == r { f = 1 }
+        END { exit !f }'; then
+    echo "ERREUR: auxinuxos-release ${RELEASE} n'est pas publie dans la suite APPS." >&2
+    echo "  Publiez d'abord les paquets de cette construction:" >&2
+    echo "  packages/publish-debs.sh --dir <dossier des .deb> --deploy" >&2
+    echo "  Sans lui, les machines installees ne verraient jamais cette version." >&2
+    exit 73
+  fi
+else
+  echo "AVERTISSEMENT: ISO sans /.disk/auxinux-release (construite avant le 2026-10-09)." >&2
+fi
 if [[ -z "${PUBLISH_NAME}" ]]; then
   # auxinuxos-0.2.0-amd64.iso -> auxinuxos-0.2.0-20260912-amd64.iso
   PUBLISH_NAME="${base%-amd64.iso}-$(date +%Y%m%d)-amd64.iso"

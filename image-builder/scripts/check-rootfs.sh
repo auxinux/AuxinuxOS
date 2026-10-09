@@ -227,6 +227,13 @@ need_exec /usr/bin/auxi "commande d'administration principale"
 need_exec /usr/bin/auxinux-center "centre de controle"
 need_owned /usr/bin/auxi auxi "auxi ne se mettrait jamais a jour (suite APPS)"
 need_owned /usr/bin/auxinux-center auxinux-center "le centre de controle ne se mettrait jamais a jour (suite APPS)"
+need_owned /usr/lib/os-release auxinuxos-release \
+  "une mise a jour de base-files remplacerait « AuxiNux OS » par « Debian », et aucune nouvelle version ne serait annoncee"
+if [[ -n "${AUXINUX_RELEASE:-}" ]]; then
+  got="$(sudo chroot "${ROOTFS}" dpkg-query -W -f='${Version}' auxinuxos-release 2>/dev/null)"
+  if [[ "${got}" == "${AUXINUX_RELEASE}" ]]; then ok "edition ${got}"
+  else fail "auxinuxos-release ${got:-absent} au lieu de l'edition ${AUXINUX_RELEASE} construite"; fi
+fi
 need_package auxinux-office "pas d'AuxiNux Office, donc pas d'editeur de texte (AuxiText remplace Kate)"
 need_file /usr/share/applications/ca.auxinux.AuxiNuxOffice.Text.desktop \
   "les fichiers texte seraient associes (mimeapps.list) a un lanceur absent"

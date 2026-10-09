@@ -20,6 +20,9 @@ set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OVERLAYS="${ROOT}/image-builder/overlays"
+# Reglages du systeme installe: dans le paquet auxinuxos-release depuis le
+# 2026-10-09 (ils arrivent aussi par la mise a jour).
+RELEASE_ROOT="${ROOT}/packages/release/root"
 LISTS="${ROOT}/image-builder/package-lists"
 
 fail=0
@@ -34,14 +37,14 @@ setting() {
 }
 
 echo "== 1. Telemetrie du bureau (KDE) =="
-setting "Plasma: FeedbackLevel=0" "${OVERLAYS}/etc/xdg/PlasmaUserFeedback" '^FeedbackLevel=0'
-setting "Applications KDE: NoTelemetry" "${OVERLAYS}/etc/xdg/kdeglobals" 'StatisticsCollectionMode=NoTelemetry'
+setting "Plasma: FeedbackLevel=0" "${RELEASE_ROOT}/etc/xdg/PlasmaUserFeedback" '^FeedbackLevel=0'
+setting "Applications KDE: NoTelemetry" "${RELEASE_ROOT}/etc/xdg/kdeglobals" 'StatisticsCollectionMode=NoTelemetry'
 
 echo "== 2. Indexation locale du contenu des documents =="
-setting "Baloo desactive" "${OVERLAYS}/etc/xdg/baloofilerc" '^Indexing-Enabled=false'
+setting "Baloo desactive" "${RELEASE_ROOT}/etc/xdg/baloofilerc" '^Indexing-Enabled=false'
 
 echo "== 3. Navigateur =="
-BRAVE="${OVERLAYS}/etc/brave/policies/managed/auxinux-privacy.json"
+BRAVE="${RELEASE_ROOT}/etc/brave/policies/managed/auxinux-privacy.json"
 for key in MetricsReportingEnabled BraveRewardsDisabled BraveWalletDisabled BraveVPNDisabled SyncDisabled; do
   setting "Brave: ${key} sous politique" "${BRAVE}" "\"${key}\""
 done
@@ -73,13 +76,13 @@ check "aucune mise a jour Flatpak automatique" \
   "$(grep -rc 'flatpak-update.timer' "${ROOT}/image-builder" 2>/dev/null | grep -v ':0$' | wc -l)" "0"
 
 echo "== 6. Verrouillage de l'ecran (confidentialite physique) =="
-setting "verrouillage automatique actif" "${OVERLAYS}/etc/xdg/kscreenlockerrc" '^Autolock=true'
+setting "verrouillage automatique actif" "${RELEASE_ROOT}/etc/xdg/kscreenlockerrc" '^Autolock=true'
 
 echo "== 7. Destinations reseau decidees (docs/privacy-stance.md) =="
 # NTP contacte un tiers a chaque demarrage. La destination a ete choisie le
 # 2026-10-05 (CNRC, pool Debian en secours): la changer doit etre un acte
 # visible, pas une ligne modifiee en passant.
-TIMESYNCD="${OVERLAYS}/etc/systemd/timesyncd.conf.d/50-auxinux.conf"
+TIMESYNCD="${RELEASE_ROOT}/etc/systemd/timesyncd.conf.d/50-auxinux.conf"
 setting "NTP: serveurs du CNRC" "${TIMESYNCD}" '^NTP=time\.nrc\.ca time\.chu\.nrc\.ca$'
 setting "NTP: secours limite au pool Debian" "${TIMESYNCD}" '^FallbackNTP=([0-3]\.debian\.pool\.ntp\.org ?)+$'
 
