@@ -477,13 +477,15 @@ sudo install -d -m 0755 "${ROOTFS_DIR}/etc/sddm.conf.d"
 # le systeme installe -- sinon la machine installee ouvrirait une session sans
 # mot de passe, sur un compte `auxinux` qui n'existe plus.
 #
-# Session=plasma est le fichier /usr/share/wayland-sessions/plasma.desktop.
-# Ecrire `plasmax11` ici basculerait tout le live en X11 sans que rien ne le
-# signale.
+# Session=auxinux est /usr/share/wayland-sessions/auxinux.desktop: AuxiNux
+# Shell, bureau par defaut depuis le 2026-10-10 (decision d'aporler), aussi
+# dans le live. KDE Plasma (Session=plasma) reste choisissable a l'ecran de
+# connexion. Ecrire `plasmax11` basculerait tout le live en X11 sans que rien
+# ne le signale.
 sudo tee "${ROOTFS_DIR}/etc/sddm.conf.d/90-auxinux-live-autologin.conf" >/dev/null <<'EOF'
 [Autologin]
 User=auxinux
-Session=plasma
+Session=auxinux
 # false: apres une deconnexion, on veut l'ecran de connexion, pas une nouvelle
 # session automatique en boucle.
 Relogin=false

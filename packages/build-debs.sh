@@ -149,6 +149,8 @@ install -D -m 0755 "${CENTER_DIR}/helper/auxinux-refresh-helper" \
   "${CENTER_ROOT}/usr/libexec/auxinux/auxinux-refresh-helper"
 install -D -m 0755 "${CENTER_DIR}/helper/auxinux-update-helper" \
   "${CENTER_ROOT}/usr/libexec/auxinux/auxinux-update-helper"
+install -D -m 0755 "${CENTER_DIR}/helper/auxinux-session-helper" \
+  "${CENTER_ROOT}/usr/libexec/auxinux/auxinux-session-helper"
 install -D -m 0644 "${CENTER_DIR}/helper/ca.auxinux.center.policy" \
   "${CENTER_ROOT}/usr/share/polkit-1/actions/ca.auxinux.center.policy"
 # Assistant d'ouverture des .exe et dossiers personnels (depuis la 0.2.2): en
@@ -222,7 +224,7 @@ Architecture: all
 Maintainer: ${MAINTAINER}
 Section: admin
 Priority: important
-Depends: auxi (>= ${VERSION}), auxinux-center (>= ${VERSION}), kernel-auxinuxos, base-files
+Depends: auxi (>= ${VERSION}), auxinux-center (>= ${VERSION}), kernel-auxinuxos, auxinux-shell, base-files
 Replaces: auxinux-center (<< 0.2.3)
 Breaks: auxinux-center (<< 0.2.3)
 Homepage: ${HOMEPAGE}

@@ -38,6 +38,18 @@
   </developer>
   <content_rating type="oars-1.1" />
   <releases>
+    <release version="0.2.5" date="2026-10-10">
+      <description>
+        <p>
+          Settings: choose the desktop opened at login, AuxiNux Shell (default)
+          or KDE Plasma.
+        </p>
+        <p xml:lang="fr">
+          Réglages : choix du bureau ouvert à la connexion, AuxiNux Shell (par
+          défaut) ou KDE Plasma.
+        </p>
+      </description>
+    </release>
     <release version="0.2.4" date="2026-10-09">
       <description>
         <p>
