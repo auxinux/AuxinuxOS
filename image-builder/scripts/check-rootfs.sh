@@ -240,6 +240,8 @@ if [[ -n "${AUXINUX_RELEASE:-}" ]]; then
   else fail "auxinuxos-release ${got:-absent} au lieu de l'edition ${AUXINUX_RELEASE} construite"; fi
 fi
 need_package auxinux-office "pas d'AuxiNux Office, donc pas d'editeur de texte (AuxiText remplace Kate)"
+need_file /var/lib/live/config/sddm \
+  "live-config ecrirait /etc/sddm.conf (Session=plasma.desktop) et le live ouvrirait Plasma au lieu d'AuxiNux Shell"
 need_package auxinux-shell "pas d'AuxiNux Shell: le bureau par defaut (live et installe) serait introuvable"
 need_file /usr/share/wayland-sessions/auxinux.desktop "session AuxiNux Shell absente: ecran noir a l'ouverture de session"
 if grep -q '^DefaultSession=auxinux.desktop$' "${ROOTFS}/etc/sddm.conf.d/10-auxinux.conf" 2>/dev/null; then

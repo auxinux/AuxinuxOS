@@ -491,6 +491,14 @@ Session=auxinux
 Relogin=false
 EOF
 
+# live-config (composant 0085-sddm) ecrit au demarrage du live un
+# /etc/sddm.conf « [Autologin] Session=plasma.desktop » -- deduit de
+# x-session-manager -- et ce fichier principal l'emporte sur sddm.conf.d: le
+# live ouvrait Plasma malgre Session=auxinux ci-dessus (constate en VM le
+# 2026-10-10). Son fichier d'etat le marque comme deja execute.
+sudo install -d -m 0755 "${ROOTFS_DIR}/var/lib/live/config"
+sudo touch "${ROOTFS_DIR}/var/lib/live/config/sddm"
+
 # display-manager.service est un lien symbolique, pas un Alias: `systemctl
 # enable sddm` ne le cree pas dans un chroot. Sans lui, graphical.target n'a
 # aucun gestionnaire d'affichage a demarrer et le systeme s'arrete sur une
