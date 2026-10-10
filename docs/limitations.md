@@ -178,6 +178,22 @@ désactivé, `apt update`/`apt upgrade` et synchronisation du thème validés su
 un système installé avec les mêmes paquets. Non vérifié : le thème dans la
 session AuxiNux Shell. L'ISO 20261009-1 a été retirée.
 
+**Remplacée le 2026-10-10 par `auxinuxos-0.2.1-20261010-amd64.iso`**
+(commit `d4a6c5d`, édition `0.2.1+20261010`, 2 816 102 400 octets, sha256
+`41c37010…04cf701e5`) : **AuxiNux Shell devient le bureau par défaut**, dans le
+live comme sur le système installé ; KDE Plasma reste installé et se choisit
+dans le centre (Réglages, « Bureau ») ou à l'écran de connexion. Les machines
+déjà installées reçoivent AuxiNux Shell par la mise à jour mais gardent leur
+dernier bureau. Install NOW affiche et consigne désormais un arrêt imprévu de
+son interface (`/var/log/auxinux-installer-arret.log`). Paquets publiés :
+`auxi` et `auxinux-center` 0.2.5, `auxinuxos-release` 0.2.1+20261010.
+Validée en VM : installation Install NOW complète avec l'ISO en **clé USB**
+(pas de plantage après la confirmation), premier démarrage sous AuxiNux
+Shell, choix de KDE Plasma dans le centre puis présélectionné par SDDM ; live
+sous AuxiNux Shell, Calamares lancé depuis le bureau. Le plantage d'Install
+NOW signalé sur une vraie machine n'a pas été reproduit. L'ISO 20261009-2 a
+été retirée.
+
 Reste à valider : le démarrage par le chemin UEFI de secours (`EFI/BOOT`, le
 micrologiciel l'a bien choisi après suppression de l'entrée NVRAM, mais l'écran
 obtenu n'a pas pu être capturé), le démarrage sur un instantané depuis le
