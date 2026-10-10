@@ -171,6 +171,7 @@ pub enum Message {
     ToggleAptPolicy(bool),
     ToggleDebApps(bool),
     SetProfile(String),
+    SetDesktopSession(String),
     OpenSystemSettings,
     OpenUrl(String),
 
@@ -256,6 +257,8 @@ pub struct App {
     /// Installation d'applications DEB activee (`auxi set deb=true`).
     deb_apps: bool,
     profile: crate::profile::ProfileState,
+    /// Bureau ouvert a la connexion (AuxiNux Shell ou KDE Plasma).
+    desktop: crate::session::DesktopState,
 
     // Assistant de premier demarrage
     assistant_step: usize,
@@ -491,6 +494,7 @@ impl Application for App {
             apt_direct: crate::sources::apt_wrapper_enabled(),
             deb_apps: crate::sources::deb_apps_enabled(),
             profile: crate::profile::state(),
+            desktop: crate::session::state(),
             assistant_step: 0,
             selection: crate::assistant::Selection::default(),
             assistant_installing: false,
@@ -853,6 +857,10 @@ impl Application for App {
                 self.start();
                 background(move || crate::profile::set(&name), Message::Done)
             }
+            Message::SetDesktopSession(id) => {
+                self.start();
+                background(move || crate::session::set(&id), Message::Done)
+            }
             Message::OpenSystemSettings => {
                 crate::system::open_system_settings();
                 Task::none()
@@ -1016,6 +1024,7 @@ impl Application for App {
                 // annulee, la carte doit afficher le profil REEL, pas celui
                 // qu'on vient de cliquer.
                 self.profile = crate::profile::state();
+                self.desktop = crate::session::state();
                 self.toast = Some(result);
                 self.reload_current_page()
             }

@@ -5,7 +5,7 @@ Tout passe par QMP (clavier, souris absolue, captures) et par une console
 serie en socket UNIX journalisee dans serial.log.
 
   vm.py start NAME --iso ISO --disk DISK [--size 60G] [--bios] [--mem 6144]
-                   [--cpus 6] [--no-cdrom] [--vars FILE] [--net]
+                   [--cpus 6] [--no-cdrom] [--vars FILE] [--nonet] [--iso-usb]
   vm.py shot  NAME OUT.png
   vm.py key   NAME COMBO [COMBO...]      ex: ret tab ctrl-alt-t shift-tab
   vm.py type  NAME TEXTE                 disposition US
@@ -141,7 +141,13 @@ def start(name, argv):
     ap.add_argument("--nonet", action="store_true")
     ap.add_argument("--vga", default="virtio")
     ap.add_argument("--diskif", default="nvme")
+    # L'ISO en CLE USB (usb-storage), comme sur une vraie machine, et non en
+    # lecteur optique: le support de demarrage est alors un DISQUE que
+    # l'installateur doit savoir exclure. AUXINUX_VM_ISO_USB=1 fait de meme.
+    ap.add_argument("--iso-usb", action="store_true")
     a = ap.parse_args(argv)
+    if os.environ.get("AUXINUX_VM_ISO_USB") == "1":
+        a.iso_usb = True
     d = vmdir(name)
     os.makedirs(d, exist_ok=True)
     if not os.path.exists(a.disk):
@@ -180,7 +186,10 @@ def start(name, argv):
                  "-device", "ide-hd,drive=d0,bus=ide.0,bootindex=1"]
     else:
         args += ["-drive", "file=%s,if=virtio,%s" % (a.disk, dopts)]
-    if a.iso and not a.no_cdrom:
+    if a.iso and not a.no_cdrom and a.iso_usb:
+        args += ["-drive", "file=%s,format=raw,if=none,id=usb0,readonly=on" % a.iso,
+                 "-device", "usb-storage,drive=usb0,removable=on,bootindex=2"]
+    elif a.iso and not a.no_cdrom:
         # Le lecteur passe APRES le disque, comme sur un PC dont le disque
         # interne est le premier peripherique d'amorcage: le live demarre tant
         # que le disque est vide, puis le systeme installe demarre seul apres

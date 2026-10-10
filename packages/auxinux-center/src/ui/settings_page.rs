@@ -1,4 +1,5 @@
-//! Page REGLAGES: assistant de configuration, applications DEB, politique APT
+//! Page REGLAGES: bureau (AuxiNux Shell / KDE Plasma), assistant de
+//! configuration, applications DEB, politique APT
 //! maison, profil d'usage et acces aux reglages du bureau.
 //!
 //! Le Center ne reimplemente pas les reglages du bureau: il y renvoie.
@@ -122,6 +123,50 @@ pub fn view(app: &App) -> Element<'_, Message> {
         .padding(14)
         .width(iced::Length::Fill);
 
+    // --- Bureau ---------------------------------------------------------------
+    // AuxiNux Shell par defaut (decision d'aporler, 2026-10-10), KDE Plasma au
+    // choix. Comme les profils: le choix courant est affiche, non cliquable.
+    let mut desktop_col = widget::Column::new()
+        .spacing(8)
+        .push(widget::text::heading("Bureau"))
+        .push(widget::text::caption(format!(
+            "Ouvert à la connexion: {}. Le changement s'applique à la prochaine \
+             ouverture de session; l'écran de connexion permet aussi de choisir \
+             l'autre bureau pour une seule session.",
+            crate::session::label(&app.desktop.default)
+        )));
+    if let Some(running) = &app.desktop.running {
+        desktop_col = desktop_col.push(widget::text::caption(format!(
+            "Session en cours: {}.",
+            crate::session::label(running)
+        )));
+    }
+    for (id, label, description) in crate::session::DESKTOPS {
+        let installed = app.desktop.installed.iter().any(|i| i == id);
+        let button = if id == app.desktop.default.as_str() {
+            widget::button::suggested(label)
+        } else if installed {
+            widget::button::standard(label).on_press(Message::SetDesktopSession(id.to_string()))
+        } else {
+            widget::button::standard(label)
+        };
+        desktop_col = desktop_col.push(
+            widget::Row::new()
+                .spacing(12)
+                .align_y(iced::Alignment::Center)
+                .push(button)
+                .push(widget::text::caption(if installed {
+                    description.to_string()
+                } else {
+                    format!("{description} (non installé)")
+                })),
+        );
+    }
+    let desktop_choice = widget::container(desktop_col)
+        .class(cosmic::theme::Container::Card)
+        .padding(14)
+        .width(iced::Length::Fill);
+
     let assistant = widget::container(
         widget::Column::new()
             .spacing(8)
@@ -182,6 +227,7 @@ pub fn view(app: &App) -> Element<'_, Message> {
             widget::scrollable(
                 widget::Column::new()
                     .spacing(12)
+                    .push(desktop_choice)
                     .push(assistant)
                     .push(deb)
                     .push(apt)

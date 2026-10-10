@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+# Choisit le bureau ouvert a la connexion: AuxiNux Shell ou KDE Plasma.
+#
+# Lance par le centre de controle (Reglages, « Bureau ») via pkexec, sous
+# l'action ca.auxinux.center.desktop-session. Decision d'aporler
+# (2026-10-10): AuxiNux Shell par defaut, KDE Plasma au choix.
+#
+# SDDM n'a qu'une session par defaut (DefaultSession) et memorise la DERNIERE
+# session ouverte (/var/lib/sddm/state.conf, section [Last]). Ecrire seulement
+# DefaultSession ne changerait rien pour un compte qui a deja ouvert l'autre
+# bureau: les deux sont ecrits.
+#
+# Usage: auxinux-session-helper auxinux|plasma
+set -euo pipefail
+
+SESSIONS_DIR="/usr/share/wayland-sessions"
+CONF="/etc/sddm.conf.d/20-auxinux-session.conf"
+STATE="/var/lib/sddm/state.conf"
+# Banc d'essai (tests/test-session-helper.sh): honore UNIQUEMENT hors root.
+if [[ "${EUID}" -ne 0 && -n "${AUXINUX_SESSION_TEST_ROOT:-}" ]]; then
+  SESSIONS_DIR="${AUXINUX_SESSION_TEST_ROOT}/wayland-sessions"
+  CONF="${AUXINUX_SESSION_TEST_ROOT}/sddm.conf.d/20-auxinux-session.conf"
+  STATE="${AUXINUX_SESSION_TEST_ROOT}/sddm/state.conf"
+fi
+
+die() { echo "auxinux-session-helper: $*" >&2; exit 64; }
+
+[[ $# -eq 1 ]] || die "usage: auxinux-session-helper auxinux|plasma"
+case "$1" in
+  auxinux|plasma) id="$1" ;;
+  *) die "bureau inconnu: $1" ;;
+esac
+session="${SESSIONS_DIR}/${id}.desktop"
+[[ -f "${session}" ]] || die "bureau non installé: ${session} absent"
+
+install -d -m 0755 "$(dirname "${CONF}")"
+tmp="$(mktemp "${CONF}.XXXXXX")"
+cat >"${tmp}" <<CONF
+# Ecrit par le centre de controle AuxiNux (Reglages, « Bureau »).
+# Passe apres 10-auxinux.conf (paquet auxinuxos-release).
+[General]
+DefaultSession=${id}.desktop
+CONF
+chmod 0644 "${tmp}"
+mv -f "${tmp}" "${CONF}"
+
+# Derniere session memorisee par SDDM: remplacee, ou ajoutee. Le format de la
+# valeur a change selon les versions de SDDM (chemin complet ou nom de
+# fichier): on reprend celui qui est deja la.
+if [[ -f "${STATE}" ]]; then
+  value="${session}"
+  if grep -q '^Session=[^/]' "${STATE}"; then value="${id}.desktop"; fi
+  tmp="$(mktemp "${STATE}.XXXXXX")"
+  awk -v s="${value}" '
+    /^\[/ { if (inlast && !done) { print "Session=" s; done=1 } inlast = ($0 == "[Last]") ; if (inlast) seen=1; print; next }
+    inlast && /^Session=/ { if (!done) { print "Session=" s; done=1 } next }
+    { print }
+    END { if (inlast && !done) { print "Session=" s; done=1 }
+          if (!seen) { print ""; print "[Last]"; print "Session=" s } }
+  ' "${STATE}" >"${tmp}"
+  chmod --reference="${STATE}" "${tmp}" 2>/dev/null || chmod 0644 "${tmp}"
+  chown --reference="${STATE}" "${tmp}" 2>/dev/null || true
+  mv -f "${tmp}" "${STATE}"
+fi
+echo "Bureau par défaut: ${id}"

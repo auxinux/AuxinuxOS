@@ -16,6 +16,7 @@ mod model;
 mod progress;
 mod profile;
 mod recovery;
+mod session;
 mod sources;
 mod system;
 mod updates;

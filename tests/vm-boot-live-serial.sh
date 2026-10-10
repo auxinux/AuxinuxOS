@@ -26,4 +26,4 @@ sleep 5
 ./vm-driver.py send "$name" "auxinux\r"; sleep 15
 ./vm-driver.py send "$name" "sudo -i\r"; sleep 8
 ./vm-driver.py send "$name" "stty -echo; PS1=''; export PS1 TERM=dumb PAGER=cat SYSTEMD_PAGER=cat SYSTEMD_COLORS=0\r"; sleep 3
-./vm-driver.py sh "$name" "echo 900 > /sys/block/sr0/device/timeout; id -un; uname -r" --timeout 120
+./vm-driver.py sh "$name" "echo 900 > /sys/block/sr0/device/timeout 2>/dev/null; id -un; uname -r" --timeout 120

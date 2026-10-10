@@ -32,6 +32,17 @@ fn main() {
         eprintln!("auxinux-installer: doit être lancé en root / must run as root");
         std::process::exit(77);
     }
+    // Un arret imprevu doit se VOIR et laisser une trace. Le service envoie
+    // stderr au journal et relance aussitot une invite de connexion: une
+    // panique ou une erreur d'entree/sortie ressemblait a « ca plante direct »
+    // sans aucun message (signale par aporler sur une vraie machine, le
+    // 2026-10-10, juste apres la confirmation).
+    let precedent = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        ratatui::restore();
+        signaler(&format!("panique: {info}"));
+        precedent(info);
+    }));
     let mut terminal = ratatui::init();
     let resultat = App::new().executer(&mut terminal);
     ratatui::restore();
@@ -45,10 +56,39 @@ fn main() {
         }
         Ok(Sortie::Console) => {}
         Err(e) => {
-            eprintln!("auxinux-installer: {e}");
+            signaler(&format!("erreur d'entrée/sortie du terminal: {e}"));
             std::process::exit(1);
         }
     }
+}
+
+const JOURNAL_ARRET: &str = "/var/log/auxinux-installer-arret.log";
+
+/// Consigne l'arret imprevu, l'affiche sur la console et attend Entree: sans
+/// cette pause, l'invite de connexion relancee par le service l'effacait.
+/// L'installation en cours (moteur) a son propre journal.
+fn signaler(cause: &str) {
+    use std::io::{BufRead, Write};
+    let texte = format!(
+        "auxinux-installer s'est arrêté / stopped: {cause}\n\
+         Journal de l'installation / installation log: {}\n",
+        systeme::JOURNAL
+    );
+    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(JOURNAL_ARRET) {
+        let _ = f.write_all(texte.as_bytes());
+    }
+    eprintln!("{texte}");
+    let mut out = std::io::stdout();
+    let _ = write!(
+        out,
+        "\r\n\r\nL'installateur s'est arrêté de façon imprévue.\r\n{cause}\r\n\r\n\
+         Détails: {JOURNAL_ARRET} et {}\r\n\
+         Appuyez sur Entrée pour ouvrir une console (compte auxinux / auxinux).\r\n",
+        systeme::JOURNAL
+    );
+    let _ = out.flush();
+    let mut ligne = String::new();
+    let _ = std::io::stdin().lock().read_line(&mut ligne);
 }
 
 /// Redemarre ou eteint la machine, MEME si le support d'installation a deja

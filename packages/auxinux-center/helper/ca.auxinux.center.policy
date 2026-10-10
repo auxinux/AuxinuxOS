@@ -87,4 +87,21 @@
     </defaults>
     <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/auxinux/auxinux-update-helper</annotate>
   </action>
+  <!--
+    Choisir le bureau ouvert a la connexion (AuxiNux Shell ou KDE Plasma):
+    ecrit la session par defaut de SDDM pour toute la machine (2026-10-10).
+  -->
+  <action id="ca.auxinux.center.desktop-session">
+    <description>Choose the desktop</description>
+    <description xml:lang="fr">Choisir le bureau</description>
+    <message>Authentication is required to change the desktop opened at login</message>
+    <message xml:lang="fr">Une authentification est requise pour changer le bureau ouvert à la connexion</message>
+    <icon_name>preferences-desktop</icon_name>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/auxinux/auxinux-session-helper</annotate>
+  </action>
 </policyconfig>

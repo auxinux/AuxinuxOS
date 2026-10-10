@@ -127,3 +127,20 @@ fonts-noto
 fonts-noto-color-emoji
 fonts-hack
 fonts-open-sans
+
+# --- AuxiNux Shell: session de bureau PAR DEFAUT -----------------------------
+# Decision d'aporler (2026-10-10): AuxiNux Shell (labwc + GTK 4) est le bureau
+# par defaut, du live comme du systeme installe; KDE Plasma reste installe et
+# se choisit dans le centre de controle (Reglages) ou a l'ecran de connexion.
+# Paquet du depot AUXINUXOS/APPS (depot ~/AuxiNuxOS-Shell). L'image installe
+# sans les recommandations: celles qui servent sont nommees ici (liste de
+# docs/phase5.md du Shell).
+auxinux-shell
+gir1.2-wp-0.5
+wlsunset
+wlopm
+wlr-randr
+grim
+slurp
+wl-clipboard
+playerctl
