@@ -205,7 +205,11 @@ le centre, et leurs listes de paquets restent anciennes : le noyau d'essai
 7.3.0, le noyau 7.2.11 et l'édition 20261010 n'y apparaissent pas. Issue :
 `sudo auxi os upgrade` dans un terminal (sudo ne passe pas par polkit), puis
 fermer et rouvrir la session. Le centre nomme désormais cette commande quand
-l'autorisation échoue.
+l'autorisation échoue. Publié le 2026-10-22 : `auxi` et `auxinux-center`
+0.2.6, édition `0.2.1+20261022` (commit `f88b657`), sans nouvelle ISO (l'ISO
+20261010 contient déjà Shell 0.1.4). auxinux-office n'est plus dans l'index APPS
+depuis son retrait (`retired/` sur l'hôte de dépôt) : l'erreur de
+`publish-debs.sh` à ce sujet est attendue.
 
 Reste à valider : le démarrage par le chemin UEFI de secours (`EFI/BOOT`, le
 micrologiciel l'a bien choisi après suppression de l'entrée NVRAM, mais l'écran
