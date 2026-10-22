@@ -161,7 +161,7 @@ fn card<'a>(app: &'a App, index: usize, entry: &'a AppEntry) -> Element<'a, Mess
             .push(info)
             .push(actions),
     )
-    .class(cosmic::theme::Container::Card)
+    .class(super::apparence::carte())
     .padding(12)
     .width(iced::Length::Fill)
     .into()

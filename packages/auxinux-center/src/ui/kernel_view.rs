@@ -62,7 +62,7 @@ fn action(app: &App, message: Message) -> Option<Message> {
 
 fn card<'a>(content: impl Into<Element<'a, Message>>) -> Element<'a, Message> {
     widget::container(content)
-        .class(cosmic::theme::Container::Card)
+        .class(super::apparence::carte())
         .padding(12)
         .width(iced::Length::Fill)
         .into()

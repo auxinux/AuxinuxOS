@@ -97,7 +97,7 @@ pub fn view(app: &App) -> Element<'_, Message> {
 
 fn card<'a>(content: impl Into<Element<'a, Message>>) -> Element<'a, Message> {
     widget::container(content)
-        .class(cosmic::theme::Container::Card)
+        .class(super::apparence::carte())
         .padding(16)
         .width(iced::Length::Fill)
         .into()

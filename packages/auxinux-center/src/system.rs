@@ -160,7 +160,7 @@ fn icon_dirs() -> Vec<std::path::PathBuf> {
 }
 
 /// Repertoire personnel XDG puis repertoires systeme, dans l'ordre de priorite.
-fn xdg_dirs(home_var: &str, home_default: &str, sys_var: &str, sys_default: &str) -> Vec<std::path::PathBuf> {
+pub(crate) fn xdg_dirs(home_var: &str, home_default: &str, sys_var: &str, sys_default: &str) -> Vec<std::path::PathBuf> {
     let mut dirs = Vec::new();
     match std::env::var_os(home_var).filter(|v| !v.is_empty()) {
         Some(dir) => dirs.push(std::path::PathBuf::from(dir)),

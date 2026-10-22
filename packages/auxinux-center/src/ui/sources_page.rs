@@ -67,7 +67,7 @@ pub fn view(app: &App) -> Element<'_, Message> {
                             .push(info)
                             .push(actions),
                     )
-                    .class(cosmic::theme::Container::Card)
+                    .class(super::apparence::carte())
                     .padding(12)
                     .width(iced::Length::Fill),
                 );
@@ -107,7 +107,7 @@ pub fn view(app: &App) -> Element<'_, Message> {
                             )
                             .push(action),
                     )
-                    .class(cosmic::theme::Container::Card)
+                    .class(super::apparence::carte())
                     .padding(12)
                     .width(iced::Length::Fill),
                 );
@@ -136,7 +136,7 @@ pub fn view(app: &App) -> Element<'_, Message> {
                                 move |enabled| Message::ToggleRemote(name.clone(), enabled)
                             })),
                     )
-                    .class(cosmic::theme::Container::Card)
+                    .class(super::apparence::carte())
                     .padding(12)
                     .width(iced::Length::Fill),
                 );
@@ -189,7 +189,7 @@ fn custom_form(app: &App) -> Element<'_, Message> {
                     .on_press(Message::AddCustomSource),
             ),
     )
-    .class(cosmic::theme::Container::Card)
+    .class(super::apparence::carte())
     .padding(14)
     .width(iced::Length::Fill)
     .into()

@@ -135,7 +135,7 @@ fn temporary_card(app: &App, number: u32) -> Element<'_, Message> {
             ))
             .push(action),
     )
-    .class(cosmic::theme::Container::Card)
+    .class(super::apparence::carte())
     .padding(14)
     .width(iced::Length::Fill)
     .into()
@@ -169,7 +169,7 @@ fn create_card(app: &App) -> Element<'_, Message> {
                     ),
             ),
     )
-    .class(cosmic::theme::Container::Card)
+    .class(super::apparence::carte())
     .padding(14)
     .width(iced::Length::Fill)
     .into()
@@ -232,7 +232,7 @@ fn point_card(app: &App, point: Point) -> Element<'_, Message> {
     };
 
     widget::container(content)
-    .class(cosmic::theme::Container::Card)
+    .class(super::apparence::carte())
     .padding(12)
     .width(iced::Length::Fill)
     .into()

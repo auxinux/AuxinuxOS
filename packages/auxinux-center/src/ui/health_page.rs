@@ -67,7 +67,7 @@ fn summary(report: &crate::model::HealthReport) -> Element<'_, Message> {
                     .push(widget::text::caption(detail)),
             ),
     )
-    .class(cosmic::theme::Container::Card)
+    .class(super::apparence::carte())
     .padding(16)
     .width(iced::Length::Fill)
     .into()
@@ -91,7 +91,7 @@ fn check_card(c: &HealthCheck) -> Element<'_, Message> {
             .push(widget::icon::from_name(severity_icon(c.severity)).size(20))
             .push(col),
     )
-    .class(cosmic::theme::Container::Card)
+    .class(super::apparence::carte())
     .padding(12)
     .width(iced::Length::Fill)
     .into()
@@ -127,7 +127,7 @@ fn hardware_card(system: &crate::model::SystemReport) -> Element<'_, Message> {
     }
 
     widget::container(col)
-        .class(cosmic::theme::Container::Card)
+        .class(super::apparence::carte())
         .padding(12)
         .width(iced::Length::Fill)
         .into()
