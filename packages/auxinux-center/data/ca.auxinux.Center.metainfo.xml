@@ -38,6 +38,18 @@
   </developer>
   <content_rating type="oars-1.1" />
   <releases>
+    <release version="0.2.6" date="2026-10-22">
+      <description>
+        <p>
+          When an administrator authorization fails, the message names the
+          terminal command that still updates the system: sudo auxi os upgrade.
+        </p>
+        <p xml:lang="fr">
+          Quand une autorisation administrateur échoue, le message nomme la
+          commande qui met encore le système à jour : sudo auxi os upgrade.
+        </p>
+      </description>
+    </release>
     <release version="0.2.5" date="2026-10-10">
       <description>
         <p>
