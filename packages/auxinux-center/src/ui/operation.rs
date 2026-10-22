@@ -201,7 +201,7 @@ pub fn view(op: &Operation) -> Element<'_, Message> {
     }
 
     widget::container(column)
-        .class(cosmic::theme::Container::Card)
+        .class(super::apparence::carte())
         .padding(12)
         .width(iced::Length::Fill)
         .into()

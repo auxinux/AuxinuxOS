@@ -68,7 +68,7 @@ pub fn view(app: &App) -> Element<'_, Message> {
                                     .on_press_maybe(idle.then_some(Message::UpdateOne(index))),
                             ),
                     )
-                    .class(cosmic::theme::Container::Card)
+                    .class(super::apparence::carte())
                     .padding(12)
                     .width(iced::Length::Fill),
                 );
@@ -97,7 +97,7 @@ pub fn view(app: &App) -> Element<'_, Message> {
                     .on_press_maybe(idle.then_some(Message::UpgradeAll)),
             ),
     )
-    .class(cosmic::theme::Container::Card)
+    .class(super::apparence::carte())
     .padding(14)
     .width(iced::Length::Fill);
 
@@ -138,7 +138,7 @@ fn os_update_card<'a>(
          l'onglet Restauration permet de revenir à la version actuelle.",
     ));
     widget::container(col)
-        .class(cosmic::theme::Container::Card)
+        .class(super::apparence::carte())
         .padding(14)
         .width(iced::Length::Fill)
         .into()

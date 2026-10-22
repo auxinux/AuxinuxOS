@@ -13,9 +13,13 @@
 //! du theme (clair/sombre, accent), se reduit a un binaire, et demarre sans
 //! charger de moteur QML.
 //!
+//! Dans la session AuxiNux Shell, le Center prend l'apparence du shell
+//! (couleurs, accent, police, barre de titre de labwc): voir crate::apparence.
+//!
 //! Organisation: un `nav_bar` a gauche, une page par section. Chaque page vit
 //! dans son propre module et n'expose qu'une fonction `view`.
 
+mod apparence;
 mod apps_page;
 mod assistant_page;
 mod health_page;
@@ -102,6 +106,8 @@ impl<T> Loading<T> {
 pub enum Message {
     // Navigation
     Page(Page),
+    /// Verifier si le shell a change de theme (session AuxiNux).
+    Apparence,
 
     // Applications
     SearchInput(String),
@@ -277,6 +283,11 @@ pub struct App {
     toast: Option<ActionResult>,
     /// Nombre d'operations longues en cours, pour l'indicateur global.
     busy: usize,
+    /// Session AuxiNux: empreinte des kdeglobals lus, pour suivre un
+    /// changement de theme du shell (None hors de cette session).
+    apparence: Option<Vec<Option<std::time::SystemTime>>>,
+    /// Police du shell, reposee a chaque affichage (voir view()).
+    police: Option<String>,
 }
 
 impl App {
@@ -439,7 +450,15 @@ impl Application for App {
         &mut self.core
     }
 
-    fn init(core: Core, ouverture: Self::Flags) -> (Self, Task<Self::Message>) {
+    fn init(mut core: Core, ouverture: Self::Flags) -> (Self, Task<Self::Message>) {
+        let apparence_lue = crate::apparence::lire();
+        let apparence_suivie = apparence_lue.is_some();
+        if apparence_suivie {
+            // labwc dessine la barre de titre et ses boutons: l'en-tete de
+            // libcosmic ne serait plus qu'une bande vide sous celle-ci.
+            core.window.show_headerbar = false;
+            core.window.sharp_corners = true;
+        }
         let mut nav = nav_bar::Model::default();
         for (title, icon, page) in [
             // Le second nom de chaque ligne est celui que porte Breeze, qui
@@ -502,6 +521,9 @@ impl Application for App {
             operation: None,
             toast: None,
             busy: 0,
+            apparence: apparence_suivie
+                .then(|| crate::apparence::empreinte(&crate::apparence::fichiers())),
+            police: apparence_lue.and_then(|a| a.police),
         };
 
         let task = match ouverture {
@@ -532,6 +554,20 @@ impl Application for App {
 
     fn update(&mut self, message: Message) -> Task<Self::Message> {
         match message {
+            Message::Apparence => {
+                let fichiers = crate::apparence::fichiers();
+                let empreinte = crate::apparence::empreinte(&fichiers);
+                if self.apparence.as_ref() == Some(&empreinte) {
+                    return Task::none();
+                }
+                self.apparence = Some(empreinte);
+                if let Some(a) = crate::apparence::lire() {
+                    self.police = a.police.clone();
+                    apparence::retenir_carte(&a);
+                    return cosmic::command::set_theme(apparence::theme(&a));
+                }
+                Task::none()
+            }
             Message::Page(page) => {
                 self.page = page;
                 self.toast = None;
@@ -1044,7 +1080,24 @@ impl Application for App {
         }
     }
 
+    fn subscription(&self) -> cosmic::iced::Subscription<Self::Message> {
+        // Une lecture de dates toutes les deux secondes, fenetre ouverte et
+        // dans la session AuxiNux seulement: le clair/sombre automatique du
+        // shell bascule au coucher du soleil, sans autre signal.
+        if self.apparence.is_some() {
+            cosmic::iced::time::every(std::time::Duration::from_secs(2)).map(|_| Message::Apparence)
+        } else {
+            cosmic::iced::Subscription::none()
+        }
+    }
+
     fn view(&self) -> Element<'_, Self::Message> {
+        // libcosmic recharge sa configuration (police Open Sans comprise)
+        // juste apres le lancement, apres notre reglage: on la repose avant
+        // de dessiner. Une simple lecture quand rien n'a change.
+        if let Some(famille) = &self.police {
+            apparence::garder_police(famille);
+        }
         let content = match self.page {
             Page::Apps => apps_page::view(self),
             Page::Updates => updates_page::view(self),
@@ -1107,7 +1160,7 @@ pub mod widgets {
                         .on_press(Message::DismissToast),
                 ),
         )
-        .class(cosmic::theme::Container::Card)
+        .class(apparence::carte())
         .padding(12)
         .width(iced::Length::Fill)
         .into()
@@ -1152,7 +1205,7 @@ pub mod widgets {
                     "Opération en cours…".to_string()
                 })),
         )
-        .class(cosmic::theme::Container::Card)
+        .class(apparence::carte())
         .padding(10)
         .width(iced::Length::Fill)
         .into()
@@ -1238,7 +1291,21 @@ pub fn icon(name: &'static str, fallbacks: &[&'static str]) -> cosmic::widget::i
 }
 
 pub fn run(ouverture: Ouverture) -> Result<(), Box<dyn std::error::Error>> {
+    // Session AuxiNux Shell: apparence du shell et barre de titre de labwc
+    // (voir crate::apparence). La police est posee AVANT Settings::default(),
+    // qui la lit.
+    let apparence = crate::apparence::lire();
+    if let Some(a) = &apparence {
+        apparence::appliquer_police(a);
+        apparence::retenir_carte(a);
+    }
     let mut settings = Settings::default();
+    if let Some(a) = &apparence {
+        settings = settings
+            .theme(apparence::theme(a))
+            .client_decorations(false)
+            .transparent(false);
+    }
     // Voir system::icon_theme(): sans cela, le theme « Cosmic », absent sous
     // Plasma, et une fenetre sans aucune icone -- boutons reduire, agrandir et
     // fermer compris.

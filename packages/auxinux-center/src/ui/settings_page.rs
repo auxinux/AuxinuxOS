@@ -44,7 +44,7 @@ pub fn view(app: &App) -> Element<'_, Message> {
                     ),
             ),
     )
-    .class(cosmic::theme::Container::Card)
+    .class(super::apparence::carte())
     .padding(14)
     .width(iced::Length::Fill);
 
@@ -76,7 +76,7 @@ pub fn view(app: &App) -> Element<'_, Message> {
                     .push(widget::toggler(app.deb_apps).on_toggle(Message::ToggleDebApps)),
             ),
     )
-    .class(cosmic::theme::Container::Card)
+    .class(super::apparence::carte())
     .padding(14)
     .width(iced::Length::Fill);
 
@@ -119,7 +119,7 @@ pub fn view(app: &App) -> Element<'_, Message> {
     }
 
     let profile = widget::container(profile_col)
-        .class(cosmic::theme::Container::Card)
+        .class(super::apparence::carte())
         .padding(14)
         .width(iced::Length::Fill);
 
@@ -163,7 +163,7 @@ pub fn view(app: &App) -> Element<'_, Message> {
         );
     }
     let desktop_choice = widget::container(desktop_col)
-        .class(cosmic::theme::Container::Card)
+        .class(super::apparence::carte())
         .padding(14)
         .width(iced::Length::Fill);
 
@@ -181,7 +181,7 @@ pub fn view(app: &App) -> Element<'_, Message> {
                     .on_press(Message::AssistantRestart),
             ),
     )
-    .class(cosmic::theme::Container::Card)
+    .class(super::apparence::carte())
     .padding(14)
     .width(iced::Length::Fill);
 
@@ -198,7 +198,7 @@ pub fn view(app: &App) -> Element<'_, Message> {
                     .on_press(Message::OpenSystemSettings),
             ),
     )
-    .class(cosmic::theme::Container::Card)
+    .class(super::apparence::carte())
     .padding(14)
     .width(iced::Length::Fill);
 
@@ -216,7 +216,7 @@ pub fn view(app: &App) -> Element<'_, Message> {
                     .on_press(Message::OpenUrl("https://os.auxinux.ca/auxinuxos".into())),
             ),
     )
-    .class(cosmic::theme::Container::Card)
+    .class(super::apparence::carte())
     .padding(14)
     .width(iced::Length::Fill);
 

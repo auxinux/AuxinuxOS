@@ -7,6 +7,7 @@
 //! --no-default-features` valide toute la logique sur une machine depourvue de
 //! Wayland, libxkbcommon et pile graphique.
 
+mod apparence;
 mod apps;
 mod assistant;
 mod cli;
