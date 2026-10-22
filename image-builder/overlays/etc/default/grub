@@ -22,8 +22,11 @@ GRUB_CMDLINE_LINUX="pci=noaer pcie_aspm=off"
 # jamais de demarrer »: l'utilisateur n'avait aucun message a lire, aucune
 # console, aucun moyen de savoir que le systeme etait en fait demarre.
 #
-# Tant que l'image n'embarque pas plymouth, un demarrage bavard est ce qui
-# sert le mieux l'utilisateur: il voit ou ca bloque et peut le rapporter.
+# Depuis la 0.3.0, l'image embarque plymouth et le theme auxinux (logo + roue
+# orange): `quiet splash` vient de /etc/default/grub.d/50-auxinux-splash.cfg
+# (paquet auxinuxos-release, lu APRES ce fichier), pour que les machines deja
+# installees le recoivent aussi. Ici on laisse vide: les entrees de secours
+# (« options avancees ») restent bavardes, et Echap montre le texte.
 GRUB_CMDLINE_LINUX_DEFAULT=""
 
 GRUB_TERMINAL_OUTPUT=gfxterm

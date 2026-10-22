@@ -156,7 +156,11 @@ def start(name, argv):
     # invite, sature par l'emulation, ne le relance pas a temps -- constate le
     # 2026-09-29 en pleine installation. Artefact de TCG, pas du systeme teste.
     args = ["qemu-system-x86_64", "-machine", "q35", "-global", "ICH9-LPC.noreboot=true",
-            "-accel", "tcg,thread=multi",
+            # KVM quand l'hote l'offre (executeurs GitHub Actions): dix fois
+            # plus vite que TCG, seul choix sur virtua-dev (conteneur sans
+            # /dev/kvm). AUXINUX_VM_ACCEL force l'un ou l'autre.
+            "-accel", os.environ.get("AUXINUX_VM_ACCEL") or
+                      ("kvm" if os.access("/dev/kvm", os.R_OK | os.W_OK) else "tcg,thread=multi"),
             "-cpu", "max", "-m", a.mem, "-smp", a.cpus,
             "-display", "none",
             "-qmp", "unix:%s/qmp.sock,server=on,wait=off" % d,

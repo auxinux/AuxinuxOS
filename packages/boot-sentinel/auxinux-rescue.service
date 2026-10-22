@@ -5,6 +5,8 @@ Description=AuxiNuxOS - console de secours et restauration
 Documentation=file:/usr/share/doc/auxinux/boot-sentinel.md
 ConditionPathExists=/run/auxinux/rescue
 After=auxinux-boot-arm.service systemd-user-sessions.service
+# Le logo de demarrage (Plymouth) cacherait le menu de secours.
+After=plymouth-quit-wait.service
 # On prend tty1 a la place de la console de connexion texte: sinon les deux
 # ecrivent sur le meme terminal et le menu devient illisible.
 Conflicts=getty@tty1.service
@@ -14,6 +16,7 @@ After=getty@tty1.service
 # Type=idle: on laisse les messages de demarrage finir de defiler avant
 # d'afficher un menu, sinon les premieres lignes du menu sont noyees.
 Type=idle
+ExecStartPre=-/bin/plymouth quit
 ExecStart=/usr/lib/auxinux/auxinux-rescue
 StandardInput=tty-force
 StandardOutput=tty

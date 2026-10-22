@@ -468,6 +468,16 @@ virtuelle** :
   l’image — et `quiet` masquait tout, y compris la raison d’un démarrage qui
   n’aboutit pas. `check-rootfs.sh` refuse désormais une image qui les
   réintroduirait sans plymouth.
+- **0.3.0 (2026-10-22)** : `quiet splash` revient, AVEC Plymouth et le thème
+  `auxinux` (logo + roue orange), à la demande d’aporler (le texte de la
+  console fait peur à qui arrive de Windows). Il vient du seul fichier
+  `/etc/default/grub.d/50-auxinux-splash.cfg` (paquet `auxinuxos-release`, donc
+  aussi sur les machines mises à jour) ; `/etc/default/grub` et `grubcfg.conf`
+  restent vides, et l’entrée « options avancées » de GRUB reste bavarde, comme
+  l’entrée « graphiques de secours » du live. Échap montre le texte.
+  `check-rootfs.sh` exige plymouth, le thème par défaut et sa présence dans
+  l’initramfs. La console de secours et Install NOW quittent Plymouth avant
+  d’occuper tty1 (`plymouth quit`, `After=plymouth-quit-wait.service`).
 - Les montages non essentiels (`/.snapshots`, `/var/lib/flatpak`, `/var/tmp`,
   `/var/cache`, `/var/log`, `/swap` et l’espace d’échange) passent en `nofail`
   au nettoyage post-installation. Sans cela, un seul d’entre eux absent faisait

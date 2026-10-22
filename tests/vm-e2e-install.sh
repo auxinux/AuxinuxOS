@@ -16,8 +16,8 @@ wait_big() { # capture NOM seuil_octets delai_max_s
   return 1
 }
 
-rm -f /mnt/build/e2e/$name-disk.raw; rm -rf "$B"
-./vm-boot-live-serial.sh "$name" "$iso" /mnt/build/e2e/$name-disk.raw || { log "ECHEC live"; exit 1; }
+rm -f ${E2E_DISK_DIR:-/mnt/build/e2e}/$name-disk.raw; rm -rf "$B"
+./vm-boot-live-serial.sh "$name" "$iso" ${E2E_DISK_DIR:-/mnt/build/e2e}/$name-disk.raw || { log "ECHEC live"; exit 1; }
 $V sh "$name" "dmesg -n 1" --timeout 60 >/dev/null
 log "live pret, attente du bureau"
 wait_big w 200000 1200 || { log "ECHEC bureau live"; exit 1; }

@@ -35,13 +35,13 @@ build() {
 }
 
 echo "== 1. Edition du jour, seconde ISO du meme jour =="
-build "0.2.1+20261009.2" "${WORK}/out"
+build "0.3.0+20261009.2" "${WORK}/out"
 check "construit" "$?" "0"
-DEB="${WORK}/out/auxinuxos-release_0.2.1+20261009.2_all.deb"
+DEB="${WORK}/out/auxinuxos-release_0.3.0+20261009.2_all.deb"
 check "paquet d'edition present" "$([[ -f ${DEB} ]] && echo oui)" "oui"
 field() { dpkg-deb -f "${DEB}" "$1"; }
-check "version" "$(field Version)" "0.2.1+20261009.2"
-check "resume lisible" "$(field Description | head -n1)" "AuxiNux OS 0.2.1, édition du 2026-10-09 (2)"
+check "version" "$(field Version)" "0.3.0+20261009.2"
+check "resume lisible" "$(field Description | head -n1)" "AuxiNux OS 0.3.0, édition du 2026-10-09 (2)"
 check "nouveautes = description longue" \
   "$(dpkg-deb -f "${DEB}" Description | tail -n +2 | grep -c 'Programmes Windows')" "1"
 check "tire auxi et le centre de la livraison" \
@@ -51,6 +51,22 @@ check "os-release porte l'edition" \
   "$(dpkg-deb --fsys-tarfile "${DEB}" | tar -xO ./usr/lib/os-release | grep -c '^BUILD_ID=20261009.2$')" "1"
 check "os-release dit toujours AuxiNux OS" \
   "$(dpkg-deb --fsys-tarfile "${DEB}" | tar -xO ./usr/lib/os-release | grep -c '^PRETTY_NAME="AuxiNux OS ')" "1"
+check "os-release nomme la variante pour AuxiPak" \
+  "$(dpkg-deb --fsys-tarfile "${DEB}" | tar -xO ./usr/lib/os-release | grep -c '^VARIANT_ID=auxinuxos$')" "1"
+for dep in "auxinux-shell (>= 0.1.6)" auxioffice auxitext "auxipak (>= 1.0.10)" plymouth; do
+  check "tire ${dep}" "$(field Depends | tr ',' '\n' | sed 's/^ *//' | grep -cxF "${dep}")" "1"
+done
+
+echo "== 1 bis. Ecran de demarrage (0.3.0) =="
+check "quiet splash par grub.d" \
+  "$(dpkg-deb --fsys-tarfile "${DEB}" | tar -xO ./etc/default/grub.d/50-auxinux-splash.cfg \
+     | grep -c '^GRUB_CMDLINE_LINUX_DEFAULT="quiet splash ')" "1"
+for f in auxinux.plymouth auxinux.script logo.png spinner.png entry.png bullet.png; do
+  check "theme Plymouth: ${f}" \
+    "$(dpkg-deb -c "${DEB}" | awk '{print $6}' | grep -cx "./usr/share/plymouth/themes/auxinux/${f}")" "1"
+done
+check "postinst choisit le theme auxinux" \
+  "$(dpkg-deb --ctrl-tarfile "${DEB}" | tar -xO ./postinst | grep -c 'plymouth-set-default-theme auxinux')" "1"
 
 echo "== 2. Reglages du systeme installe: dans le paquet, en conffiles =="
 contents="$(dpkg-deb -c "${DEB}" | awk '{print $6}')"
@@ -94,7 +110,7 @@ CDEB="${WORK}/out/auxinux-center_${VERSION}_amd64.deb"
 check "plus de /etc/xdg/kiorc dans auxinux-center" "$(dpkg-deb -c "${CDEB}" | grep -c 'etc/xdg/kiorc')" "0"
 
 echo "== 4. Editions refusees =="
-for bad in "0.3.0+20261009" "0.2.1" "0.2.1+2026109" "0.2.1+20261009-2"; do
+for bad in "0.2.1+20261009" "0.3.0" "0.3.0+2026109" "0.3.0+20261009-2"; do
   build "${bad}" "${WORK}/bad"
   check "« ${bad} » refusee" "$?" "65"
 done

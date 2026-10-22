@@ -9,8 +9,8 @@
 //! suggerees, outils de vie privee. Il se relance a tout moment depuis le
 //! centre de controle.
 //!
-//! La bureautique n'est plus une question (2026-10-04): AuxiNux Office est
-//! inclus dans l'image. LibreOffice reste installable depuis la page
+//! La bureautique n'est plus une question (2026-10-04): AuxiOffice (AuxiNux
+//! Office avant la 0.3.0) est inclus dans l'image. LibreOffice reste installable depuis la page
 //! Applications.
 //!
 //! Flatpak d'abord (arbitrage du meme jour): versions recentes, isolees,
@@ -402,7 +402,7 @@ mod tests {
         }
         // Proposee mais decochee.
         assert!(!ids.contains(&"com.github.xournalpp.xournalpp"));
-        // AuxiNux Office est dans l'image: plus de suite bureautique a installer.
+        // AuxiOffice est dans l'image: plus de suite bureautique a installer.
         assert!(!ids.contains(&"org.libreoffice.LibreOffice"));
     }
 

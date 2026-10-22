@@ -1,0 +1,85 @@
+# Theme Plymouth d'AuxiNux OS (0.3.0): logo au centre, roue orange dessous.
+# Meme ecran que l'ouverture d'AuxiNux Shell (fond #151b23, accent #ef8a12),
+# pour que le demarrage et la session s'enchainent sans changer de decor.
+# Images: packages/release/plymouth/make-theme-images.py.
+
+Window.SetBackgroundTopColor(0.082, 0.106, 0.137);    # #151b23
+Window.SetBackgroundBottomColor(0.020, 0.031, 0.047); # #05080c
+
+screen_w = Window.GetWidth();
+screen_h = Window.GetHeight();
+screen_x = Window.GetX();
+screen_y = Window.GetY();
+
+logo.image = Image("logo.png");
+logo.sprite = Sprite(logo.image);
+logo.x = screen_x + screen_w / 2 - logo.image.GetWidth() / 2;
+logo.y = screen_y + screen_h / 2 - logo.image.GetHeight() / 2 - 40;
+logo.sprite.SetPosition(logo.x, logo.y, 10);
+
+spinner.image = Image("spinner.png");
+spinner.sprite = Sprite();
+spinner.cx = screen_x + screen_w / 2;
+spinner.cy = logo.y + logo.image.GetHeight() + 60;
+spinner.angle = 0;
+
+fun refresh_callback() {
+  # ~1 tour par seconde a 50 images/s.
+  spinner.angle += 2 * 3.14159 / 50;
+  if (spinner.angle > 2 * 3.14159) spinner.angle -= 2 * 3.14159;
+  rotated = spinner.image.Rotate(spinner.angle);
+  spinner.sprite.SetImage(rotated);
+  spinner.sprite.SetPosition(spinner.cx - rotated.GetWidth() / 2,
+                             spinner.cy - rotated.GetHeight() / 2, 20);
+}
+Plymouth.SetRefreshFunction(refresh_callback);
+
+# --- Mot de passe (secours LUKS) ---------------------------------------------
+# Normalement GRUB demande la phrase de passe et l'initramfs deverrouille avec
+# le fichier-cle: cette boite n'apparait que si le fichier-cle a echoue.
+entry.image = Image("entry.png");
+entry.sprite = Sprite();
+bullet.image = Image("bullet.png");
+bullets = [];
+prompt.sprite = Sprite();
+
+fun hide_password() {
+  entry.sprite.SetOpacity(0);
+  prompt.sprite.SetOpacity(0);
+  for (i = 0; bullets[i]; i++) bullets[i].SetOpacity(0);
+  spinner.sprite.SetOpacity(1);
+}
+
+fun display_password_callback(text, count) {
+  spinner.sprite.SetOpacity(0);
+  if (!text) text = "Phrase de passe du disque";
+  prompt.image = Image.Text(text, 1, 1, 1);
+  prompt.sprite.SetImage(prompt.image);
+  prompt.sprite.SetPosition(screen_x + screen_w / 2 - prompt.image.GetWidth() / 2, spinner.cy - 40, 30);
+  prompt.sprite.SetOpacity(1);
+  ex = screen_x + screen_w / 2 - entry.image.GetWidth() / 2;
+  ey = spinner.cy - entry.image.GetHeight() / 2 + 10;
+  entry.sprite.SetImage(entry.image);
+  entry.sprite.SetPosition(ex, ey, 30);
+  entry.sprite.SetOpacity(1);
+  for (i = 0; bullets[i]; i++) bullets[i].SetOpacity(0);
+  for (i = 0; i < count && i < 24; i++) {
+    if (!bullets[i]) {
+      bullets[i] = Sprite(bullet.image);
+    }
+    bullets[i].SetPosition(ex + 14 + i * 12, ey + entry.image.GetHeight() / 2 - bullet.image.GetHeight() / 2, 40);
+    bullets[i].SetOpacity(1);
+  }
+}
+Plymouth.SetDisplayPasswordFunction(display_password_callback);
+Plymouth.SetDisplayNormalFunction(hide_password);
+
+# --- Messages (ex. verification du disque) -----------------------------------
+message.sprite = Sprite();
+fun message_callback(text) {
+  message.image = Image.Text(text, 0.8, 0.8, 0.8);
+  message.sprite.SetImage(message.image);
+  message.sprite.SetPosition(screen_x + screen_w / 2 - message.image.GetWidth() / 2,
+                             screen_y + screen_h - 60, 30);
+}
+Plymouth.SetMessageFunction(message_callback);

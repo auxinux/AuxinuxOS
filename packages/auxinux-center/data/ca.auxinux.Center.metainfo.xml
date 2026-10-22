@@ -38,6 +38,18 @@
   </developer>
   <content_rating type="oars-1.1" />
   <releases>
+    <release version="0.2.8" date="2026-10-22">
+      <description>
+        <p>
+          AuxiNux OS 0.3.0: the welcome assistant names AuxiOffice, AuxiText
+          and AuxiPak, now included in the system.
+        </p>
+        <p xml:lang="fr">
+          AuxiNux OS 0.3.0 : l'assistant d'accueil nomme AuxiOffice, AuxiText
+          et AuxiPak, désormais inclus dans le système.
+        </p>
+      </description>
+    </release>
     <release version="0.2.7" date="2026-10-22">
       <description>
         <p>

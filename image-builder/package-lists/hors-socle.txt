@@ -23,7 +23,7 @@ onionshare
 metadata-cleaner
 bleachbit
 
-# Editeur de texte: remplace par AuxiText (AuxiNux Office), 2026-10-04.
+# Editeur de texte: remplace par AuxiText (paquet auxitext, AuxiOffice), 2026-10-04.
 kate
 
 # Bureautique

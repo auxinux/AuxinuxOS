@@ -1404,7 +1404,7 @@ run_install() {
   elif [[ "${MODE}" == "deb" ]]; then
     # --deb explicite: un paquet NOUVEAU est refuse tant que l'installation DEB
     # n'est pas activee. Un paquet deja installe passe: c'est ainsi que le
-    # centre met a jour une application DEB (AuxiNux Office), et pkexec ne
+    # centre met a jour une application DEB (AuxiOffice), et pkexec ne
     # transmet aucune variable d'environnement. L'assistant de premier
     # demarrage, qui installe ses propres paquets (Brave, depuis son depot),
     # passe AUXI_DEB_SYSTEME=1.

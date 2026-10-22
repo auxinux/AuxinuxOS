@@ -1,0 +1,75 @@
+# Tests et paquets d'AuxiNux OS sur les executeurs GitHub (plus rapides que
+# virtua-dev, 2 vCPU: demande d'aporler, 2026-10-22).
+#
+# - tests: toutes les suites tests/test-*.sh et les tests Rust du centre
+#   (logique seule, sans libcosmic).
+# - debs: auxi, auxinux-center (interface complete) et auxinuxos-release,
+#   construits dans Debian 13 (la glibc de la cible), en artefact. La
+#   PUBLICATION reste faite depuis virtua-repo (cle de signature du depot),
+#   jamais d'ici.
+name: CI
+
+on:
+  push:
+    branches: [main, "feature/**", "fix/**"]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      release:
+        description: "Edition (AUXINUX_RELEASE), ex. 0.3.0+20261023 ; vide = date du jour"
+        required: false
+
+jobs:
+  tests:
+    name: Tests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Suites shell
+        run: |
+          fail=0
+          for t in tests/test-*.sh; do
+            if bash "$t" >"/tmp/$(basename "$t").log" 2>&1; then
+              echo "OK     $t"
+            else
+              echo "ECHEC  $t"; tail -n 40 "/tmp/$(basename "$t").log"; fail=1
+            fi
+          done
+          exit "$fail"
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: packages/auxinux-center
+      - name: Tests Rust du centre (logique)
+        working-directory: packages/auxinux-center
+        run: cargo test --no-default-features --features tui
+
+  debs:
+    name: Paquets (Debian 13)
+    runs-on: ubuntu-24.04
+    container: debian:trixie
+    steps:
+      - name: Outils de construction
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            ca-certificates curl git build-essential pkg-config dpkg-dev \
+            libxkbcommon-dev libwayland-dev libudev-dev libinput-dev libssl-dev
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: packages/auxinux-center
+      - name: Centre (interface complete)
+        run: packages/auxinux-center/build.sh
+      - name: Paquets
+        env:
+          AUXINUX_RELEASE: ${{ inputs.release }}
+        run: |
+          [ -n "${AUXINUX_RELEASE}" ] || unset AUXINUX_RELEASE
+          packages/build-debs.sh --out out/debs
+          cd out/debs && sha256sum *.deb | tee SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: auxinuxos-debs
+          path: out/debs/
