@@ -10,7 +10,7 @@
 # La suite est geree par le script de publication d'AuxiNux Office, sur l'hote
 # de depot: ~/auxinuxos-apps-pub/publish-repo.sh. Il est utilise TEL QUEL, comme
 # il le documente (des .deb en arguments, --deploy): son pool local est
-# cumulatif, donc auxinux-office reste indexe. On verifie quand meme, apres
+# cumulatif, donc auxinux-office (s'il est publie) reste indexe. On verifie, apres
 # coup, que les trois paquets sont dans l'index.
 #
 # Comme publish-iso.sh: l'hote de build n'a pas de cle vers l'hote de depot, le
@@ -91,8 +91,11 @@ for pkg in auxi auxinux-center auxinuxos-release; do
     exit 73
   fi
 done
-[[ -n "$(published_version auxinux-office "${INDEX}")" ]] \
-  || echo "AVERTISSEMENT: auxinux-office absent de l'index AVANT publication." >&2
+# auxinux-office est retire du depot pendant sa refonte (2026-10-22): son
+# absence n'est une erreur que s'il ETAIT indexe avant cette publication.
+OFFICE_AVANT="$(published_version auxinux-office "${INDEX}")"
+[[ -n "${OFFICE_AVANT}" ]] \
+  || echo "    auxinux-office: absent de l'index (retire pendant sa refonte)"
 
 echo "==> Paquets sur ${BUILD_HOST}:${REMOTE_DIR}"
 declare -A SHA
@@ -142,7 +145,9 @@ for pkg in auxi auxinux-center auxinuxos-release; do
 done
 office="$(published_version auxinux-office "${INDEX}")"
 echo "    auxinux-office: ${office:-(absent)}"
-[[ -n "${office}" ]] || { echo "ERREUR: auxinux-office a disparu de l'index APPS" >&2; fail=1; }
+if [[ -n "${OFFICE_AVANT}" && -z "${office}" ]]; then
+  echo "ERREUR: auxinux-office a disparu de l'index APPS" >&2; fail=1
+fi
 
 for pkg in "${PKGS[@]}"; do
   file="$(awk -v p="${pkg}" -v v="${WANT[${pkg}]}" '
