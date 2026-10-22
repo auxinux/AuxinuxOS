@@ -243,7 +243,7 @@ need_package auxioffice "pas d'AuxiOffice: aucune suite bureautique"
 need_package auxitext "pas d'AuxiText, donc pas d'editeur de texte (AuxiText remplace Kate)"
 need_package auxipak "pas d'AuxiPak (demande d'aporler pour la 0.3.0)"
 need_exec /usr/bin/auxipak "commande auxipak absente"
-need_setting /etc/auxipak/config.toml '^program = "/usr/bin/auxi"$' \
+need_setting /etc/auxipak/config.toml '^program = "(/usr/bin/)?auxi"$' \
   "AuxiPak passerait par apt-get, bloque sur AuxiNux OS"
 need_setting /usr/lib/os-release '^VARIANT_ID=auxinuxos$' \
   "AuxiPak prendrait AuxiNux OS pour une Debian ordinaire (apt-get bloque)"
@@ -475,7 +475,7 @@ need_setting /etc/plymouth/plymouthd.conf '^Theme=auxinux$' "Plymouth afficherai
 initrd="$(sudo find "${ROOTFS}/boot" -maxdepth 1 -name 'initrd.img-*auxinuxos*' 2>/dev/null | sort -V | tail -n1)"
 if [[ -z "${initrd}" ]]; then
   fail "aucun initramfs AuxiNux dans /boot"
-elif sudo lsinitramfs "${initrd}" 2>/dev/null | grep -q 'usr/share/plymouth/themes/auxinux/auxinux.script'; then
+elif sudo chroot "${ROOTFS}" lsinitramfs "/boot/$(basename "${initrd}")" 2>/dev/null | grep -q 'usr/share/plymouth/themes/auxinux/auxinux.script'; then
   ok "$(basename "${initrd}"): theme Plymouth auxinux present"
 else
   fail "$(basename "${initrd}"): theme Plymouth auxinux absent de l'initramfs — splash muet ou theme Debian"
