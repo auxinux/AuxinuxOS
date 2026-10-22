@@ -120,10 +120,7 @@ pub fn set(id: &str) -> ActionResult {
             label(id)
         ))
     } else if out.code == Some(126) || out.stderr.contains("Not authorized") {
-        ActionResult::err(
-            "Opération annulée: l'autorisation administrateur n'a pas été donnée. \
-             Rien n'a été modifié.",
-        )
+        ActionResult::err(crate::progress::AUTH_REFUSED)
     } else {
         let msg = out.stderr.trim();
         ActionResult::err(if msg.is_empty() {

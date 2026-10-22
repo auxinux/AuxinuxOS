@@ -194,6 +194,19 @@ sous AuxiNux Shell, Calamares lancé depuis le bureau. Le plantage d'Install
 NOW signalé sur une vraie machine n'a pas été reproduit. L'ISO 20261009-2 a
 été retirée.
 
+**Machines restées sur AuxiNux Shell 0.1.2 (signalé le 2026-10-21)** : aucune
+mise à jour possible depuis le centre, et le Shell plante puis se relance à
+chaque « Actualiser les listes » ou « Mettre à jour ». L'agent d'autorisation
+de Shell 0.1.2 se termine en SEGV dès que le mot de passe est validé ; pkexec
+répond « Not authorized ». Reproduit à l'identique en VM le 2026-10-22 (live
+20261010 avec le code 0.1.2) ; Shell 0.1.3 et suivants ne plantent pas (même
+essai, mot de passe accepté). Ces machines ne peuvent donc pas se réparer par
+le centre, et leurs listes de paquets restent anciennes : le noyau d'essai
+7.3.0, le noyau 7.2.11 et l'édition 20261010 n'y apparaissent pas. Issue :
+`sudo auxi os upgrade` dans un terminal (sudo ne passe pas par polkit), puis
+fermer et rouvrir la session. Le centre nomme désormais cette commande quand
+l'autorisation échoue.
+
 Reste à valider : le démarrage par le chemin UEFI de secours (`EFI/BOOT`, le
 micrologiciel l'a bien choisi après suppression de l'entrée NVRAM, mais l'écran
 obtenu n'a pas pu être capturé), le démarrage sur un instantané depuis le

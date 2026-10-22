@@ -167,6 +167,18 @@ fn run_tracked(cmd: &str, args: &[&str], on_line: &mut dyn FnMut(&str)) -> (Outp
     (out, recent.into())
 }
 
+/// Message d'un refus d'autorisation par pkexec.
+///
+/// Le meme refus arrive quand l'agent d'autorisation du bureau plante au lieu
+/// de repondre: AuxiNux Shell 0.1.2 se terminait en SEGV des que le mot de
+/// passe etait valide (reproduit en VM le 2026-10-22). Le Center ne pouvait
+/// alors plus rien mettre a jour, pas meme le Shell fautif; le terminal, qui
+/// passe par sudo et non par polkit, reste la seule issue: on la nomme.
+pub const AUTH_REFUSED: &str = "Opération annulée: l'autorisation administrateur n'a pas été donnée. \
+     Rien n'a été modifié.\n\
+     Si la fenêtre d'autorisation n'est pas apparue, ou a disparu après le mot de passe, \
+     faites la mise à jour dans un terminal: sudo auxi os upgrade";
+
 /// Resultat affiche a l'utilisateur.
 pub fn conclude(out: &Output, recent: &[String], via_pkexec: bool, success: &str) -> ActionResult {
     if out.ok {
@@ -181,10 +193,7 @@ pub fn conclude(out: &Output, recent: &[String], via_pkexec: bool, success: &str
         && (out.code == Some(126)
             || (out.code == Some(127) && out.stderr.contains("Not authorized")))
     {
-        return ActionResult::err(
-            "Opération annulée: l'autorisation administrateur n'a pas été donnée. \
-             Rien n'a été modifié.",
-        );
+        return ActionResult::err(AUTH_REFUSED);
     }
     if recent.is_empty() {
         return ActionResult::err(match out.code {
@@ -339,6 +348,8 @@ mod tests {
             .to_string();
         let r = conclude(&out, &["Error executing command as another user: Not authorized".into()], true, "ok");
         assert!(r.message.contains("autorisation"), "{}", r.message);
+        // Agent d'autorisation plante (Shell 0.1.2): la voie du terminal est nommee.
+        assert!(r.message.contains("sudo auxi os upgrade"), "{}", r.message);
         // 127 sans ce message: un vrai echec, montre tel quel.
         let r = conclude(&output(false, Some(127)), &["E: autre".into()], true, "ok");
         assert_eq!(r.message, "E: autre");
