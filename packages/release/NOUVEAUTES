@@ -1,3 +1,4 @@
+Mises à jour bloquées (« Not authorized ») et AuxiNux Shell qui redémarre : la cause était l'ancienne version du Shell, corrigée. Si une autorisation échoue encore, le centre de contrôle indique la commande à lancer dans un terminal : sudo auxi os upgrade.
 AuxiNux Shell devient le bureau par défaut, dans le live comme après l'installation ; KDE Plasma reste installé et se choisit dans le centre de contrôle (Réglages, « Bureau ») ou à l'écran de connexion.
 AuxiNux OS 0.2.1 : les nouvelles versions sont annoncées ici et s'installent en un clic, après un point de restauration automatique (en ligne de commande : auxi os update, puis sudo auxi os upgrade).
 Noyaux : vue Noyau dans Applications (installer, activer, désinstaller, noyaux en essai) ; la mise à jour du système installe désormais les nouveaux noyaux.
