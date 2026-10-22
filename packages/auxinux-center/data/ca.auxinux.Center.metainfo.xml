@@ -38,6 +38,20 @@
   </developer>
   <content_rating type="oars-1.1" />
   <releases>
+    <release version="0.2.7" date="2026-10-22">
+      <description>
+        <p>
+          In the AuxiNux Shell session, the control center follows the shell
+          look: colors, accent, font, light or dark mode and the window title
+          bar, like the other applications.
+        </p>
+        <p xml:lang="fr">
+          Dans la session AuxiNux Shell, le centre de contrôle suit l'apparence
+          du shell : couleurs, accent, police, mode clair ou sombre et barre de
+          titre, comme les autres applications.
+        </p>
+      </description>
+    </release>
     <release version="0.2.6" date="2026-10-22">
       <description>
         <p>
