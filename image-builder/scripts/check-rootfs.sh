@@ -289,6 +289,14 @@ need_setting /etc/auxinux/apps.conf '^DEB_APPS=0$' \
 
 echo "-- Installateur console « Install NOW »"
 need_exec /usr/bin/auxinux-installer "l'entree GRUB par defaut menerait a une console vide"
+# Le bandeau de l'installateur nomme la version: un binaire d'une construction
+# precedente (premiere ISO 0.3.0: celui du 10 octobre, « 0.2.1 ») se voit ici.
+os_version="$(sed -n 's/^VERSION="\([^ "]*\).*/\1/p' "${ROOTFS}/usr/lib/os-release" 2>/dev/null)"
+if [[ -n "${os_version}" ]] && sudo grep -aqF "AuxiNux OS ${os_version} " "${ROOTFS}/usr/bin/auxinux-installer"; then
+  ok "installateur console de la version ${os_version}"
+else
+  fail "installateur console d'une autre version que ${os_version:-?} — binaire perime d'une construction precedente"
+fi
 need_exec /usr/lib/auxinux/auxinux-install-engine "l'installateur ne pourrait rien installer"
 need_file /etc/systemd/system/multi-user.target.wants/auxinux-installer.service \
   "l'installateur ne se lancerait pas depuis l'entree « Installer maintenant »"

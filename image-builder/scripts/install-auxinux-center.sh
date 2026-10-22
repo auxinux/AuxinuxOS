@@ -81,8 +81,12 @@ sudo rm -rf "${ROOTFS}/var/backups/auxinuxos-release"
 # Installateur console « Install NOW » (entree GRUB par defaut du live):
 # programme, moteur et unite qui le lance sur la premiere console. Tous trois
 # sont retires du systeme installe par post-install-cleanup.sh.
+# TOUJOURS recompiler (cargo ne refait que ce qui a change): un binaire
+# simplement PRESENT pouvait dater d'une construction precedente -- la
+# premiere ISO 0.3.0 (2026-10-22) embarquait l'installateur du 10 octobre,
+# bandeau « AuxiNux OS 0.2.1 » compris. AUXINUX_INSTALLER_BIN reste respecte.
 INSTALLER_BIN="${AUXINUX_INSTALLER_BIN:-${PKG_DIR}/target/release/auxinux-installer}"
-if [[ ! -x "${INSTALLER_BIN}" ]]; then
+if [[ -z "${AUXINUX_INSTALLER_BIN:-}" ]]; then
   echo "==> Compilation de l'installateur console"
   if [[ -x "${HOME}/.cargo/bin/cargo" ]]; then export PATH="${HOME}/.cargo/bin:${PATH}"; fi
   (cd "${PKG_DIR}" && cargo build --release --no-default-features --features tui --bin auxinux-installer)
