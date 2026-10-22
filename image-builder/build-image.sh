@@ -5,7 +5,7 @@ PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DEFAULT_WORK_DIR="/mnt/build/Auxinuxos-normal"
 OUTPUT_DIR="${PROJECT_DIR}/image-builder/output"
 WORK_DIR="${AUXINUX_NORMAL_BUILD_DIR:-${DEFAULT_WORK_DIR}}"
-PROFILE="0.2.1-live"
+PROFILE="0.3.0-live"
 FORCE=0
 REUSE_ROOTFS=0
 
@@ -13,7 +13,7 @@ usage() {
   cat <<EOF
 usage: $0 [--work-dir PATH] [--force] [--reuse-rootfs]
 
-Builds AuxiNux OS 0.2.1 live ISO.
+Builds AuxiNux OS 0.3.0 live ISO.
 
 Defaults:
   work dir : ${DEFAULT_WORK_DIR}
@@ -47,10 +47,10 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# Edition d'AuxiNux OS construite: 0.2.0+AAAAMMJJ[.N]. Fixee UNE fois ici et
+# Edition d'AuxiNux OS construite: 0.3.0+AAAAMMJJ[.N]. Fixee UNE fois ici et
 # exportee: le paquet auxinuxos-release (packages/build-debs.sh) la porte, l'ISO
 # l'enregistre dans /.disk/auxinux-release, et publish-iso.sh en tire le nom
-# publie. Une seconde ISO le meme jour: AUXINUX_RELEASE=0.2.0+AAAAMMJJ.2.
+# publie. Une seconde ISO le meme jour: AUXINUX_RELEASE=0.3.0+AAAAMMJJ.2.
 OS_VERSION="$(sed -n 's/^VERSION="\([^ "]*\).*/\1/p' "${PROJECT_DIR}/packages/release/root/usr/lib/os-release")"
 export AUXINUX_RELEASE="${AUXINUX_RELEASE:-${OS_VERSION}+$(date +%Y%m%d)}"
 echo "==> Edition: ${AUXINUX_RELEASE}"
@@ -122,7 +122,7 @@ purge_build_dir() {
 BUILD_DIR="${WORK_DIR}/${PROFILE}"
 ROOTFS_DIR="${BUILD_DIR}/rootfs"
 ISO_ROOT="${BUILD_DIR}/iso-root"
-OUTPUT_ISO="${OUTPUT_DIR}/auxinuxos-0.2.1-amd64.iso"
+OUTPUT_ISO="${OUTPUT_DIR}/auxinuxos-0.3.0-amd64.iso"
 
 if [[ "${FORCE}" -eq 1 && "${REUSE_ROOTFS}" -eq 1 ]]; then
   echo "--force and --reuse-rootfs cannot be used together" >&2
@@ -626,10 +626,10 @@ sudo mksquashfs "${ROOTFS_DIR}" "${ISO_ROOT}/live/filesystem.squashfs" \
 # WiFi reste fonctionnel. Meme reglage que /etc/default/grub du systeme
 # installe.
 #
-# `quiet splash` a ete retire des entrees de menu, comme sur le systeme
-# installe: `splash` est inerte (pas de plymouth dans l'image) et `quiet`
-# masque tout, y compris les raisons d'un demarrage qui n'aboutit pas. Un
-# medium live sert AUSSI a diagnostiquer une machine: il doit parler.
+# `quiet splash` (0.3.0): logo AuxiNux + roue orange (Plymouth, theme auxinux
+# dans l'initrd) au lieu du texte, qui fait peur a qui arrive de Windows. La
+# touche Echap montre le texte; l'entree « graphiques de secours » reste
+# bavarde: un medium live sert AUSSI a diagnostiquer une machine.
 # « Installer maintenant » est l'entree PAR DEFAUT (demande d'aporler,
 # 2026-10-02): le live demarre en console (multi-user.target, pas de bureau) et
 # auxinux-installer.service lance l'installateur maison. « Essayer » donne le
@@ -639,13 +639,13 @@ cat >"${ISO_ROOT}/boot/grub/grub.cfg" <<'EOF'
 set timeout=10
 set default=0
 
-menuentry "Installer AuxiNux OS 0.2.1 maintenant  /  Install AuxiNux OS 0.2.1 now" {
-    linux /live/vmlinuz boot=live components username=auxinux hostname=auxinuxos-live pci=noaer pcie_aspm=off systemd.unit=multi-user.target auxinux.install=1
+menuentry "Installer AuxiNux OS 0.3.0 maintenant  /  Install AuxiNux OS 0.3.0 now" {
+    linux /live/vmlinuz boot=live components username=auxinux hostname=auxinuxos-live pci=noaer pcie_aspm=off quiet splash loglevel=3 systemd.unit=multi-user.target auxinux.install=1
     initrd /live/initrd.img
 }
 
-menuentry "Essayer AuxiNux OS 0.2.1 (bureau live)  /  Try AuxiNux OS 0.2.1 (live desktop)" {
-    linux /live/vmlinuz boot=live components username=auxinux hostname=auxinuxos-live pci=noaer pcie_aspm=off
+menuentry "Essayer AuxiNux OS 0.3.0 (bureau live)  /  Try AuxiNux OS 0.3.0 (live desktop)" {
+    linux /live/vmlinuz boot=live components username=auxinux hostname=auxinuxos-live pci=noaer pcie_aspm=off quiet splash loglevel=3
     initrd /live/initrd.img
 }
 
@@ -655,13 +655,13 @@ menuentry "Essayer, graphiques de secours  /  Try, safe graphics (nomodeset)" {
 }
 
 menuentry "Essayer, copie en memoire  /  Try, copy to RAM (toram)" {
-    linux /live/vmlinuz boot=live components username=auxinux hostname=auxinuxos-live pci=noaer pcie_aspm=off toram
+    linux /live/vmlinuz boot=live components username=auxinux hostname=auxinuxos-live pci=noaer pcie_aspm=off quiet splash loglevel=3 toram
     initrd /live/initrd.img
 }
 EOF
 
 cat >"${ISO_ROOT}/README.txt" <<'EOF'
-AuxiNux OS 0.2.1
+AuxiNux OS 0.3.0
 
 Live user: auxinux
 Live password: auxinux

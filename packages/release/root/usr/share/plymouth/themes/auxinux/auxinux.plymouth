@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=AuxiNux
+Description=Logo AuxiNux et roue orange pendant le demarrage
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/auxinux
+ScriptFile=/usr/share/plymouth/themes/auxinux/auxinux.script

@@ -4,7 +4,7 @@
 # (redemarrage) -> SDDM -> bureau. Usage: vm-install-now.sh NOM ISO
 #
 # Choix: francais, en ligne, Toronto, clavier Francais (Canada), disque entier
-# SANS chiffrement, Firefox seul (+ Bottles, toujours installe; AuxiNux Office
+# SANS chiffrement, Firefox seul (+ Bottles, toujours installe; AuxiOffice
 # est dans l'image, il n'y a plus de question bureautique), profil
 # Bureautique sans suggestion, aucun outil de vie privee -- le plus court
 # chemin qui exerce TOUTES les etapes du moteur.
@@ -16,8 +16,8 @@ cd "$(dirname "$0")"
 log() { echo "$(date -u +%H:%M:%S) $*"; }
 shot() { $V shot "$name" "$B/$1.png" >/dev/null 2>&1; }
 
-rm -f /mnt/build/e2e/$name-disk.raw; rm -rf "$B"
-AUXINUX_ENTREE=0 ./vm-boot-live-serial.sh "$name" "$iso" /mnt/build/e2e/$name-disk.raw || { log "ECHEC live"; exit 1; }
+rm -f ${E2E_DISK_DIR:-/mnt/build/e2e}/$name-disk.raw; rm -rf "$B"
+AUXINUX_ENTREE=0 ./vm-boot-live-serial.sh "$name" "$iso" ${E2E_DISK_DIR:-/mnt/build/e2e}/$name-disk.raw || { log "ECHEC live"; exit 1; }
 $V sh "$name" "dmesg -n 1; systemctl is-active auxinux-installer" --timeout 60
 sleep 10; shot e0
 k() { $V key "$name" "$@"; sleep 3; }
@@ -26,7 +26,7 @@ k ret; sleep 8; k ret; sleep 6; k ret; sleep 6; shot e2   # reseau, fuseau, clav
 k ret; sleep 4                                # disque (sans chiffrement)
 $V type "$name" "Marie Tremblay"; k tab; k tab; k tab
 $V type "$name" "Quebec2026"; k tab; $V type "$name" "Quebec2026"; k ret; sleep 4
-k ret; k down down down; k ret               # Firefox, pas de lecteur (AuxiNux Office est inclus)
+k ret; k down down down; k ret               # Firefox, pas de lecteur (AuxiOffice est inclus)
 k spc; k down; k spc; k ret                   # profil: aucune suggestion
 for i in 1 2 3 4 5; do k spc; k down; done; k ret   # aucun outil de vie privee
 shot e3

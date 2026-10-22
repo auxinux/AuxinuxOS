@@ -1,3 +1,8 @@
+AuxiNux OS 0.3.0 : au démarrage, le logo d'AuxiNux et une roue orange remplacent le texte de la console (touche Échap pour le revoir) ; le même écran accompagne l'ouverture d'AuxiNux Shell.
+AuxiOffice remplace AuxiNux Office : AuxiWriter, AuxiSheet, AuxiPresent, AuxiDraw et AuxiPDF (version bêta).
+AuxiText devient l'éditeur de texte par défaut (fichiers .txt, journaux, Markdown, JSON, XML, YAML, scripts).
+AuxiPak est inclus : la commande auxipak installe les applications du catalogue AuxiPak (auxipak search firefox, puis sudo auxipak install firefox).
+Noyau AuxiNux 7.2.11.
 AuxiNux Shell : rechercher et installer les mises à jour directement dans Paramètres > Mises à jour ; Dolphin, les applications KDE et le centre de contrôle prennent les couleurs, l'accent et la police du Shell.
 Mises à jour bloquées (« Not authorized ») et AuxiNux Shell qui redémarre : la cause était l'ancienne version du Shell, corrigée. Si une autorisation échoue encore, le centre de contrôle indique la commande à lancer dans un terminal : sudo auxi os upgrade.
 AuxiNux Shell devient le bureau par défaut, dans le live comme après l'installation ; KDE Plasma reste installé et se choisit dans le centre de contrôle (Réglages, « Bureau ») ou à l'écran de connexion.

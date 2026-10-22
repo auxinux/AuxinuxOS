@@ -1,0 +1,85 @@
+# ISO d'AuxiNux OS sur un executeur GitHub, puis installation complete
+# « Install NOW » en VM sous KVM (tests/vm-install-now.sh). Remplace la
+# construction sur virtua-dev (2 vCPU, VM en TCG: plusieurs heures), qui reste
+# le repli. Lancement manuel seulement.
+#
+# La PUBLICATION (publish-iso.sh, paquets dans le depot APPS) reste faite
+# depuis virtua-repo, sur le feu vert d'aporler: l'ISO et ses paquets sont
+# des artefacts a telecharger, sha256 compris.
+name: ISO
+
+on:
+  workflow_dispatch:
+    inputs:
+      release:
+        description: "Edition (AUXINUX_RELEASE), ex. 0.3.0+20261023 ; vide = date du jour"
+        required: false
+      vm:
+        description: "Installer l'ISO en VM (KVM) apres la construction"
+        type: boolean
+        default: true
+
+jobs:
+  iso:
+    name: Construction et essai en VM
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Place disque
+        # Rootfs (~8 Go), squashfs et ISO (~3 Go chacun), disque de la VM:
+        # l'executeur n'a qu'environ 14 Go libres au depart.
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL \
+            /usr/local/share/boost /usr/local/.ghcup /usr/share/swift
+          sudo docker image prune -af >/dev/null
+          sudo mkdir -p /mnt/work && sudo chmod 777 /mnt/work
+          df -h / /mnt
+
+      - name: Construction de l'ISO (Debian 13, conteneur privilegie)
+        run: |
+          docker run --rm --privileged \
+            -e AUXINUX_RELEASE="${{ inputs.release }}" \
+            -v "$PWD:/src" -v /mnt/work:/work \
+            debian:trixie bash -c '[ -n "$AUXINUX_RELEASE" ] || unset AUXINUX_RELEASE; bash /src/image-builder/ci/build-iso-in-container.sh'
+          sudo chown -R "$(id -u):$(id -g)" image-builder/output
+          sudo rm -rf /mnt/work/*/rootfs
+          cd image-builder/output && sha256sum *.iso debs/*.deb | tee SHA256SUMS
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: auxinuxos-iso
+          path: |
+            image-builder/output/*.iso
+            image-builder/output/debs/*.deb
+            image-builder/output/SHA256SUMS
+          compression-level: 0
+
+      - name: KVM
+        if: inputs.vm
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends qemu-system-x86 qemu-utils ovmf
+          ls -l /dev/kvm
+
+      - name: Installation « Install NOW » en VM
+        if: inputs.vm
+        env:
+          E2E_BASE: /dev/shm/e2e
+          E2E_DISK_DIR: /mnt/work
+        run: |
+          iso="$(ls image-builder/output/*.iso)"
+          cp "$iso" /dev/shm/auxinuxos.iso
+          tests/vm-install-now.sh gh /dev/shm/auxinuxos.iso
+
+      - uses: actions/upload-artifact@v4
+        if: always() && inputs.vm
+        with:
+          name: vm-captures
+          path: |
+            /dev/shm/e2e/gh/*.png
+            /dev/shm/e2e/gh/serial.log

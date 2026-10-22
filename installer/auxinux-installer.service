@@ -8,11 +8,15 @@
 Description=Installateur AuxiNux OS (Install NOW)
 ConditionKernelCommandLine=auxinux.install=1
 After=systemd-user-sessions.service NetworkManager.service
+# L'ecran de demarrage (Plymouth, depuis la 0.3.0) occupe l'affichage: il doit
+# avoir quitte, sinon l'installateur tourne derriere le logo.
+After=plymouth-quit-wait.service
 Conflicts=getty@tty1.service
 Before=getty@tty1.service
 
 [Service]
 Type=idle
+ExecStartPre=-/bin/plymouth quit
 # Police Unicode: cadres, fleches et accents de l'interface. La police par
 # defaut (Lat15) n'a pas les traits de cadre.
 ExecStartPre=-/usr/bin/setfont -C /dev/tty1 Uni3-Terminus16

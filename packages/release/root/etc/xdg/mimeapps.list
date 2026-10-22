@@ -2,13 +2,38 @@
 application/x-ms-dos-executable=auxinux-windows-wizard.desktop
 application/x-msi=auxinux-windows-wizard.desktop
 application/x-ms-shortcut=auxinux-windows-wizard.desktop
-# Editeur de texte: AuxiText (AuxiNux Office), et non plus Kate.
-text/plain=ca.auxinux.AuxiNuxOffice.Text.desktop
-text/x-log=ca.auxinux.AuxiNuxOffice.Text.desktop
-text/markdown=ca.auxinux.AuxiNuxOffice.Text.desktop
-application/json=ca.auxinux.AuxiNuxOffice.Text.desktop
-application/xml=ca.auxinux.AuxiNuxOffice.Text.desktop
-text/xml=ca.auxinux.AuxiNuxOffice.Text.desktop
-application/yaml=ca.auxinux.AuxiNuxOffice.Text.desktop
-application/x-yaml=ca.auxinux.AuxiNuxOffice.Text.desktop
-text/x-yaml=ca.auxinux.AuxiNuxOffice.Text.desktop
+# Editeur de texte brut: AuxiText (paquet auxitext, AuxiOffice), et non Kate
+# (decision d'aporler, 2026-10-22: « l'editeur de texte brut par defaut »).
+# Vrai identifiant ca.auxinux.AuxiText; l'ancien ca.auxinux.AuxiNuxOffice.Text
+# reste fourni (cache) par le paquet pour les reglages d'avant la 0.3.0.
+# Ni text/html (navigateur) ni text/csv (AuxiSheet): ce ne sont pas des textes
+# qu'on edite d'abord.
+text/plain=ca.auxinux.AuxiText.desktop
+text/x-log=ca.auxinux.AuxiText.desktop
+text/markdown=ca.auxinux.AuxiText.desktop
+text/x-markdown=ca.auxinux.AuxiText.desktop
+text/x-readme=ca.auxinux.AuxiText.desktop
+application/json=ca.auxinux.AuxiText.desktop
+application/xml=ca.auxinux.AuxiText.desktop
+text/xml=ca.auxinux.AuxiText.desktop
+application/yaml=ca.auxinux.AuxiText.desktop
+application/x-yaml=ca.auxinux.AuxiText.desktop
+text/x-yaml=ca.auxinux.AuxiText.desktop
+application/toml=ca.auxinux.AuxiText.desktop
+text/x-toml=ca.auxinux.AuxiText.desktop
+text/x-ini=ca.auxinux.AuxiText.desktop
+text/x-properties=ca.auxinux.AuxiText.desktop
+text/x-shellscript=ca.auxinux.AuxiText.desktop
+application/x-shellscript=ca.auxinux.AuxiText.desktop
+text/x-python=ca.auxinux.AuxiText.desktop
+text/x-python3=ca.auxinux.AuxiText.desktop
+text/x-csrc=ca.auxinux.AuxiText.desktop
+text/x-chdr=ca.auxinux.AuxiText.desktop
+text/x-c++src=ca.auxinux.AuxiText.desktop
+text/x-c++hdr=ca.auxinux.AuxiText.desktop
+text/x-rust=ca.auxinux.AuxiText.desktop
+text/x-diff=ca.auxinux.AuxiText.desktop
+text/x-patch=ca.auxinux.AuxiText.desktop
+text/css=ca.auxinux.AuxiText.desktop
+application/javascript=ca.auxinux.AuxiText.desktop
+text/javascript=ca.auxinux.AuxiText.desktop

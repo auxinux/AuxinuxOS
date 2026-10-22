@@ -239,7 +239,27 @@ if [[ -n "${AUXINUX_RELEASE:-}" ]]; then
   if [[ "${got}" == "${AUXINUX_RELEASE}" ]]; then ok "edition ${got}"
   else fail "auxinuxos-release ${got:-absent} au lieu de l'edition ${AUXINUX_RELEASE} construite"; fi
 fi
-need_package auxinux-office "pas d'AuxiNux Office, donc pas d'editeur de texte (AuxiText remplace Kate)"
+need_package auxioffice "pas d'AuxiOffice: aucune suite bureautique"
+need_package auxitext "pas d'AuxiText, donc pas d'editeur de texte (AuxiText remplace Kate)"
+need_package auxipak "pas d'AuxiPak (demande d'aporler pour la 0.3.0)"
+need_exec /usr/bin/auxipak "commande auxipak absente"
+need_setting /etc/auxipak/config.toml '^program = "/usr/bin/auxi"$' \
+  "AuxiPak passerait par apt-get, bloque sur AuxiNux OS"
+need_setting /usr/lib/os-release '^VARIANT_ID=auxinuxos$' \
+  "AuxiPak prendrait AuxiNux OS pour une Debian ordinaire (apt-get bloque)"
+# Noyau: celui de la suite prod « kernel » au moment du build, jamais un
+# noyau en retard (exigence d'aporler pour la 0.3.0: « le dernier kernel de
+# notre depot en prod »). Les listes apt du chroot sont celles du build.
+kernel_got="$(sudo chroot "${ROOTFS}" dpkg-query -W -f='${Version}' kernel-auxinuxos 2>/dev/null || true)"
+kernel_cand="$(sudo chroot "${ROOTFS}" apt-cache policy kernel-auxinuxos 2>/dev/null \
+  | sed -n 's/^ *Candidate: //p')"
+if [[ -z "${kernel_got}" ]]; then
+  fail "kernel-auxinuxos absent"
+elif [[ -n "${kernel_cand}" && "${kernel_cand}" != "(none)" && "${kernel_got}" != "${kernel_cand}" ]]; then
+  fail "noyau kernel-auxinuxos ${kernel_got} alors que la suite prod offre ${kernel_cand}"
+else
+  ok "noyau kernel-auxinuxos ${kernel_got} (le plus recent de la suite prod)"
+fi
 need_file /var/lib/live/config/sddm \
   "live-config ecrirait /etc/sddm.conf (Session=plasma.desktop) et le live ouvrirait Plasma au lieu d'AuxiNux Shell"
 need_package auxinux-shell "pas d'AuxiNux Shell: le bureau par defaut (live et installe) serait introuvable"
@@ -249,11 +269,11 @@ if grep -q '^DefaultSession=auxinux.desktop$' "${ROOTFS}/etc/sddm.conf.d/10-auxi
 else
   fail "SDDM: DefaultSession=auxinux.desktop absent de 10-auxinux.conf"
 fi
-need_file /usr/share/applications/ca.auxinux.AuxiNuxOffice.Text.desktop \
+need_file /usr/share/applications/ca.auxinux.AuxiText.desktop \
   "les fichiers texte seraient associes (mimeapps.list) a un lanceur absent"
-need_setting /etc/xdg/mimeapps.list '^text/plain=ca\.auxinux\.AuxiNuxOffice\.Text\.desktop$' \
+need_setting /etc/xdg/mimeapps.list '^text/plain=ca\.auxinux\.AuxiText\.desktop$' \
   "les fichiers texte ne s'ouvriraient pas avec AuxiText"
-need_file /etc/apt/sources.list.d/auxinux-apps.sources "AuxiNux Office ne recevrait aucune mise a jour"
+need_file /etc/apt/sources.list.d/auxinux-apps.sources "AuxiOffice, AuxiText et AuxiPak ne recevraient aucune mise a jour"
 need_file /etc/apt/sources.list.d/auxinuxos-kernel-dev.sources.disabled \
   "le depot des noyaux en essai ne serait pas propose dans le centre de controle"
 need_file /usr/share/applications/ca.auxinux.Center.desktop "le centre de controle n'apparaitrait dans aucun menu"
@@ -431,18 +451,35 @@ need_file /etc/systemd/system/multi-user.target.wants/systemd-oomd.service \
 need_package zram-tools "pas d'echange compresse en RAM"
 need_file /etc/systemd/system/multi-user.target.wants/zramswap.service "zram installe mais non active"
 
-echo "-- Demarrage observable"
-# `quiet` masque noyau ET systemd; sans plymouth (absent de l'image) `splash`
-# est inerte. Les deux reunis transforment n'importe quelle panne de session en
-# ecran noir muet, impossible a diagnostiquer pour l'utilisateur.
+echo "-- Ecran de demarrage"
+# Depuis la 0.3.0, logo + roue orange (Plymouth, theme auxinux) au lieu du
+# texte de la console (demande d'aporler: le texte fait peur a qui arrive de
+# Windows). `quiet splash` ne vient QUE de /etc/default/grub.d/50-auxinux-splash.cfg
+# (paquet auxinuxos-release): /etc/default/grub et grubcfg.conf restent vides,
+# et les entrees de secours de GRUB gardent le texte. Sans Plymouth et son
+# theme dans l'initramfs, `quiet` seul ferait d'une panne un ecran noir muet:
+# l'un sans l'autre est refuse.
 for grub_file in /etc/default/grub /etc/calamares/modules/grubcfg.conf; do
   if [[ -f "${ROOTFS}${grub_file}" ]] &&
      grep -qE '^[^#]*GRUB_CMDLINE_LINUX_DEFAULT.*(quiet|splash)' "${ROOTFS}${grub_file}"; then
-    fail "${grub_file}: 'quiet'/'splash' actif alors que plymouth est absent — un demarrage en echec n'afficherait rien"
+    fail "${grub_file}: 'quiet'/'splash' ici aussi — seul grub.d/50-auxinux-splash.cfg doit le porter"
   else
-    ok "${grub_file}: demarrage bavard"
+    ok "${grub_file}: pas de 'quiet' (porte par grub.d)"
   fi
 done
+need_package plymouth "pas d'ecran de demarrage: 'quiet splash' donnerait un ecran noir"
+need_setting /etc/default/grub.d/50-auxinux-splash.cfg '^GRUB_CMDLINE_LINUX_DEFAULT=".*quiet splash' \
+  "le texte de la console s'afficherait au demarrage"
+need_file /usr/share/plymouth/themes/auxinux/auxinux.plymouth "theme Plymouth AuxiNux absent"
+need_setting /etc/plymouth/plymouthd.conf '^Theme=auxinux$' "Plymouth afficherait le theme Debian et non le logo AuxiNux"
+initrd="$(sudo find "${ROOTFS}/boot" -maxdepth 1 -name 'initrd.img-*auxinuxos*' 2>/dev/null | sort -V | tail -n1)"
+if [[ -z "${initrd}" ]]; then
+  fail "aucun initramfs AuxiNux dans /boot"
+elif sudo lsinitramfs "${initrd}" 2>/dev/null | grep -q 'usr/share/plymouth/themes/auxinux/auxinux.script'; then
+  ok "$(basename "${initrd}"): theme Plymouth auxinux present"
+else
+  fail "$(basename "${initrd}"): theme Plymouth auxinux absent de l'initramfs — splash muet ou theme Debian"
+fi
 
 # Le module Calamares `grubcfg` ajoute « quiet » de lui-meme (kernel_params,
 # defaut ["quiet"]) par-dessus une GRUB_CMDLINE_LINUX_DEFAULT vide: le controle

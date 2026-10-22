@@ -222,12 +222,12 @@ has "sans Flatpak, DEB active: apt-get install htop" "install -- htop"
 # --deb explicite, DEB desactive: nouveau paquet refuse, paquet installe mis a
 # jour (chemin du centre), paquets de l'assistant acceptes.
 printf 'DEB_APPS=0\n' >"${APPS_CONF}"
-deb_installed() { [[ "$1" == "auxinux-office" ]]; }
+deb_installed() { [[ "$1" == "auxioffice" ]]; }
 : >"${CALLS}"
 ( set -e; run_install --deb vlc ) </dev/null >/dev/null 2>&1
 check "--deb d'un paquet nouveau, DEB desactive: refus" "$?" "1"
 lacks "--deb refuse: aucun apt-get" "apt-get"
-( set -e; run_install --deb auxinux-office ) </dev/null >/dev/null 2>&1
+( set -e; run_install --deb auxioffice ) </dev/null >/dev/null 2>&1
 check "--deb d'un paquet installe (mise a jour): accepte" "$?" "0"
 : >"${CALLS}"
 ( set -e; AUXI_DEB_SYSTEME=1 run_install --deb brave-browser ) </dev/null >/dev/null 2>&1

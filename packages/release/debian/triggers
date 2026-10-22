@@ -1,2 +1,3 @@
-# Le hook initramfs (demarrage sur un instantane) change: regenerer l initramfs.
+# Le hook initramfs (demarrage sur un instantane) ou le theme Plymouth change:
+# regenerer l initramfs.
 activate-noawait update-initramfs

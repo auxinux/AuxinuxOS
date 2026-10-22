@@ -13,6 +13,20 @@ case "$1" in
     if [ -f /etc/default/snapper ] && grep -q '^DISABLE_APT_SNAPSHOT="no"' /etc/default/snapper; then
       sed -i 's/^DISABLE_APT_SNAPSHOT="no"/DISABLE_APT_SNAPSHOT="yes"/' /etc/default/snapper
     fi
+    # Ecran de demarrage (0.3.0): theme auxinux par defaut. L'initramfs est
+    # regenere par le declencheur update-initramfs (debian/triggers), une
+    # seule fois en fin de transaction. Aucun echec ici ne doit bloquer une
+    # mise a jour: au pire, le theme Debian s'affiche.
+    if [ -x /usr/sbin/plymouth-set-default-theme ] &&
+       [ -f /usr/share/plymouth/themes/auxinux/auxinux.plymouth ]; then
+      plymouth-set-default-theme auxinux >/dev/null 2>&1 || true
+    fi
+    # `quiet splash` vient de /etc/default/grub.d/50-auxinux-splash.cfg: le
+    # menu de GRUB doit etre regenere pour le prendre. Pas dans le chroot de
+    # construction de l'image (aucun /boot/grub: l'installateur le fait).
+    if [ -f /boot/grub/grub.cfg ] && command -v update-grub >/dev/null 2>&1; then
+      update-grub >/dev/null 2>&1 || true
+    fi
     if [ -d /run/systemd/system ]; then
       systemctl daemon-reload >/dev/null 2>&1 || true
     fi
