@@ -178,6 +178,8 @@ pub enum Message {
     ToggleDebApps(bool),
     SetProfile(String),
     SetDesktopSession(String),
+    InstallPlasma,
+    RemovePlasma,
     OpenSystemSettings,
     OpenUrl(String),
 
@@ -897,6 +899,12 @@ impl Application for App {
                 self.start();
                 background(move || crate::session::set(&id), Message::Done)
             }
+            Message::InstallPlasma => {
+                self.launch("Installation de KDE Plasma".into(), crate::session::install_plasma)
+            }
+            Message::RemovePlasma => {
+                self.launch("Retrait de KDE Plasma".into(), crate::session::remove_plasma)
+            }
             Message::OpenSystemSettings => {
                 crate::system::open_system_settings();
                 Task::none()
@@ -1023,6 +1031,9 @@ impl Application for App {
                 // Une nouvelle version d'AuxiNux OS a pu etre installee:
                 // os-release a change.
                 self.os_version = crate::updates::os_version();
+                // KDE Plasma installe ou retire depuis Reglages: la carte
+                // « Bureau » doit montrer l'etat reel.
+                self.desktop = crate::session::state();
                 if let Some(version) = crate::updates::center_updated() {
                     self.toast = Some(ActionResult::ok(format!(
                         "AuxiNux OS Center a été mis à jour (version {version}). \

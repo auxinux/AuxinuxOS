@@ -273,6 +273,16 @@ need_file /usr/share/applications/ca.auxinux.AuxiText.desktop \
   "les fichiers texte seraient associes (mimeapps.list) a un lanceur absent"
 need_setting /etc/xdg/mimeapps.list '^text/plain=ca\.auxinux\.AuxiText\.desktop$' \
   "les fichiers texte ne s'ouvriraient pas avec AuxiText"
+# Applications AuxiNux (2026-10-23): chacune remplace son equivalent.
+need_package auxi-mail "pas d'AuxiMail: aucun logiciel de courrier"
+need_package auxicorrect "pas d'AuxiCorrect: ni correcteur ni dictionnaire pour AuxiOffice et AuxiMail"
+need_exec /usr/lib/auxicorrect/auxicorrect-cli "AuxiOffice et AuxiMail appellent auxicorrect-cli: correction impossible"
+need_file /usr/share/applications/ca.auxinux.pdf.desktop "les PDF seraient associes (mimeapps.list) a un lanceur absent"
+need_setting /etc/xdg/mimeapps.list '^application/pdf=ca\.auxinux\.pdf\.desktop$' \
+  "les PDF ne s'ouvriraient pas avec AuxiPDF"
+need_file /usr/share/applications/AuxiMail.desktop "les liens mailto: seraient associes a un lanceur absent"
+need_setting /etc/xdg/mimeapps.list '^x-scheme-handler/mailto=AuxiMail\.desktop$' \
+  "un lien « courriel » ouvrirait autre chose qu'AuxiMail"
 need_file /etc/apt/sources.list.d/auxinux-apps.sources "AuxiOffice, AuxiText et AuxiPak ne recevraient aucune mise a jour"
 need_file /etc/apt/sources.list.d/auxinuxos-kernel-dev.sources.disabled \
   "le depot des noyaux en essai ne serait pas propose dans le centre de controle"
@@ -328,17 +338,25 @@ need_setting /etc/xdg/user-dirs.conf '^enabled=False$' \
 need_file /etc/xdg/autostart/auxinux-user-dirs.desktop "les comptes existants n'auraient jamais leurs dossiers personnels"
 need_exec /usr/bin/auxinux-windows-setup "installation de la couche Windows et jeux"
 
-echo "-- Bureau et session (KDE Plasma / Wayland)"
-need_exec /usr/bin/startplasma-wayland "le bureau ne demarrerait pas"
-need_exec /usr/bin/plasmashell "aucun panneau ni bureau"
-need_exec /usr/bin/kwin_wayland "aucun compositeur Wayland"
-need_exec /usr/bin/systemsettings "le centre de controle renvoie vers les reglages de Plasma"
+echo "-- Bureau et session (AuxiNux Shell, sans le bureau Plasma)"
+# Depuis 2026-10-23, le bureau Plasma n'est plus dans l'image (option du centre
+# de controle): ses executables sont REFUSES plus bas (retire-du-socle.txt).
+# Les scripts de mise en page Plasma restent livres par auxinuxos-release:
+# ils servent a qui l'installe.
+need_exec /usr/bin/labwc "aucun compositeur Wayland pour AuxiNux Shell"
+need_exec /usr/bin/auxinux-session "la session AuxiNux Shell ne demarrerait pas"
+need_package x11-xserver-utils "xset/xhost absents: le lanceur de l'installateur graphique echoue (tires jusqu'ici par plasma-workspace)"
+need_package xdg-desktop-portal-wlr "aucune capture ni partage d'ecran sous labwc"
+need_package plasma-integration "les applications KDE et le centre ne suivraient plus le mode sombre ni l'accent du Shell"
+need_package xdg-desktop-portal-kde "le mode sombre ne serait plus publie aux applications GTK (auxinux-color-sync)"
+need_file /usr/share/sddm/themes/auxinux/Main.qml "ecran de connexion sans theme: celui de Debian dependait de Plasma"
+need_setting /etc/sddm.conf.d/10-auxinux.conf '^Current=auxinux$' "SDDM chercherait un theme absent"
 need_file /usr/share/plasma/shells/org.kde.plasma.desktop/contents/updates/auxinux-sans-discover.js \
-  "Discover, absent, resterait epingle dans la barre des taches: une icone blanche qui ne lance rien"
+  "Plasma installe a la demande garderait Discover epingle: une icone blanche qui ne lance rien"
 need_file /usr/share/plasma/shells/org.kde.plasma.desktop/contents/updates/auxinux-fond-ecran.js \
-  "le bureau garderait le fond d'ecran de Plasma au lieu de celui d'AuxiNux"
+  "Plasma installe a la demande garderait son fond d'ecran au lieu de celui d'AuxiNux"
 need_file /usr/share/backgrounds/auxinuxos/default.png "le script du fond d'ecran pointerait vers un fichier absent"
-need_package libgl1-mesa-dri "serveur graphique SANS pilote DRI: KWin ne demarre pas (ce paquet n'est qu'un Recommends)"
+need_package libgl1-mesa-dri "serveur graphique SANS pilote DRI: labwc et le greeter ne demarrent pas (ce paquet n'est qu'un Recommends)"
 need_package login "PAM sans /etc/pam.d/login: la pile d'authentification du greeter echoue"
 
 echo "-- Heure (sans elle, aucun HTTPS)"
@@ -547,6 +565,10 @@ HORS_SOCLE_LIST="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/package-lists/
 while read -r pkg; do
   refuse_package "${pkg}" "application imposee: elle doit etre proposee par l'assistant, pas installee d'office"
 done < <(awk 'NF && $1 !~ /^#/ {print $1}' "${HORS_SOCLE_LIST}")
+# Bureau Plasma et equivalents des applications AuxiNux (2026-10-23).
+while read -r pkg; do
+  refuse_package "${pkg}" "retire du socle (retire-du-socle.txt): Plasma s'installe depuis le centre, l'application AuxiNux remplace son equivalent"
+done < <(awk 'NF && $1 !~ /^#/ {print $1}' "$(dirname "${HORS_SOCLE_LIST}")/retire-du-socle.txt")
 # Le depot Brave est livre, mais DESACTIVE: actif, il ferait contacter Brave a
 # chaque `apt update`, meme par qui ne l'a pas choisi.
 refuse_file /etc/apt/sources.list.d/brave-browser-release.sources \
@@ -570,6 +592,10 @@ echo "-- Session live: rien qui ressemble a un ecran noir"
 # Le live ne doit NI se verrouiller NI eteindre l'ecran: un visiteur qui laisse
 # la machine deux minutes revenait devant un ecran noir, puis un mot de passe
 # qu'il n'a jamais choisi. Constate sur le premier essai VM de la 0.2.0.
+need_setting /home/auxinux/.config/auxinux-shell/config.json '"lock_after": 0,' \
+  "le live (AuxiNux Shell) se verrouillerait apres cinq minutes"
+need_setting /home/auxinux/.config/auxinux-shell/config.json '"screen_off_after": 0,' \
+  "l'ecran du live (AuxiNux Shell) s'eteindrait apres dix minutes"
 need_setting /home/auxinux/.config/kscreenlockerrc '^Autolock=false' \
   "le live se verrouillerait apres dix minutes"
 need_setting /home/auxinux/.config/powerdevilrc '^TurnOffDisplayWhenIdle=false' \

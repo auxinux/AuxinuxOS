@@ -127,7 +127,7 @@ sudo install -m 0755 "${PKG_DIR}/data/ca.auxinux.Center.desktop" \
 # Le Center est un binaire libcosmic: aucune dependance QML/Kirigami/KF6 a
 # installer. Ses dependances d'execution (libwayland-client, libxkbcommon,
 # pilotes mesa GL/Vulkan) sont toutes tirees par le bureau Plasma et par
-# desktop-plasma.txt, qui declare explicitement libgl1-mesa-dri et
+# bureau-auxinux.txt, qui declare explicitement libgl1-mesa-dri et
 # mesa-vulkan-drivers -- de simples Recommends que --no-install-recommends
 # aurait laisses de cote.
 #

@@ -1,0 +1,13 @@
+[SddmGreeterTheme]
+Name=AuxiNux
+Description=Ecran de connexion d'AuxiNux OS
+Author=AuxiNux
+License=GPL-3.0-or-later
+Type=sddm-theme
+Version=1.0
+Website=https://os.auxinux.ca/auxinuxos
+MainScript=Main.qml
+ConfigFile=theme.conf
+Theme-Id=auxinux
+Theme-API=2.0
+QtVersion=6

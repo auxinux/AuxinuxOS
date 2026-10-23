@@ -37,3 +37,8 @@ text/x-patch=ca.auxinux.AuxiText.desktop
 text/css=ca.auxinux.AuxiText.desktop
 application/javascript=ca.auxinux.AuxiText.desktop
 text/javascript=ca.auxinux.AuxiText.desktop
+# PDF: AuxiPDF (AuxiOffice), qui remplace Okular (regle d'aporler, 2026-10-23:
+# une application AuxiNux installee remplace son equivalent).
+application/pdf=ca.auxinux.pdf.desktop
+# Courrier: AuxiMail (liens « mailto: » des pages Web et des documents).
+x-scheme-handler/mailto=AuxiMail.desktop

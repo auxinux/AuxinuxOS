@@ -30,7 +30,7 @@
 # installe et son demarrage, pas l'installateur.
 set -euo pipefail
 
-ROOTFS="${ROOTFS:-/mnt/build/Auxinuxos-normal/0.3.0-live/rootfs}"
+ROOTFS="${ROOTFS:-/mnt/build/Auxinuxos-normal/0.4.0-live/rootfs}"
 WORK="${WORK:-/mnt/build/vmtest}"
 REPO="${REPO:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 TARGET="${WORK}/target"

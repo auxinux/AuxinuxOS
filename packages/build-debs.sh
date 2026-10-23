@@ -12,7 +12,7 @@
 #   auxinux-center_<V>_amd64.deb  le Center, ses deux helpers, son action polkit,
 #                               l'assistant des .exe, les dossiers personnels
 #   auxinuxos-release_<R>_all.deb la VERSION d'AuxiNux OS (une par ISO publiee,
-#                               R = 0.3.0+AAAAMMJJ[.N]) et les reglages du
+#                               R = 0.4.0+AAAAMMJJ[.N]) et les reglages du
 #                               systeme installe (packages/release/root/)
 #
 # auxinuxos-release (depuis le 2026-10-09): chaque ISO publiee est une
@@ -34,7 +34,7 @@
 #   packages/build-debs.sh [--out DIR]
 # Variables:
 #   AUXINUX_CENTER_BIN  binaire du Center deja compile (sinon target/release)
-#   AUXINUX_RELEASE     version d'AuxiNux OS: 0.3.0+AAAAMMJJ[.N]
+#   AUXINUX_RELEASE     version d'AuxiNux OS: 0.4.0+AAAAMMJJ[.N]
 #                       (defaut: version de os-release + date du jour)
 #   AUXINUX_STRIP=0     ne pas stripper le binaire (tests avec un faux binaire)
 set -euo pipefail
@@ -79,7 +79,7 @@ if [[ "${BIN_VERSION}" != "auxinux-center ${VERSION}" ]]; then
   exit 65
 fi
 
-# Version d'AuxiNux OS: celle de os-release (0.3.0), plus l'edition (la date
+# Version d'AuxiNux OS: celle de os-release (0.4.0), plus l'edition (la date
 # de l'ISO, et .N pour une seconde ISO le meme jour).
 RELEASE_DIR="${SCRIPT_DIR}/release"
 OS_VERSION="$(sed -n 's/^VERSION="\([^ "]*\).*/\1/p' "${RELEASE_DIR}/root/usr/lib/os-release")"
@@ -224,7 +224,7 @@ Architecture: all
 Maintainer: ${MAINTAINER}
 Section: admin
 Priority: important
-Depends: auxi (>= ${VERSION}), auxinux-center (>= ${VERSION}), kernel-auxinuxos, auxinux-shell (>= 0.1.6), auxioffice, auxitext, auxipak (>= 1.0.10), plymouth, base-files
+Depends: auxi (>= ${VERSION}), auxinux-center (>= ${VERSION}), kernel-auxinuxos, auxinux-shell (>= 0.1.6), auxioffice, auxitext, auxi-mail, auxicorrect, auxipak (>= 1.0.10), plymouth, base-files
 Replaces: auxinux-center (<< 0.2.3)
 Breaks: auxinux-center (<< 0.2.3)
 Homepage: ${HOMEPAGE}

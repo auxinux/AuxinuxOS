@@ -38,6 +38,20 @@
   </developer>
   <content_rating type="oars-1.1" />
   <releases>
+    <release version="0.2.9" date="2026-10-23">
+      <description>
+        <p>
+          AuxiNux OS 0.4.0: KDE Plasma is no longer preinstalled; Settings can
+          install or remove it. "Open the desktop settings" opens the AuxiNux
+          Shell settings.
+        </p>
+        <p xml:lang="fr">
+          AuxiNux OS 0.4.0 : KDE Plasma n'est plus préinstallé ; Réglages
+          l'installe ou le retire. « Ouvrir les réglages du bureau » ouvre les
+          Paramètres d'AuxiNux Shell.
+        </p>
+      </description>
+    </release>
     <release version="0.2.8" date="2026-10-22">
       <description>
         <p>

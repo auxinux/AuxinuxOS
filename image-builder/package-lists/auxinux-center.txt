@@ -3,7 +3,7 @@
 # L'interface Kirigami/Qt6 a ete remplacee par libcosmic: le Center est un
 # binaire statique du point de vue du bureau, dont les seules dependances
 # d'execution (wayland, libxkbcommon, pilotes mesa) sont deja declarees par
-# desktop-plasma.txt.
+# bureau-auxinux.txt.
 #
 # Ce fichier est conserve volontairement vide pour que build-image.sh et la
 # documentation gardent une place ou declarer une future dependance.

@@ -4,6 +4,9 @@
 //! (DefaultSession de /etc/sddm.conf.d/10-auxinux.conf, paquet
 //! auxinuxos-release), et le centre permet de choisir l'un ou l'autre.
 //!
+//! Depuis 2026-10-23, Plasma n'est plus dans l'image: le centre l'installe et
+//! le retire a la demande (install_plasma, remove_plasma).
+//!
 //! Le choix vaut pour la machine: SDDM n'a qu'une session par defaut et ne
 //! memorise que la DERNIERE session ouverte (/var/lib/sddm/state.conf). Le
 //! helper ecrit les deux, sinon un compte qui a deja ouvert Plasma y
@@ -58,7 +61,7 @@ pub fn state() -> DesktopState {
         .filter(|id| Path::new(SESSIONS_DIR).join(format!("{id}.desktop")).exists())
         .collect();
     DesktopState {
-        default: default_session_in(&texts).unwrap_or_else(|| "plasma".to_string()),
+        default: default_session_in(&texts).unwrap_or_else(|| "auxinux".to_string()),
         running: running_in(&std::env::var("XDG_CURRENT_DESKTOP").unwrap_or_default()),
         installed,
     }
@@ -107,6 +110,22 @@ fn running_in(current_desktop: &str) -> Option<String> {
     } else {
         None
     }
+}
+
+/// Installe KDE Plasma (bureau secondaire, plus dans l'image depuis
+/// 2026-10-23). La liste des paquets est figee dans le helper, cote root.
+pub fn install_plasma(on_line: &mut dyn FnMut(&str)) -> ActionResult {
+    crate::progress::privileged(
+        &[SESSION_HELPER, "install-plasma"],
+        on_line,
+        "KDE Plasma est installé: choisissez-le ci-dessous ou à l'écran de connexion",
+    )
+}
+
+/// Retire KDE Plasma. Le helper remet d'abord AuxiNux Shell comme bureau
+/// ouvert a la connexion, et refuse si une session Plasma est ouverte.
+pub fn remove_plasma(on_line: &mut dyn FnMut(&str)) -> ActionResult {
+    crate::progress::privileged(&[SESSION_HELPER, "remove-plasma"], on_line, "KDE Plasma est retiré")
 }
 
 pub fn set(id: &str) -> ActionResult {

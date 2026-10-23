@@ -104,7 +104,14 @@ fn product_name() -> String {
 /// demarre.
 pub fn open_system_settings() {
     use std::process::{Command, Stdio};
-    for candidate in ["systemsettings", "gnome-control-center", "cosmic-settings"] {
+    // Les Parametres d'AuxiNux Shell d'abord: depuis 2026-10-23 Plasma (et
+    // systemsettings) n'est plus dans l'image, et ce bouton ne faisait rien.
+    for candidate in [
+        "auxinux-settings",
+        "systemsettings",
+        "gnome-control-center",
+        "cosmic-settings",
+    ] {
         let spawned = Command::new(candidate)
             .stdin(Stdio::null())
             .stdout(Stdio::null())

@@ -125,7 +125,7 @@ pub fn view(app: &App) -> Element<'_, Message> {
 
     // --- Bureau ---------------------------------------------------------------
     // AuxiNux Shell par defaut (decision d'aporler, 2026-10-10), KDE Plasma au
-    // choix. Comme les profils: le choix courant est affiche, non cliquable.
+    // choix, installe a la demande depuis 2026-10-23. Comme les profils: le choix courant est affiche, non cliquable.
     let mut desktop_col = widget::Column::new()
         .spacing(8)
         .push(widget::text::heading("Bureau"))
@@ -162,6 +162,36 @@ pub fn view(app: &App) -> Element<'_, Message> {
                 })),
         );
     }
+    // KDE Plasma n'est plus dans l'image (2026-10-23): installe ou retire a
+    // la demande. Jamais retire depuis une session Plasma ouverte.
+    let plasma_installed = app.desktop.installed.iter().any(|i| i == "plasma");
+    let plasma_running = app.desktop.running.as_deref() == Some("plasma");
+    if !plasma_installed {
+        desktop_col = desktop_col.push(
+            widget::Row::new()
+                .spacing(12)
+                .align_y(iced::Alignment::Center)
+                .push(widget::button::standard("Installer KDE Plasma").on_press(Message::InstallPlasma))
+                .push(widget::text::caption(
+                    "Bureau secondaire, à télécharger (Internet requis, environ 1 Go \
+                     une fois installé). AuxiNux Shell reste le bureau par défaut.",
+                )),
+        );
+    } else if !plasma_running {
+        desktop_col = desktop_col.push(
+            widget::Row::new()
+                .spacing(12)
+                .align_y(iced::Alignment::Center)
+                .push(widget::button::destructive("Retirer KDE Plasma").on_press(Message::RemovePlasma))
+                .push(widget::text::caption(
+                    "Libère de la place. AuxiNux Shell redevient le bureau ouvert à la connexion.",
+                )),
+        );
+    } else {
+        desktop_col = desktop_col.push(widget::text::caption(
+            "Pour retirer KDE Plasma, ouvrez une session AuxiNux Shell.",
+        ));
+    }
     let desktop_choice = widget::container(desktop_col)
         .class(super::apparence::carte())
         .padding(14)
@@ -191,7 +221,7 @@ pub fn view(app: &App) -> Element<'_, Message> {
             .push(widget::text::heading("Réglages du bureau"))
             .push(widget::text::caption(
                 "Affichage, apparence, clavier, langue, réseau et comptes se \
-                 configurent dans les réglages du bureau.",
+                 configurent dans les Paramètres d'AuxiNux Shell.",
             ))
             .push(
                 widget::button::suggested("Ouvrir les réglages du bureau")

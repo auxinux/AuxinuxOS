@@ -1,0 +1,135 @@
+# Bureau d'AuxiNux OS: AuxiNux Shell (labwc + GTK 4), SANS le bureau Plasma.
+#
+# Decision d'aporler (2026-10-23): l'image n'installe plus le BUREAU KDE Plasma
+# (plasma-desktop/workspace, KWin, systemsettings, kscreen, powerdevil,
+# plasma-nm/pa, bluedevil...). Il reste propose en option dans le centre de
+# controle (Reglages, « Bureau »). Les APPLICATIONS KDE restent (Dolphin,
+# Konsole...): AuxiNux Shell leur donne deja ses couleurs (kdeglobals), elles
+# ne tirent ni plasma-workspace ni KWin (verifie par apt-get -s sur Debian 13).
+#
+# Regle d'aporler (meme jour): une application AuxiNux installee REMPLACE son
+# equivalent. AuxiPDF (AuxiOffice) -> plus d'Okular; AuxiText -> plus de Kate;
+# AuxiMail -> plus de Thunderbird propose.
+#
+# Ce que ces paquets remplacaient de Plasma: voir retire-du-socle.txt (purge
+# sur un rootfs reutilise, refuse par check-rootfs.sh).
+
+# --- Session ---------------------------------------------------------------
+# Recommandations du paquet auxinux-shell, NOMMEES car l'image installe sans
+# les recommandations (liste de docs/phase5.md du Shell).
+auxinux-shell
+gir1.2-wp-0.5
+wlsunset
+wlopm
+wlr-randr
+grim
+slurp
+wl-clipboard
+playerctl
+xwayland
+qt6-wayland
+qt6-translations-l10n
+# GARDES alors que le bureau Plasma part: le Shell s'en sert.
+#  - plasma-integration: QT_QPA_PLATFORMTHEME=kde (bin/auxinux-session), et elle
+#    tire breeze, dont les .colors servent au Shell pour ecrire le kdeglobals de
+#    session (sans eux: applications KDE et centre sans mode sombre ni accent).
+#  - xdg-desktop-portal-kde: publie org.freedesktop.appearance color-scheme lu
+#    par auxinux-color-sync (AuxiText et les applications GTK suivent le mode
+#    sombre), et le selecteur de fichiers des Flatpak (auxinux-portals.conf).
+#  - polkit-kde-agent-1: agent d'autorisation de REPLI du Shell.
+# Aucun des trois ne tire plasma-workspace ni KWin.
+plasma-integration
+xdg-desktop-portal
+xdg-desktop-portal-kde
+xdg-desktop-portal-gtk
+# Captures et partage d'ecran sous labwc (auxinux-portals.conf demande « wlr »
+# pour Screenshot/ScreenCast: absent jusqu'ici, Spectacle ne capturait pas).
+xdg-desktop-portal-wlr
+polkit-kde-agent-1
+dconf-gsettings-backend
+
+# --- Ecran de connexion ----------------------------------------------------
+# Greeter SDDM en X11 (son defaut), session utilisateur en Wayland: combinaison
+# testee par Debian (un greeter Wayland a laisse un ecran 100 % noir sans
+# console de secours, reproduit en VM le 2026-09-09). Theme AuxiNux livre par
+# auxinuxos-release (/usr/share/sddm/themes/auxinux): sddm-theme-debian-breeze
+# DEPEND de plasma-workspace et part avec Plasma.
+sddm
+# xset/xhost du lanceur de l'installateur graphique (auxinux-install-launcher):
+# jusqu'ici tires par plasma-workspace seulement.
+x11-xserver-utils
+
+# --- Services du bureau ----------------------------------------------------
+# Profils d'energie (applet du Shell, auxinux-profile).
+power-profiles-daemon
+# Bascule GPU integre/dedie pour les machines hybrides (profil jeu).
+switcheroo-control
+kio-extras
+
+# --- Applications AuxiNux (depot AUXINUXOS/APPS) -------------------------------
+# AuxiOffice: AuxiWriter, AuxiSheet, AuxiPresent, AuxiDraw et AuxiPDF (lecteur
+# PDF par defaut).
+auxioffice
+# AuxiText: editeur de texte brut et de programmation par defaut.
+auxitext
+# AuxiMail: courrier (paquet auxi-mail).
+auxi-mail
+# AuxiCorrect: correcteur et dictionnaire du francais pour AuxiOffice et
+# AuxiMail (dictionnaire SQLite d'environ 240 Mo).
+auxicorrect
+# AuxiPak: catalogue d'applications multi-plateforme (installe par auxi).
+auxipak
+
+# --- Applications KDE gardees ---------------------------------------------
+dolphin
+konsole
+ark
+gwenview
+kcalc
+# Capture d'ecran: le paquet Debian s'appelle kde-spectacle, pas spectacle.
+kde-spectacle
+kdialog
+# zenity RESTE la base des assistants maison (accueil live, ouverture de .exe,
+# couche jeu): leur syntaxe n'a pas d'equivalent direct en kdialog, et ils sont
+# couverts par des tests.
+zenity
+partitionmanager
+gnome-disk-utility
+
+# --- Materiel et services ------------------------------------------------
+udisks2
+upower
+bluez
+cups
+cups-filters
+system-config-printer
+libnotify-bin
+
+# --- Audio ---------------------------------------------------------------
+pipewire
+pipewire-pulse
+pipewire-audio
+wireplumber
+libspa-0.2-bluetooth
+
+# --- Pilotes graphiques ---------------------------------------------------
+# libgl1-mesa-dri n'est qu'un RECOMMENDS de xserver-xorg-core et de la pile
+# Qt. L'image installe avec --no-install-recommends: sans cette ligne, l'ISO
+# embarque un serveur graphique SANS AUCUN pilote DRI, et on retombe sur
+# l'ecran noir.
+libgl1-mesa-dri
+libglx-mesa0
+libegl1
+libgl1
+# mesa-vulkan-drivers sert aussi au controle materiel de l'installateur
+# (savoir si le jeu est possible), pas seulement aux jeux.
+mesa-vulkan-drivers
+# glxinfo/eglinfo: c'est ainsi que le controle materiel distingue une
+# acceleration reelle d'un rendu logiciel (llvmpipe).
+mesa-utils
+
+# --- Polices --------------------------------------------------------------
+fonts-noto
+fonts-noto-color-emoji
+fonts-hack
+fonts-open-sans

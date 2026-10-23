@@ -10,8 +10,29 @@
 # DefaultSession ne changerait rien pour un compte qui a deja ouvert l'autre
 # bureau: les deux sont ecrits.
 #
+# Depuis 2026-10-23, le bureau Plasma n'est plus dans l'image: ce helper sait
+# aussi l'INSTALLER et le RETIRER (Reglages, « Bureau »).
+#
 # Usage: auxinux-session-helper auxinux|plasma
+#        auxinux-session-helper install-plasma|remove-plasma
 set -euo pipefail
+
+# Le bureau Plasma, tel que l'image l'installait jusqu'a la 0.3.0
+# (image-builder/package-lists/retire-du-socle.txt), SANS:
+#  - sddm-theme-debian-breeze et kde-config-sddm: le theme de connexion reste
+#    celui d'AuxiNux;
+#  - kwin-x11: session X11 de secours inutile ici;
+#  - okular: AuxiPDF est le lecteur PDF.
+# Liste FIGEE cote root: le centre ne transmet aucun nom de paquet.
+PLASMA_PACKAGES=(
+  plasma-desktop plasma-workspace kwin-wayland systemsettings kinfocenter
+  kscreen powerdevil plasma-nm plasma-pa bluedevil kde-config-screenlocker
+  kde-config-gtk-style breeze-gtk-theme ksshaskpass kwrited
+  plasma-systemmonitor plasma-firewall kwalletmanager
+)
+APT_GET="/usr/lib/auxinux/apt-real/apt-get"
+[[ -x "${APT_GET}" ]] || APT_GET="apt-get"
+DPKG_QUERY="dpkg-query"
 
 SESSIONS_DIR="/usr/share/wayland-sessions"
 CONF="/etc/sddm.conf.d/20-auxinux-session.conf"
@@ -21,12 +42,59 @@ if [[ "${EUID}" -ne 0 && -n "${AUXINUX_SESSION_TEST_ROOT:-}" ]]; then
   SESSIONS_DIR="${AUXINUX_SESSION_TEST_ROOT}/wayland-sessions"
   CONF="${AUXINUX_SESSION_TEST_ROOT}/sddm.conf.d/20-auxinux-session.conf"
   STATE="${AUXINUX_SESSION_TEST_ROOT}/sddm/state.conf"
+  APT_GET="${AUXINUX_SESSION_TEST_APT:-${APT_GET}}"
+  DPKG_QUERY="${AUXINUX_SESSION_TEST_DPKG_QUERY:-dpkg-query}"
 fi
 
 die() { echo "auxinux-session-helper: $*" >&2; exit 64; }
 
-[[ $# -eq 1 ]] || die "usage: auxinux-session-helper auxinux|plasma"
+# APT direct (le vrai apt-get, detourne par auxi), et non `auxi install --deb`:
+#  - SANS les recommandations: celles de Plasma ramenent plasma-discover
+#    (PackageKit), plasma-welcome (contenu en ligne) et plasma-browser-
+#    integration, refuses dans l'image (check-rootfs.sh);
+#  - `auxi uninstall` ne retire qu'UN paquet par appel.
+# APT::Status-Fd=1: lignes « pmstatus: » que le centre lit pour sa barre de
+# progression. L'instantane BTRFS est pose par le hook dpkg, comme pour toute
+# transaction.
+apt_plasma() {
+  DEBIAN_FRONTEND=noninteractive "${APT_GET}" -y -o APT::Status-Fd=1 \
+    -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold "$@"
+}
+
+[[ $# -eq 1 ]] || die "usage: auxinux-session-helper auxinux|plasma|install-plasma|remove-plasma"
 case "$1" in
+  install-plasma)
+    echo "auxinux-etape:1:2:Mise à jour des listes de paquets"
+    apt_plasma update
+    echo "auxinux-etape:2:2:Installation de KDE Plasma"
+    apt_plasma install --no-install-recommends "${PLASMA_PACKAGES[@]}"
+    echo "KDE Plasma est installé."
+    exit 0
+    ;;
+  remove-plasma)
+    # Jamais depuis une session Plasma ouverte: elle s'effondrerait sous
+    # l'utilisateur. Le centre desactive deja le bouton dans ce cas.
+    if loginctl list-sessions --no-legend 2>/dev/null | awk '{print $1}' \
+        | xargs -r -I{} loginctl show-session {} -p Desktop --value 2>/dev/null \
+        | grep -qix kde; then
+      echo "auxinux-session-helper: une session KDE Plasma est ouverte; fermez-la avant de retirer Plasma." >&2
+      exit 65
+    fi
+    # Le bureau ouvert a la connexion redevient AuxiNux Shell AVANT le retrait.
+    "$0" auxinux
+    echo "auxinux-etape:1:2:Retrait de KDE Plasma"
+    installed=()
+    for pkg in "${PLASMA_PACKAGES[@]}" kwin-x11 sddm-theme-debian-breeze sddm-theme-breeze kde-config-sddm; do
+      if "${DPKG_QUERY}" -W -f='${db:Status-Status}' "${pkg}" 2>/dev/null | grep -qx installed; then
+        installed+=("${pkg}")
+      fi
+    done
+    [[ "${#installed[@]}" -eq 0 ]] || apt_plasma purge "${installed[@]}"
+    echo "auxinux-etape:2:2:Nettoyage"
+    apt_plasma autoremove --purge
+    echo "KDE Plasma est retiré."
+    exit 0
+    ;;
   auxinux|plasma) id="$1" ;;
   *) die "bureau inconnu: $1" ;;
 esac

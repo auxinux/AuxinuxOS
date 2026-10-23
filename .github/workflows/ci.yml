@@ -16,7 +16,7 @@ on:
   workflow_dispatch:
     inputs:
       release:
-        description: "Edition (AUXINUX_RELEASE), ex. 0.3.0+20261023 ; vide = date du jour"
+        description: "Edition (AUXINUX_RELEASE), ex. 0.4.0+20261030 ; vide = date du jour"
         required: false
 
 jobs:
