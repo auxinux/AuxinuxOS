@@ -1,4 +1,4 @@
-# Branding Calamares — AuxiNux OS 0.3.0
+# Branding Calamares — AuxiNux OS 0.4.0
 ---
 componentName: auxinuxos
 
@@ -14,10 +14,10 @@ windowPlacement: center
 strings:
     productName:         AuxiNux OS
     shortProductName:    AuxiNux OS
-    version:             0.3.0
-    shortVersion:        0.3.0
-    versionedName:       AuxiNux OS 0.3.0
-    shortVersionedName:  AuxiNux OS 0.3.0
+    version:             0.4.0
+    shortVersion:        0.4.0
+    versionedName:       AuxiNux OS 0.4.0
+    shortVersionedName:  AuxiNux OS 0.4.0
     bootloaderEntryName: AuxiNuxOS
     productUrl:          https://os.auxinux.ca/auxinuxos
     supportUrl:          https://os.auxinux.ca/auxinuxos

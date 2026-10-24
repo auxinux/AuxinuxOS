@@ -59,6 +59,37 @@ rm "${WORK}/wayland-sessions/plasma.desktop"
 check "bureau non installe" "$(run "${H}" plasma)" "64"
 check "rien n'a change" "$(grep DefaultSession "${CONF}")" "DefaultSession=plasma.desktop"
 
+echo "== 3 bis. Installer et retirer KDE Plasma (2026-10-23) =="
+# Faux apt-get qui journalise; faux dpkg-query qui dit kwin-x11 et
+# plasma-desktop installes, rien d'autre.
+cat >"${WORK}/apt-get" <<'EOF'
+#!/bin/sh
+echo "$*" >>"${AUXINUX_SESSION_TEST_ROOT}/apt.log"
+EOF
+cat >"${WORK}/dpkg-query" <<'EOF'
+#!/bin/sh
+for a; do pkg="$a"; done
+case "$pkg" in plasma-desktop|kwin-x11) printf installed ;; *) printf not-installed ;; esac
+EOF
+chmod +x "${WORK}/apt-get" "${WORK}/dpkg-query"
+export AUXINUX_SESSION_TEST_APT="${WORK}/apt-get" AUXINUX_SESSION_TEST_DPKG_QUERY="${WORK}/dpkg-query"
+touch "${WORK}/wayland-sessions/plasma.desktop"
+check "installation acceptee" "$(run "${H}" install-plasma)" "0"
+check "listes rafraichies d'abord" "$(sed -n 1p "${WORK}/apt.log" | grep -c ' update$')" "1"
+inst="$(sed -n 2p "${WORK}/apt.log")"
+check "sans les recommandations (pas de Discover)" "$(grep -c -- '--no-install-recommends' <<<"${inst}")" "1"
+check "tire plasma-desktop et kwin-wayland" "$(grep -c 'plasma-desktop.*kwin-wayland' <<<"${inst}")" "1"
+check "garde le theme de connexion AuxiNux" "$(grep -c 'sddm-theme' <<<"${inst}")" "0"
+check "pas d'Okular (AuxiPDF)" "$(grep -c 'okular' <<<"${inst}")" "0"
+"${H}" plasma >/dev/null 2>&1
+: >"${WORK}/apt.log"
+check "retrait accepte" "$(run "${H}" remove-plasma)" "0"
+check "AuxiNux Shell redevient le bureau par defaut" "$(grep DefaultSession "${CONF}")" "DefaultSession=auxinux.desktop"
+check "purge seulement ce qui est installe" "$(sed -n 1p "${WORK}/apt.log" | grep -o 'purge.*')" "purge plasma-desktop kwin-x11"
+check "puis nettoyage des dependances" "$(sed -n 2p "${WORK}/apt.log" | grep -c 'autoremove --purge')" "1"
+check "verbe inconnu refuse" "$(run "${H}" install-gnome)" "64"
+unset AUXINUX_SESSION_TEST_APT AUXINUX_SESSION_TEST_DPKG_QUERY
+
 echo "== 4. Politique et paquet =="
 POLICY="${ROOT}/packages/auxinux-center/helper/ca.auxinux.center.policy"
 check "action polkit dediee" "$(grep -c 'auxinux-session-helper</annotate>' "${POLICY}")" "1"

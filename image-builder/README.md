@@ -25,7 +25,7 @@ Depuis la racine du dépôt, sur l’hôte Linux :
 ./image-builder/build-image.sh --work-dir /mnt/build/Auxinuxos-normal
 ```
 
-La sortie est `image-builder/output/auxinuxos-0.3.0-amd64.iso`, et les paquets
+La sortie est `image-builder/output/auxinuxos-0.4.0-amd64.iso`, et les paquets
 qu'elle contient (`auxi`, `auxinux-center`, `auxinuxos-release` de son édition)
 sont dans `image-builder/output/debs/`. Publication : d'abord ces paquets
 (`packages/publish-debs.sh --dir …/image-builder/output/debs --deploy`), puis
@@ -40,7 +40,8 @@ Le contenu de l’image est décrit par `package-lists/`, et par rien d’autre 
 | Liste | Contenu |
 |---|---|
 | `base.txt`, `firmware.txt` | socle système et micrologiciels |
-| `desktop-plasma.txt` | KDE Plasma, SDDM, pilotes graphiques, audio |
+| `bureau-auxinux.txt` | AuxiNux Shell, SDDM, applications AuxiNux et KDE, pilotes graphiques, audio |
+| `retire-du-socle.txt` | bureau Plasma et equivalents des applications AuxiNux : purges et refuses |
 | `i18n-canada.txt` | dictionnaires fr/en-CA |
 | `live-installer.txt` | installateur du médium live |
 | `rollback.txt`, `performance.txt` | snapper/grub-btrfs, zram |

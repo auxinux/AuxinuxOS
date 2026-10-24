@@ -1,3 +1,7 @@
+AuxiNux OS 0.4.0 : plus léger. Le bureau KDE Plasma n'est plus installé d'office ; AuxiNux Shell est le bureau, et Plasma s'installe ou se retire dans le centre de contrôle (Réglages, « Bureau »). Les ordinateurs qui ont déjà Plasma le gardent.
+Nouvelles applications AuxiNux : AuxiMail pour le courrier et AuxiCorrect, le correcteur et dictionnaire du français d'AuxiOffice et d'AuxiMail.
+Les PDF s'ouvrent avec AuxiPDF, et les liens « courriel » avec AuxiMail ; Okular n'est plus installé d'office.
+Nouvel écran de connexion aux couleurs d'AuxiNux.
 AuxiNux OS 0.3.0 : au démarrage, le logo d'AuxiNux et une roue orange remplacent le texte de la console (touche Échap pour le revoir) ; le même écran accompagne l'ouverture d'AuxiNux Shell.
 AuxiOffice remplace AuxiNux Office : AuxiWriter, AuxiSheet, AuxiPresent, AuxiDraw et AuxiPDF (version bêta).
 AuxiText devient l'éditeur de texte par défaut (fichiers .txt, journaux, Markdown, JSON, XML, YAML, scripts).

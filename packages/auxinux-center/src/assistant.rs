@@ -130,8 +130,10 @@ impl Profil {
     /// engage le projet a ce que son installation soit un acte explicite --
     /// « jamais une case pre-cochee ».
     pub fn suggestions(self) -> &'static [(App, bool)] {
-        const BUREAUTIQUE: [(App, bool); 3] = [
-            (flatpak("org.mozilla.Thunderbird", "Thunderbird", "Courriel et agenda"), true),
+        // Thunderbird n'est plus propose: AuxiMail est dans l'image (regle
+        // d'aporler, 2026-10-23: une application AuxiNux installee remplace
+        // son equivalent).
+        const BUREAUTIQUE: [(App, bool); 2] = [
             (flatpak("org.gnome.SimpleScan", "Numériseur", "Numériser des documents"), true),
             (flatpak("com.github.xournalpp.xournalpp", "Xournal++", "Annoter des PDF, prendre des notes"), false),
         ];
@@ -394,7 +396,6 @@ mod tests {
         for expected in [
             "org.mozilla.firefox",
             "org.videolan.VLC",
-            "org.mozilla.Thunderbird",
             "org.keepassxc.KeePassXC",
             "com.usebottles.bottles",
         ] {
@@ -402,8 +403,10 @@ mod tests {
         }
         // Proposee mais decochee.
         assert!(!ids.contains(&"com.github.xournalpp.xournalpp"));
-        // AuxiOffice est dans l'image: plus de suite bureautique a installer.
+        // AuxiOffice et AuxiMail sont dans l'image: ni suite bureautique ni
+        // courrielleur a installer.
         assert!(!ids.contains(&"org.libreoffice.LibreOffice"));
+        assert!(!ids.contains(&"org.mozilla.Thunderbird"));
     }
 
     #[test]

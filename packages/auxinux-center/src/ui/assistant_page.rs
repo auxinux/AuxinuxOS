@@ -124,10 +124,11 @@ fn intro<'a>() -> Element<'a, Message> {
             .push(widget::text::title3("Bienvenue dans AuxiNux OS"))
             .push(widget::text::body(
                 "Votre système est installé avec le strict nécessaire: le bureau \
-                 AuxiNux Shell (KDE Plasma au choix), ses outils de base, la suite \
-                 AuxiOffice (texte, tableur, présentations, dessin, PDF), \
-                 l'éditeur AuxiText, le catalogue AuxiPak et de quoi faire \
-                 tourner les applications Windows (Wine et Bottles).",
+                 AuxiNux Shell, les applications AuxiNux (AuxiOffice avec \
+                 AuxiPDF, AuxiText, AuxiMail, le correcteur AuxiCorrect), le \
+                 catalogue AuxiPak, quelques outils de KDE (fichiers, terminal, \
+                 images) et de quoi faire tourner les applications Windows \
+                 (Wine et Bottles). KDE Plasma s'installe depuis Réglages.",
             ))
             .push(widget::text::body(
                 "Aucune autre application n'a été choisie à votre place. Cet \

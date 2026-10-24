@@ -1,7 +1,7 @@
 [Desktop Entry]
 Type=Application
 Name=Install AuxiNuxOS
-Comment=Install AuxiNuxOS 0.3.0
+Comment=Install AuxiNuxOS 0.4.0
 Exec=/usr/lib/auxinux/auxinux-install-launcher
 Icon=system-software-install
 Terminal=false

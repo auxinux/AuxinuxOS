@@ -5,7 +5,7 @@ PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DEFAULT_WORK_DIR="/mnt/build/Auxinuxos-normal"
 OUTPUT_DIR="${PROJECT_DIR}/image-builder/output"
 WORK_DIR="${AUXINUX_NORMAL_BUILD_DIR:-${DEFAULT_WORK_DIR}}"
-PROFILE="0.3.0-live"
+PROFILE="0.4.0-live"
 FORCE=0
 REUSE_ROOTFS=0
 
@@ -13,7 +13,7 @@ usage() {
   cat <<EOF
 usage: $0 [--work-dir PATH] [--force] [--reuse-rootfs]
 
-Builds AuxiNux OS 0.3.0 live ISO.
+Builds AuxiNux OS 0.4.0 live ISO.
 
 Defaults:
   work dir : ${DEFAULT_WORK_DIR}
@@ -47,10 +47,10 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# Edition d'AuxiNux OS construite: 0.3.0+AAAAMMJJ[.N]. Fixee UNE fois ici et
+# Edition d'AuxiNux OS construite: 0.4.0+AAAAMMJJ[.N]. Fixee UNE fois ici et
 # exportee: le paquet auxinuxos-release (packages/build-debs.sh) la porte, l'ISO
 # l'enregistre dans /.disk/auxinux-release, et publish-iso.sh en tire le nom
-# publie. Une seconde ISO le meme jour: AUXINUX_RELEASE=0.3.0+AAAAMMJJ.2.
+# publie. Une seconde ISO le meme jour: AUXINUX_RELEASE=0.4.0+AAAAMMJJ.2.
 OS_VERSION="$(sed -n 's/^VERSION="\([^ "]*\).*/\1/p' "${PROJECT_DIR}/packages/release/root/usr/lib/os-release")"
 export AUXINUX_RELEASE="${AUXINUX_RELEASE:-${OS_VERSION}+$(date +%Y%m%d)}"
 echo "==> Edition: ${AUXINUX_RELEASE}"
@@ -122,7 +122,7 @@ purge_build_dir() {
 BUILD_DIR="${WORK_DIR}/${PROFILE}"
 ROOTFS_DIR="${BUILD_DIR}/rootfs"
 ISO_ROOT="${BUILD_DIR}/iso-root"
-OUTPUT_ISO="${OUTPUT_DIR}/auxinuxos-0.3.0-amd64.iso"
+OUTPUT_ISO="${OUTPUT_DIR}/auxinuxos-0.4.0-amd64.iso"
 
 if [[ "${FORCE}" -eq 1 && "${REUSE_ROOTFS}" -eq 1 ]]; then
   echo "--force and --reuse-rootfs cannot be used together" >&2
@@ -149,8 +149,10 @@ package_csv() {
 # l'installation: deux enumerations separees, c'etait deux sources de verite
 # pour le meme contenu.
 #
-# L'image est un SOCLE (decision d'aporler, 2026-10-02): le systeme, KDE
-# Plasma et ses outils de base, les codecs, le pare-feu et la couche Windows.
+# L'image est un SOCLE (decision d'aporler, 2026-10-02): le systeme, AuxiNux
+# Shell et ses outils de base (plus de bureau Plasma depuis 2026-10-23: voir
+# retire-du-socle.txt), les applications AuxiNux, les codecs, le pare-feu et
+# la couche Windows.
 # AUCUNE application d'usage -- navigateur, bureautique, multimedia, jeu, vie
 # privee: l'assistant de premier demarrage les propose et les installe, en
 # Flatpak de preference. Ce qui ne doit plus etre dans l'image est liste dans
@@ -158,7 +160,7 @@ package_csv() {
 BOOTSTRAP_LISTS=(
   base.txt
   firmware.txt
-  desktop-plasma.txt
+  bureau-auxinux.txt
   i18n-canada.txt
   live-installer.txt
   rollback.txt
@@ -237,8 +239,11 @@ mount_chroot_api_filesystems
 # constate en VM le 2026-10-02). On ne purge que ce qui est
 # reellement installe: apt-get refuse un nom qu'il ne trouve dans aucun index
 # -- c'est le cas de brave-browser, dont le depot est desormais desactive.
+# Meme traitement pour retire-du-socle.txt: le bureau Plasma (2026-10-23) et
+# les equivalents des applications AuxiNux.
 mapfile -t HORS_SOCLE < <(awk 'NF && $1 !~ /^#/ {print $1}' \
-  "${PROJECT_DIR}/image-builder/package-lists/hors-socle.txt")
+  "${PROJECT_DIR}/image-builder/package-lists/hors-socle.txt" \
+  "${PROJECT_DIR}/image-builder/package-lists/retire-du-socle.txt")
 mapfile -t HORS_SOCLE_PRESENTS < <(sudo chroot "${ROOTFS_DIR}" \
   dpkg-query -W -f='${binary:Package} ${db:Status-Status}\n' "${HORS_SOCLE[@]}" 2>/dev/null \
   | awk '$2 == "installed" {print $1}')
@@ -246,6 +251,11 @@ if [[ "${#HORS_SOCLE_PRESENTS[@]}" -gt 0 ]]; then
   echo "==> Retrait des applications sorties du socle: ${HORS_SOCLE_PRESENTS[*]}"
   sudo chroot "${ROOTFS_DIR}" env DEBIAN_FRONTEND=noninteractive \
     apt-get purge -y "${HORS_SOCLE_PRESENTS[@]}"
+  # Leurs dependances, installees automatiquement, restaient: le gain de
+  # place du retrait de Plasma n'existait que sur un rootfs neuf. Ce que les
+  # listes demandent est reinstalle plus bas de toute facon.
+  sudo chroot "${ROOTFS_DIR}" env DEBIAN_FRONTEND=noninteractive \
+    apt-get autoremove --purge -y
 fi
 
 echo "==> Configuring APT sources"
@@ -321,7 +331,7 @@ for lot in "efi:grub-efi-amd64" "bios:grub-pc" "luks:cryptsetup-initramfs keyuti
 done
 sudo chroot "${ROOTFS_DIR}" apt-get clean
 
-# Le bureau vient desormais de Debian: voir package-lists/desktop-plasma.txt,
+# Le bureau vient desormais de Debian: voir package-lists/bureau-auxinux.txt,
 # installe par le bloc apt ci-dessus comme n'importe quel autre paquet.
 #
 # Ce qui se trouvait ICI a ete supprime avec l'abandon de COSMIC (2026-09-12):
@@ -435,6 +445,21 @@ AutoSuspendAction=0
 EOF
 # Un rootfs reutilise garde l'ancien fichier: Plasma le migrerait par-dessus.
 sudo rm -f "${ROOTFS_DIR}/home/auxinux/.config/powermanagementprofilesrc"
+# AuxiNux Shell, le bureau du live, a SES reglages (lockscreen.py): par defaut
+# verrouillage apres 300 s et ecran eteint apres 600 s (data/config.json). Les
+# deux fichiers Plasma ci-dessus ne le concernent pas: sans celui-ci, le live
+# se verrouillait quand meme, sur un mot de passe que le visiteur ignore.
+sudo install -d -m 0755 "${ROOTFS_DIR}/home/auxinux/.config/auxinux-shell"
+sudo tee "${ROOTFS_DIR}/home/auxinux/.config/auxinux-shell/config.json" >/dev/null <<'EOF'
+{
+  "lock": {
+    "lock_after": 0,
+    "screen_off_after": 0,
+    "suspend_after": 0,
+    "lock_on_suspend": false
+  }
+}
+EOF
 sudo chroot "${ROOTFS_DIR}" chown -R auxinux:auxinux /home/auxinux/.config
 # L'installateur ne s'autodemarre PAS. Il l'a fait tant que le bureau etait
 # COSMIC, qui n'affiche aucune icone de bureau; Plasma en affiche (vue
@@ -639,12 +664,12 @@ cat >"${ISO_ROOT}/boot/grub/grub.cfg" <<'EOF'
 set timeout=10
 set default=0
 
-menuentry "Installer AuxiNux OS 0.3.0 maintenant  /  Install AuxiNux OS 0.3.0 now" {
+menuentry "Installer AuxiNux OS 0.4.0 maintenant  /  Install AuxiNux OS 0.4.0 now" {
     linux /live/vmlinuz boot=live components username=auxinux hostname=auxinuxos-live pci=noaer pcie_aspm=off quiet splash loglevel=3 systemd.unit=multi-user.target auxinux.install=1
     initrd /live/initrd.img
 }
 
-menuentry "Essayer AuxiNux OS 0.3.0 (bureau live)  /  Try AuxiNux OS 0.3.0 (live desktop)" {
+menuentry "Essayer AuxiNux OS 0.4.0 (bureau live)  /  Try AuxiNux OS 0.4.0 (live desktop)" {
     linux /live/vmlinuz boot=live components username=auxinux hostname=auxinuxos-live pci=noaer pcie_aspm=off quiet splash loglevel=3
     initrd /live/initrd.img
 }
@@ -661,7 +686,7 @@ menuentry "Essayer, copie en memoire  /  Try, copy to RAM (toram)" {
 EOF
 
 cat >"${ISO_ROOT}/README.txt" <<'EOF'
-AuxiNux OS 0.3.0
+AuxiNux OS 0.4.0
 
 Live user: auxinux
 Live password: auxinux

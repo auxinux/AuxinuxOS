@@ -1,4 +1,4 @@
-AuxiNux OS 0.3.0 \n \l
+AuxiNux OS 0.4.0 \n \l
 
 Cette console texte s'affiche quand le bureau n'a pas demarre.
 Connectez-vous avec votre compte, puis:   journalctl -b -u sddm

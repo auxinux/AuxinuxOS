@@ -8,5 +8,5 @@
 # l'image est hors-socle.txt.
 #
 # Le pare-feu reste: c'est une protection active par defaut, sans interface
-# imposee (plasma-firewall, dans desktop-plasma.txt, sert a le regler).
+# imposee (regle depuis AuxiNux Shell et le centre de controle; plasma-firewall part avec Plasma le 2026-10-23).
 ufw

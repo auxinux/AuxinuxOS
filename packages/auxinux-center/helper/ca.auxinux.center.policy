@@ -90,12 +90,14 @@
   <!--
     Choisir le bureau ouvert a la connexion (AuxiNux Shell ou KDE Plasma):
     ecrit la session par defaut de SDDM pour toute la machine (2026-10-10).
+    Depuis 2026-10-23, le meme helper installe et retire KDE Plasma, qui n'est
+    plus dans l'image (liste de paquets figee cote root).
   -->
   <action id="ca.auxinux.center.desktop-session">
-    <description>Choose the desktop</description>
-    <description xml:lang="fr">Choisir le bureau</description>
-    <message>Authentication is required to change the desktop opened at login</message>
-    <message xml:lang="fr">Une authentification est requise pour changer le bureau ouvert à la connexion</message>
+    <description>Choose, install or remove a desktop</description>
+    <description xml:lang="fr">Choisir, installer ou retirer un bureau</description>
+    <message>Authentication is required to change, install or remove the desktop</message>
+    <message xml:lang="fr">Une authentification est requise pour changer, installer ou retirer un bureau</message>
     <icon_name>preferences-desktop</icon_name>
     <defaults>
       <allow_any>no</allow_any>

@@ -57,31 +57,11 @@ fi
 
 # --- Ecran de connexion SDDM -----------------------------------------------
 #
-# Le theme debian-breeze pointe son fond d'ecran et son logo vers
-# /usr/share/desktop-base/, or le paquet desktop-base N'EST PAS installe: sans
-# cette surcharge, l'ecran de connexion s'affiche sur un aplat de couleur, sans
-# logo. SDDM lit theme.conf.user APRES theme.conf, ce qui evite de modifier un
-# fichier appartenant a un paquet Debian (une mise a jour de plasma-desktop
-# l'ecraserait).
-SDDM_THEME_DIR="${ROOTFS}/usr/share/sddm/themes/debian-breeze"
-if [[ -d "${SDDM_THEME_DIR}" ]]; then
-  sudo install -m 0644 \
-    "${ASSET_DIR}/BanniereAuxiNux-Youtube.png" \
-    "${ROOTFS}/usr/share/sddm/themes/debian-breeze/auxinux-background.png"
-  sudo install -m 0644 \
-    "${ASSET_DIR}/logo-AuxiNux-source.png" \
-    "${ROOTFS}/usr/share/sddm/themes/debian-breeze/auxinux-logo.png"
-  sudo tee "${SDDM_THEME_DIR}/theme.conf.user" >/dev/null <<'SDDM_EOF'
-[General]
-type=image
-background=/usr/share/sddm/themes/debian-breeze/auxinux-background.png
-logo=/usr/share/sddm/themes/debian-breeze/auxinux-logo.png
-showlogo=shown
-showClock=true
-SDDM_EOF
-else
-  echo "AVERTISSEMENT: theme SDDM debian-breeze absent, branding de l'ecran de connexion ignore." >&2
-fi
+# Depuis 2026-10-23, le theme « auxinux » (fond, couleurs, textes en
+# francais) est LIVRE par auxinuxos-release (/usr/share/sddm/themes/auxinux):
+# il suit les mises a jour. L'ancien habillage de debian-breeze se faisait ici
+# (theme.conf.user), mais ce theme depend de plasma-workspace, retire de
+# l'image.
 
 # --- Fond d'ecran par defaut du bureau -------------------------------------
 #

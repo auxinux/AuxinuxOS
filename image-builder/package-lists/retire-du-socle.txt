@@ -1,0 +1,40 @@
+# Paquets RETIRES du socle d'AuxiNux OS: le bureau KDE Plasma et ce qui ne
+# servait qu'a lui (decision d'aporler, 2026-10-23), et les equivalents des
+# applications AuxiNux (Okular: AuxiPDF).
+#
+# Ce n'est pas une liste d'installation: build-image.sh les PURGE d'un rootfs
+# reutilise (sinon ils restent, marques installes a la main) et
+# check-rootfs.sh REFUSE une image qui en contient un. Plasma s'installe a la
+# demande depuis le centre de controle.
+#
+# Different de hors-socle.txt: celle-la liste les applications que
+# l'assistant de premier demarrage PROPOSE.
+
+# --- Bureau Plasma ---------------------------------------------------------
+plasma-desktop
+plasma-workspace
+kwin-wayland
+kwin-x11
+# Depend de plasma-workspace: remplace par le theme SDDM auxinux.
+sddm-theme-debian-breeze
+sddm-theme-breeze
+kde-config-sddm
+kde-config-screenlocker
+systemsettings
+kinfocenter
+kscreen
+powerdevil
+plasma-nm
+plasma-pa
+bluedevil
+kde-config-gtk-style
+breeze-gtk-theme
+ksshaskpass
+kwrited
+plasma-systemmonitor
+plasma-firewall
+kwalletmanager
+
+# --- Remplaces par une application AuxiNux ----------------------------------
+# AuxiPDF (AuxiOffice) est le lecteur PDF.
+okular
