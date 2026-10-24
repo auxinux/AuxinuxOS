@@ -105,11 +105,25 @@ DISQUE="$(val DISQUE)"
 [[ "${DISQUE}" =~ ^/dev/[a-z0-9]+$ ]] || erreur "disque invalide: ${DISQUE}"
 [[ "$(lsblk -dno TYPE "${DISQUE}" 2>/dev/null)" == "disk" ]] || erreur "${DISQUE} n'est pas un disque"
 # Le support d'installation lui-meme ne doit jamais etre efface.
+#
+# PANNE SUR VRAIE MACHINE (Latitude 5480, 2026-10-24, ISO 0.4.0): une cle USB
+# gravee avec l'ISO est souvent montee comme DISQUE ENTIER (/dev/sdb, iso9660
+# hybride), pas comme partition. `lsblk -no PKNAME /dev/sdb | head -n1`
+# listait alors le disque ET ses partitions; head fermait le tube, lsblk
+# mourait de SIGPIPE, pipefail en faisait une erreur: installation arretee
+# avant meme de commencer. Invisible en VM (ISO en lecteur optique, sans
+# partition).
+#
+# `lsblk -s` remonte la chaine des peripheriques (inverse): le support lui-meme
+# s'il est un disque, son disque s'il est une partition, et les disques sous
+# un peripherique dm (Ventoy). awk lit TOUTE la sortie: aucun SIGPIPE.
 support="$(findmnt -no SOURCE /run/live/medium 2>/dev/null || true)"
 if [[ -n "${support}" ]]; then
-  parent="$(lsblk -no PKNAME "${support}" 2>/dev/null | head -n1)"
-  [[ "/dev/${parent}" != "${DISQUE}" && "${support}" != "${DISQUE}" ]] \
-    || erreur "${DISQUE} est le support d'installation"
+  disques_support="$(lsblk -nslpo NAME,TYPE "${support}" 2>/dev/null \
+    | awk '$2 == "disk" {print $1}')" || disques_support=""
+  if [[ "${support}" == "${DISQUE}" ]] || grep -qxF -- "${DISQUE}" <<<"${disques_support}"; then
+    erreur "${DISQUE} est le support d'installation"
+  fi
 fi
 
 CHIFFREMENT="$(val CHIFFREMENT)"
