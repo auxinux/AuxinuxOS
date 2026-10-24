@@ -19,8 +19,10 @@ mkdir -p "${T}/bin"
 cat >"${T}/bin/lsblk" <<'STUB'
 #!/usr/bin/env bash
 case " $* " in
+  # Chaine inverse du support (lsblk -nslpo NAME,TYPE): une ligne par
+  # peripherique, le support d'abord, puis ce qui est dessous.
+  *" NAME,TYPE "*) [[ -n "${STUB_ANCETRES:-}" ]] && printf '%b\n' "${STUB_ANCETRES}" ;;
   *" TYPE "*) echo disk ;;
-  *" PKNAME "*) echo "${STUB_PKNAME:-}" ;;
 esac
 STUB
 cat >"${T}/bin/findmnt" <<'STUB'
@@ -78,9 +80,20 @@ done
 
 echo "== 2. Le support d'installation n'est jamais une cible =="
 config "DISQUE=/dev/sdb"
-STUB_SUPPORT=/dev/sdb1 STUB_PKNAME=sdb simuler; rc=$?
-check "refus" "${rc}" "1"
+STUB_SUPPORT=/dev/sdb1 STUB_ANCETRES='/dev/sdb1 part\n/dev/sdb disk' simuler; rc=$?
+check "support sur une partition: refus" "${rc}" "1"
 has "raison donnee" "est le support d'installation"
+# Panne du Latitude 5480 (2026-10-24): cle montee comme DISQUE ENTIER.
+STUB_SUPPORT=/dev/sdb STUB_ANCETRES='/dev/sdb disk' simuler; rc=$?
+check "support sur le disque entier: refus" "${rc}" "1"
+has "raison donnee (disque entier)" "est le support d'installation"
+# Ventoy: l'ISO est vue a travers un peripherique dm pose sur la cle.
+STUB_SUPPORT=/dev/mapper/ventoy STUB_ANCETRES='/dev/mapper/ventoy dm\n/dev/sdb disk' simuler; rc=$?
+check "support Ventoy (dm): refus" "${rc}" "1"
+config
+STUB_SUPPORT=/dev/sdb STUB_ANCETRES='/dev/sdb disk' simuler; rc=$?
+check "cle en disque entier, cible interne: installation possible" "${rc}" "0"
+lacks "plus d'echec de commande sur la cle" "commande en echec"
 
 echo "== 3. Installation UEFI hors ligne, sans chiffrement =="
 config; EFI=1 simuler; rc=$?
