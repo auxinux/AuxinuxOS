@@ -224,7 +224,7 @@ Architecture: all
 Maintainer: ${MAINTAINER}
 Section: admin
 Priority: important
-Depends: auxi (>= ${VERSION}), auxinux-center (>= ${VERSION}), kernel-auxinuxos, auxinux-shell (>= 0.1.6), auxioffice, auxitext, auxi-mail, auxicorrect, auxipak (>= 1.0.10), plymouth, base-files
+Depends: auxi (>= ${VERSION}), auxinux-center (>= ${VERSION}), kernel-auxinuxos, auxinux-shell (>= 0.2.1), auxioffice, auxitext, auxi-mail, auxicorrect, auxipak (>= 1.0.10), plymouth, base-files
 Replaces: auxinux-center (<< 0.2.3)
 Breaks: auxinux-center (<< 0.2.3)
 Homepage: ${HOMEPAGE}

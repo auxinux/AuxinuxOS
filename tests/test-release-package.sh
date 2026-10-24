@@ -53,7 +53,7 @@ check "os-release dit toujours AuxiNux OS" \
   "$(dpkg-deb --fsys-tarfile "${DEB}" | tar -xO ./usr/lib/os-release | grep -c '^PRETTY_NAME="AuxiNux OS ')" "1"
 check "os-release nomme la variante pour AuxiPak" \
   "$(dpkg-deb --fsys-tarfile "${DEB}" | tar -xO ./usr/lib/os-release | grep -c '^VARIANT_ID=auxinuxos$')" "1"
-for dep in "auxinux-shell (>= 0.1.6)" auxioffice auxitext "auxipak (>= 1.0.10)" plymouth; do
+for dep in "auxinux-shell (>= 0.2.1)" auxioffice auxitext "auxipak (>= 1.0.10)" plymouth; do
   check "tire ${dep}" "$(field Depends | tr ',' '\n' | sed 's/^ *//' | grep -cxF "${dep}")" "1"
 done
 
