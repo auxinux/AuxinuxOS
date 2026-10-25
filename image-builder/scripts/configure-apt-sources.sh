@@ -24,7 +24,11 @@ ARCH="${AUXINUX_ARCH:-$(dpkg --print-architecture 2>/dev/null || echo amd64)}"
 # a « Architectures: amd64 i386 ». La valeur n'est PAS recopiee aveuglement de
 # ce qui est servi: le changement a ete fait sur le serveur, et `diff` confirme
 # qu'une SEULE ligne differe de la version precedente (77c77).
-DEB_SOURCES_SHA256="fc27108b817e85df84f061f29e9a792af897cc828835d093d257212c96c927ac"
+# Mis a jour le 2026-10-25 (Edition ARM): la ligne devient « Architectures:
+# ${ARCHITECTURES} », qui vaut TOUJOURS « amd64 i386 » sur un PC et « arm64 »
+# sur une machine ARM64 (dpkg --print-architecture). Copie d'avant conservee
+# sur le serveur: scripts/.install-auxinux-sources-DEB.sh.avant-arm64-20261025.
+DEB_SOURCES_SHA256="86389b0a10a9a46040b8f024dae14c6ab3644034f3eb5ab1fe3f0aa609972a07"
 AUXINUXOS_KEYRING_SHA256="963f569b4a74f9c76e0c56dd9fa288222b344ff6b102d26fc5eabf6e3ca3f410"
 BRAVE_KEYRING_SHA256="c85e85aa3d1783ffaa649ee8dbbc22af7f87192d304602d37e3018226b394788"
 BRAVE_SOURCES_SHA256="afb89575e544c6da0e2ba4f850931be800b442507a0ad9be3e12d0439566fb1f"
