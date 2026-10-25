@@ -302,6 +302,92 @@ virtuelle** :
 - L’hôte de build a besoin de `libxkbcommon-dev libwayland-dev libudev-dev
   libinput-dev`. Qt6 et KF6 ne sont plus nécessaires.
 
+## Édition ARM (arm64) — en préparation (2026-10-25, branche `feature/arm64`)
+
+Cible : machines virtuelles sur Mac Apple Silicon (UTM, Parallels, VMware
+Fusion), plus tard les portables ARM64. **UEFI seulement**, sans couche
+Windows. Aucune ISO arm64 n'a encore été construite ni démarrée.
+
+### Ce qui est prêt (scripts et tests, à sec)
+
+- `build-image.sh` prend l'architecture de l'hôte (`dpkg --print-architecture`,
+  surchargeable par `AUXINUX_ARCH`) : `mmdebstrap --architectures=arm64`,
+  répertoire `/mnt/build/Auxinuxos-arm64` (amd64 garde `Auxinuxos-normal`),
+  ISO `auxinuxos-0.4.0-arm64.iso`. En arm64 : pas de `couche-windows.txt`, pas
+  de `dpkg --add-architecture i386`, lots hors ligne de l'installateur
+  `efi` (grub-efi-arm64) et `luks` seulement.
+- Listes de paquets : un marqueur final `[amd64]` / `[arm64]` restreint une
+  ligne à une architecture (`image-builder/scripts/package-names.sh`, seul
+  filtre, partagé par l'installation, la purge et `check-rootfs.sh`).
+  L'édition amd64 reçoit exactement les mêmes paquets qu'avant (vérifié par
+  `tests/test-arm64-image.sh`). En arm64 : GRUB EFI arm64 au lieu de
+  grub-pc/grub-efi-amd64, pas de pilote VA-API Intel, et les outils invités
+  `spice-vdagent`, `qemu-guest-agent`, `open-vm-tools`,
+  `open-vm-tools-desktop` (tous publiés en arm64 par Debian 13). Parallels
+  n'a pas d'outils invités dans Debian.
+- `make-iso.sh` : chaîne signée aa64 (`shimaa64`, `gcdaa64`, `mmaa64` →
+  `BOOTAA64.EFI`, `grubaa64.efi`, `mmaa64.efi`), un seul El Torito EFI et la
+  partition EFI ajoutée ; aucune partie BIOS.
+- `check-rootfs.sh` en arm64 : binaires EFI arm64 présents, lot `efi` avec
+  grub-efi-arm64, aucun lot `bios`, aucune architecture étrangère ni paquet
+  i386, pas de Wine ni d'entrée « couche Windows », outils invités présents.
+- Install NOW : refuse une machine arm64 démarrée sans UEFI **avant** de
+  toucher au disque ; `grub-install --target=arm64-efi` ; la partition
+  `bios_grub` est gardée (inoffensive) pour que la racine reste la partition 3.
+  `post-install-cleanup.sh` et `verify-installed-boot.sh` utilisent les noms
+  aa64 et la question debconf de `grub-efi-arm64`.
+- `auxi kernel` accepte les noyaux `-auxinuxos-<architecture native>` :
+  `7.2.12-auxinuxos-arm64` sur l'édition ARM (publié dans la suite `kernel`).
+- Centre : sur une architecture autre que x86_64, l'assistant n'impose pas
+  Bottles, ne propose pas le profil Jeu (Steam, Heroic, Lutris) et ne promet
+  pas Wine. Le paquet `auxinux-center` arm64 n'embarque pas l'assistant des
+  `.exe` ; l'image arm64 n'installe pas `auxinux-windows-setup` ni son entrée
+  de menu.
+- `auxinux-hwcheck` lit le modèle du processeur avec `lscpu` ou
+  `/proc/device-tree/model` quand `/proc/cpuinfo` n'a pas de « model name »
+  (cas de l'arm64).
+- `publish-debs.sh` et `publish-iso.sh` ont une option `--arch` (défaut
+  amd64) ; `tests/vm-driver.py` démarre un invité arm64 avec
+  `AUXINUX_VM_ARCH=arm64` (qemu-system-aarch64, machine `virt`, AAVMF du
+  paquet `qemu-efi-aarch64`).
+
+### Ce qui manque (bloquant)
+
+- **Miroir Debian sans arm64** : `dep.auxinux.ca/DEBIAN` ne sert pas
+  `binary-arm64` (404 le 2026-10-25). Le bootstrap arm64 échoue tant que la
+  synchronisation du miroir n'inclut pas arm64 (`ARCHES` sur virtua-repo).
+- **Suite APPS sans arm64** : son `Release` ne déclare que amd64, et
+  `binary-arm64` répond 404. Paquets propres à l'architecture à reconstruire
+  en arm64 : `auxinux-center`, `auxioffice`, `auxitext`, `auxi-mail`,
+  `auxicorrect`, `auxipak`. Les paquets `all` (`auxi`, `auxinux-shell`,
+  `auxi-shell-auxipak`, `auxinuxos-release`) n'ont besoin que de l'index
+  arm64.
+- **Hôte de construction arm64 natif** : `build-image.sh` exécute les
+  binaires de l'image dans des chroot, sans émulation ; le Center y est aussi
+  compilé.
+- **Pas de couche Windows** : Wine n'exécute pas de programmes x86 sur arm64.
+
+### Contournement local à retirer plus tard
+
+- Le script distant `install-auxinux-sources-DEB.sh`, épinglé par son
+  sha256, écrit `Architectures: amd64 i386` dans `auxinux-debian.sources`.
+  Il n'est pas modifié : en arm64 seulement, `configure-apt-sources.sh`
+  remplace cette ligne par `Architectures: arm64` juste après son exécution.
+  Le `apt-get update` que fait ce script lui-même tourne donc encore avec
+  amd64 i386. À retirer quand le script distant écrira l'architecture de la
+  machine.
+
+### À vérifier sur la première ISO arm64
+
+- Démarrage sous UTM (QEMU), VMware Fusion et Parallels ; presse-papiers et
+  redimensionnement de l'écran.
+- Applications proposées par l'assistant : certaines n'existent sur Flathub
+  qu'en x86_64 ; le dépôt de Brave doit déclarer arm64.
+- Dépôts tiers du centre (`auxinux-source-helper` : VS Code, Docker, Mullvad,
+  Signal) déclarés `Architectures: amd64` : inutilisables en arm64 tels quels.
+- `firmware-qcom-soc` (portables Snapdragon), écarté de `firmware.txt`, sera
+  nécessaire pour les portables ARM64.
+
 ## Installateur maison « Install NOW » (2026-10-02)
 
 - **Disque entier seulement** : pas d’installation à côté de Windows ni dans

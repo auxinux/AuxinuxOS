@@ -18,11 +18,13 @@
 # publie sans --deploy.
 #
 # Usage:
-#   publish-debs.sh --dir DOSSIER_DISTANT [--version V] [--deploy]
+#   publish-debs.sh --dir DOSSIER_DISTANT [--version V] [--arch ARCH] [--deploy]
 #
 #   --dir      dossier SUR l'hote de build qui contient auxi_<V>_all.deb et
-#              auxinux-center_<V>_amd64.deb (sortie de packages/build-debs.sh)
+#              auxinux-center_<V>_<ARCH>.deb (sortie de packages/build-debs.sh)
 #   --version  version a publier (defaut: celle de packages/auxinux-center/Cargo.toml)
+#   --arch     architecture du paquet auxinux-center et de l'index verifie
+#              (binary-<ARCH>): amd64 (defaut) ou arm64 (Edition ARM)
 #   --deploy   publie reellement; sans cette option, le script verifie et
 #              affiche ce qu'il ferait
 set -euo pipefail
@@ -32,23 +34,29 @@ BUILD_HOST="${AUXINUX_BUILD_HOST:-virtua-dev}"
 REPO_HOST="${AUXINUX_REPO_HOST:-virtua-repo}"
 PUB_DIR="${AUXINUX_APPS_PUB_DIR:-auxinuxos-apps-pub}"
 BASE_URL="${AUXINUX_REPO_URL:-https://dep.auxinux.ca/AUXINUXOS}"
-PACKAGES_URL="${BASE_URL}/dists/APPS/main/binary-amd64/Packages"
 
 REMOTE_DIR=""
 VERSION=""
+ARCH="amd64"
 DEPLOY=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --dir)     REMOTE_DIR="${2:?--dir demande un dossier}"; shift 2 ;;
     --version) VERSION="${2:?--version demande une version}"; shift 2 ;;
+    --arch)    ARCH="${2:?--arch demande une architecture}"; shift 2 ;;
     --deploy)  DEPLOY=1; shift ;;
-    -h|--help) sed -n '2,29p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,31p' "$0"; exit 0 ;;
     *) echo "argument inconnu: $1" >&2; exit 64 ;;
   esac
 done
 
 [[ -n "${REMOTE_DIR}" ]] || { echo "--dir est obligatoire" >&2; exit 64; }
+case "${ARCH}" in
+  amd64|arm64) ;;
+  *) echo "architecture non prise en charge: ${ARCH} (amd64 ou arm64)" >&2; exit 64 ;;
+esac
+PACKAGES_URL="${BASE_URL}/dists/APPS/main/binary-${ARCH}/Packages"
 if [[ -z "${VERSION}" ]]; then
   VERSION="$(sed -n 's/^version = "\([^"]*\)"/\1/p' "${SCRIPT_DIR}/auxinux-center/Cargo.toml" | head -n1)"
 fi
@@ -70,7 +78,7 @@ RELEASE_DEB="$(ssh "${BUILD_HOST}" "cd '${REMOTE_DIR}' && ls auxinuxos-release_*
 RELEASE="${RELEASE_DEB#auxinuxos-release_}"; RELEASE="${RELEASE%_all.deb}"
 
 declare -A WANT=([auxi]="${VERSION}" [auxinux-center]="${VERSION}" [auxinuxos-release]="${RELEASE}")
-declare -A FILE=([auxi]="auxi_${VERSION}_all.deb" [auxinux-center]="auxinux-center_${VERSION}_amd64.deb" [auxinuxos-release]="${RELEASE_DEB}")
+declare -A FILE=([auxi]="auxi_${VERSION}_all.deb" [auxinux-center]="auxinux-center_${VERSION}_${ARCH}.deb" [auxinuxos-release]="${RELEASE_DEB}")
 
 echo "==> Index publie: ${PACKAGES_URL}"
 INDEX="$(curl -fsS "${PACKAGES_URL}")" || { echo "index APPS illisible" >&2; exit 69; }

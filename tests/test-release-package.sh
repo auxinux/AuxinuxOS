@@ -30,7 +30,7 @@ check() {
   if [[ "$2" == "$3" ]]; then echo "  OK   $1"; else echo "  ECHEC $1: attendu [$3] obtenu [$2]"; fail=1; fi
 }
 build() {
-  AUXINUX_STRIP=0 AUXINUX_CENTER_BIN="${WORK}/center" AUXINUX_RELEASE="$1" \
+  AUXINUX_ARCH=amd64 AUXINUX_STRIP=0 AUXINUX_CENTER_BIN="${WORK}/center" AUXINUX_RELEASE="$1" \
     "${ROOT}/packages/build-debs.sh" --out "$2" >/dev/null 2>"${WORK}/err"
 }
 

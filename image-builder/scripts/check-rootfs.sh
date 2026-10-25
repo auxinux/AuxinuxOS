@@ -18,6 +18,12 @@ set -uo pipefail
 
 ROOTFS="${1:?usage: check-rootfs.sh ROOTFS}"
 
+# Architecture de l'image (exportee par build-image.sh). amd64: UEFI + BIOS et
+# couche Windows. arm64 (Edition ARM): UEFI seulement, sans couche Windows ni
+# paquet i386.
+ARCH="${AUXINUX_ARCH:-$(dpkg --print-architecture 2>/dev/null || echo amd64)}"
+PACKAGE_NAMES="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/package-names.sh"
+
 FAILURES=0
 
 fail() {
@@ -313,8 +319,20 @@ need_file /etc/systemd/system/multi-user.target.wants/auxinux-installer.service 
 need_file /etc/calamares/branding/auxinuxos/show.qml "l'installateur graphique n'aurait pas de diaporama"
 # Installation SANS Internet: GRUB (UEFI et BIOS) et LUKS doivent etre dans
 # l'image. Un lot vide, c'est une installation hors ligne qui echoue au
-# moment d'installer le chargeur de demarrage.
-for lot in efi bios luks; do
+# moment d'installer le chargeur de demarrage. En arm64: UEFI et LUKS
+# seulement, et le lot efi doit porter le GRUB arm64.
+if [[ "${ARCH}" == "amd64" ]]; then
+  LOTS=(efi bios luks)
+else
+  LOTS=(efi luks)
+  if sudo sh -c "ls '${ROOTFS}/usr/share/auxinux/installateur/paquets/efi/'grub-efi-arm64_*.deb" >/dev/null 2>&1; then
+    ok "paquets embarques: efi contient grub-efi-arm64"
+  else
+    fail "paquets embarques: efi sans grub-efi-arm64 — Install NOW ne pourrait pas installer GRUB hors ligne"
+  fi
+  refuse_file /usr/share/auxinux/installateur/paquets/bios "lot BIOS dans une image arm64 (UEFI seulement)"
+fi
+for lot in "${LOTS[@]}"; do
   if sudo sh -c "ls '${ROOTFS}/usr/share/auxinux/installateur/paquets/${lot}/'*.deb" >/dev/null 2>&1; then
     ok "paquets embarques: ${lot}"
   else
@@ -326,9 +344,11 @@ echo "-- Assistants graphiques"
 need_package zenity "les assistants (accueil live, .exe) n'afficheraient aucune fenetre"
 need_package kdialog "boites de dialogue natives pour les scripts KDE"
 need_exec /usr/bin/auxinux-welcome "premier ecran de la session live"
-need_exec /usr/bin/auxinux-windows-wizard "ouverture des fichiers .exe"
-need_package wine32:i386 "Wine ne lancerait aucun programme 32 bits, donc presque aucun installateur Windows"
-need_owned /usr/bin/auxinux-windows-wizard auxinux-center "l'assistant des .exe ne recevrait aucun correctif"
+if [[ "${ARCH}" == "amd64" ]]; then
+  need_exec /usr/bin/auxinux-windows-wizard "ouverture des fichiers .exe"
+  need_package wine32:i386 "Wine ne lancerait aucun programme 32 bits, donc presque aucun installateur Windows"
+  need_owned /usr/bin/auxinux-windows-wizard auxinux-center "l'assistant des .exe ne recevrait aucun correctif"
+fi
 need_setting /etc/xdg/kiorc '^behaviourOnLaunch=execute$' \
   "Dolphin demanderait « Executer / Annuler » (Annuler par defaut) avant d'ouvrir un .exe"
 need_file /etc/skel/Downloads "les telechargements des nouveaux comptes partiraient dans le bac a sable de Firefox"
@@ -336,7 +356,16 @@ need_file /etc/skel/.config/user-dirs.dirs "aucun dossier de telechargement decl
 need_setting /etc/xdg/user-dirs.conf '^enabled=False$' \
   "xdg-user-dirs (tire par wine32) creerait des dossiers traduits et deplacerait le bureau"
 need_file /etc/xdg/autostart/auxinux-user-dirs.desktop "les comptes existants n'auraient jamais leurs dossiers personnels"
-need_exec /usr/bin/auxinux-windows-setup "installation de la couche Windows et jeux"
+if [[ "${ARCH}" == "amd64" ]]; then
+  need_exec /usr/bin/auxinux-windows-setup "installation de la couche Windows et jeux"
+else
+  # Edition ARM: pas de couche Windows. Une entree de menu qui l'annonce
+  # menerait a une installation qui echoue.
+  refuse_file /usr/share/applications/auxinux-windows-setup.desktop \
+    "entree « couche Windows » dans une image arm64 (Wine x86 indisponible)"
+  refuse_file /usr/share/applications/auxinux-windows-wizard.desktop \
+    "ouverture des .exe annoncee dans une image arm64 (Wine x86 indisponible)"
+fi
 
 echo "-- Bureau et session (AuxiNux Shell, sans le bureau Plasma)"
 # Depuis 2026-10-23, le bureau Plasma n'est plus dans l'image (option du centre
@@ -518,13 +547,39 @@ else
   fail "grubcfg.conf: kernel_params absent — Calamares ajouterait « quiet » au systeme installe"
 fi
 
-echo "-- Couche Windows"
-if sudo chroot "${ROOTFS}" dpkg --print-foreign-architectures 2>/dev/null | grep -qx i386; then
-  ok "architecture i386"
+if [[ "${ARCH}" == "amd64" ]]; then
+  echo "-- Couche Windows"
+  if sudo chroot "${ROOTFS}" dpkg --print-foreign-architectures 2>/dev/null | grep -qx i386; then
+    ok "architecture i386"
+  else
+    fail "architecture i386 — wine32 absent, donc aucune application Windows 32 bits"
+  fi
+  need_package wine "couche de compatibilite Windows"
 else
-  fail "architecture i386 — wine32 absent, donc aucune application Windows 32 bits"
+  echo "-- Edition ARM (${ARCH}): UEFI seulement, sans couche Windows"
+  if sudo chroot "${ROOTFS}" dpkg --print-foreign-architectures 2>/dev/null | grep -q .; then
+    fail "architecture etrangere declaree ($(sudo chroot "${ROOTFS}" dpkg --print-foreign-architectures 2>/dev/null | paste -sd' ')) — l'Edition ARM n'en a aucune"
+  else
+    ok "aucune architecture etrangere"
+  fi
+  i386_pkgs="$(sudo chroot "${ROOTFS}" dpkg-query -W -f='${binary:Package}\n' 2>/dev/null | grep ':i386$' | paste -sd' ' || true)"
+  if [[ -n "${i386_pkgs}" ]]; then
+    fail "paquets i386 installes: ${i386_pkgs}"
+  else
+    ok "aucun paquet i386"
+  fi
+  # Chaine de demarrage signee arm64, lue par make-iso.sh.
+  need_file /usr/lib/shim/shimaa64.efi.signed "pas de shim arm64: l'ISO ne demarrerait pas (paquet shim-signed)"
+  need_file /usr/lib/shim/mmaa64.efi.signed "pas de MokManager arm64 (paquet shim-signed)"
+  need_file /usr/lib/grub/arm64-efi-signed/gcdaa64.efi.signed "pas de GRUB arm64 signe (paquet grub-efi-arm64-signed)"
+  need_package grub-efi-arm64-bin "grub-install --target=arm64-efi impossible pendant l'installation"
+  refuse_package grub-pc-bin "GRUB BIOS dans une image arm64"
+  refuse_package wine "couche Windows dans une image arm64 (Wine x86 indisponible)"
+  # Outils invites: presse-papiers et redimensionnement dans les VM sur Mac.
+  need_package spice-vdagent "presse-papiers et taille d'ecran dans UTM/QEMU"
+  need_package qemu-guest-agent "arret propre et synchronisation depuis l'hote UTM/QEMU"
+  need_package open-vm-tools-desktop "presse-papiers et taille d'ecran dans VMware Fusion"
 fi
-need_package wine "couche de compatibilite Windows"
 
 echo "-- Politique APT"
 if [[ -L "${ROOTFS}/usr/bin/apt-get" ]]; then
@@ -564,11 +619,11 @@ echo "-- Socle: aucune application imposee"
 HORS_SOCLE_LIST="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/package-lists/hors-socle.txt"
 while read -r pkg; do
   refuse_package "${pkg}" "application imposee: elle doit etre proposee par l'assistant, pas installee d'office"
-done < <(awk 'NF && $1 !~ /^#/ {print $1}' "${HORS_SOCLE_LIST}")
+done < <("${PACKAGE_NAMES}" "${ARCH}" "${HORS_SOCLE_LIST}")
 # Bureau Plasma et equivalents des applications AuxiNux (2026-10-23).
 while read -r pkg; do
   refuse_package "${pkg}" "retire du socle (retire-du-socle.txt): Plasma s'installe depuis le centre, l'application AuxiNux remplace son equivalent"
-done < <(awk 'NF && $1 !~ /^#/ {print $1}' "$(dirname "${HORS_SOCLE_LIST}")/retire-du-socle.txt")
+done < <("${PACKAGE_NAMES}" "${ARCH}" "$(dirname "${HORS_SOCLE_LIST}")/retire-du-socle.txt")
 # Le depot Brave est livre, mais DESACTIVE: actif, il ferait contacter Brave a
 # chaque `apt update`, meme par qui ne l'a pas choisi.
 refuse_file /etc/apt/sources.list.d/brave-browser-release.sources \

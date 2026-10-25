@@ -9,8 +9,10 @@
 #
 #   auxi_<V>_all.deb            /usr/bin/auxi, le bouclier apt, le hook
 #                               d'instantane
-#   auxinux-center_<V>_amd64.deb  le Center, ses deux helpers, son action polkit,
-#                               l'assistant des .exe, les dossiers personnels
+#   auxinux-center_<V>_<ARCH>.deb le Center, ses deux helpers, son action polkit,
+#                               l'assistant des .exe (amd64 seulement), les
+#                               dossiers personnels. ARCH = architecture native
+#                               de l'hote (amd64, ou arm64 pour l'Edition ARM).
 #   auxinuxos-release_<R>_all.deb la VERSION d'AuxiNux OS (une par ISO publiee,
 #                               R = 0.4.0+AAAAMMJJ[.N]) et les reglages du
 #                               systeme installe (packages/release/root/)
@@ -37,7 +39,11 @@
 #   AUXINUX_RELEASE     version d'AuxiNux OS: 0.4.0+AAAAMMJJ[.N]
 #                       (defaut: version de os-release + date du jour)
 #   AUXINUX_STRIP=0     ne pas stripper le binaire (tests avec un faux binaire)
+#   AUXINUX_ARCH        architecture du paquet auxinux-center (defaut: celle
+#                       de l'hote, qui est aussi celle du binaire compile)
 set -euo pipefail
+
+ARCH="${AUXINUX_ARCH:-$(dpkg --print-architecture 2>/dev/null || echo amd64)}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CENTER_DIR="${SCRIPT_DIR}/auxinux-center"
@@ -155,10 +161,14 @@ install -D -m 0644 "${CENTER_DIR}/helper/ca.auxinux.center.policy" \
   "${CENTER_ROOT}/usr/share/polkit-1/actions/ca.auxinux.center.policy"
 # Assistant d'ouverture des .exe et dossiers personnels (depuis la 0.2.2): en
 # paquet, leurs correctifs atteignent aussi les machines deja installees.
-install -D -m 0755 "${SCRIPT_DIR}/windows-support/auxinux-windows-wizard" \
-  "${CENTER_ROOT}/usr/bin/auxinux-windows-wizard"
-install -D -m 0644 "${SCRIPT_DIR}/windows-support/auxinux-windows-wizard.desktop" \
-  "${CENTER_ROOT}/usr/share/applications/auxinux-windows-wizard.desktop"
+# amd64 seulement: en arm64 (Edition ARM), Wine n'execute pas de programmes
+# x86; un assistant qui propose d'ouvrir un .exe menerait a un echec.
+if [[ "${ARCH}" == "amd64" ]]; then
+  install -D -m 0755 "${SCRIPT_DIR}/windows-support/auxinux-windows-wizard" \
+    "${CENTER_ROOT}/usr/bin/auxinux-windows-wizard"
+  install -D -m 0644 "${SCRIPT_DIR}/windows-support/auxinux-windows-wizard.desktop" \
+    "${CENTER_ROOT}/usr/share/applications/auxinux-windows-wizard.desktop"
+fi
 install -D -m 0755 "${SCRIPT_DIR}/user-dirs/auxinux-user-dirs" \
   "${CENTER_ROOT}/usr/lib/auxinux/auxinux-user-dirs"
 install -D -m 0644 "${SCRIPT_DIR}/user-dirs/auxinux-user-dirs.desktop" \
@@ -175,7 +185,7 @@ printf '%s\n' /etc/xdg/autostart/auxinux-assistant.desktop \
 SHLIBS=""
 if command -v dpkg-shlibdeps >/dev/null 2>&1; then
   mkdir -p "${WORK}/shlibs/debian"
-  printf 'Source: auxinux-center\n\nPackage: auxinux-center\nArchitecture: amd64\n' \
+  printf 'Source: auxinux-center\n\nPackage: auxinux-center\nArchitecture: %s\n' "${ARCH}" \
     >"${WORK}/shlibs/debian/control"
   SHLIBS="$(cd "${WORK}/shlibs" && dpkg-shlibdeps -O "${CENTER_ROOT}/usr/bin/auxinux-center" 2>/dev/null \
     | sed -n 's/^shlibs:Depends=//p')"
@@ -186,7 +196,7 @@ DEPENDS="auxi (= ${VERSION}), pkexec, flatpak, zenity, libwayland-client0, libxk
 cat >"${CENTER_ROOT}/DEBIAN/control" <<EOF
 Package: auxinux-center
 Version: ${VERSION}
-Architecture: amd64
+Architecture: ${ARCH}
 Maintainer: ${MAINTAINER}
 Section: admin
 Priority: optional
@@ -268,7 +278,7 @@ for root in "${AUXI_ROOT}" "${CENTER_ROOT}" "${REL_ROOT}"; do
 done
 
 AUXI_DEB="${OUT_DIR}/auxi_${VERSION}_all.deb"
-CENTER_DEB="${OUT_DIR}/auxinux-center_${VERSION}_amd64.deb"
+CENTER_DEB="${OUT_DIR}/auxinux-center_${VERSION}_${ARCH}.deb"
 dpkg-deb --root-owner-group -Zxz --build "${AUXI_ROOT}" "${AUXI_DEB}" >/dev/null
 dpkg-deb --root-owner-group -Zxz --build "${CENTER_ROOT}" "${CENTER_DEB}" >/dev/null
 RELEASE_DEB="${OUT_DIR}/auxinuxos-release_${RELEASE}_all.deb"

@@ -118,18 +118,27 @@ fn question<'a>(
 }
 
 fn intro<'a>() -> Element<'a, Message> {
+    // Edition ARM: pas de couche Windows (Wine x86 indisponible), on ne la
+    // promet pas.
+    let socle = if assistant::couche_windows() {
+        "Votre système est installé avec le strict nécessaire: le bureau \
+         AuxiNux Shell, les applications AuxiNux (AuxiOffice avec \
+         AuxiPDF, AuxiText, AuxiMail, le correcteur AuxiCorrect), le \
+         catalogue AuxiPak, quelques outils de KDE (fichiers, terminal, \
+         images) et de quoi faire tourner les applications Windows \
+         (Wine et Bottles). KDE Plasma s'installe depuis Réglages."
+    } else {
+        "Votre système est installé avec le strict nécessaire: le bureau \
+         AuxiNux Shell, les applications AuxiNux (AuxiOffice avec \
+         AuxiPDF, AuxiText, AuxiMail, le correcteur AuxiCorrect), le \
+         catalogue AuxiPak et quelques outils de KDE (fichiers, terminal, \
+         images). KDE Plasma s'installe depuis Réglages."
+    };
     card(
         widget::Column::new()
             .spacing(12)
             .push(widget::text::title3("Bienvenue dans AuxiNux OS"))
-            .push(widget::text::body(
-                "Votre système est installé avec le strict nécessaire: le bureau \
-                 AuxiNux Shell, les applications AuxiNux (AuxiOffice avec \
-                 AuxiPDF, AuxiText, AuxiMail, le correcteur AuxiCorrect), le \
-                 catalogue AuxiPak, quelques outils de KDE (fichiers, terminal, \
-                 images) et de quoi faire tourner les applications Windows \
-                 (Wine et Bottles). KDE Plasma s'installe depuis Réglages.",
-            ))
+            .push(widget::text::body(socle))
             .push(widget::text::body(
                 "Aucune autre application n'a été choisie à votre place. Cet \
                  assistant vous demande ce que vous voulez: navigateur, \
@@ -194,7 +203,7 @@ fn checkboxes<'a>(
 
 fn profil(sel: &assistant::Selection) -> Element<'_, Message> {
     let mut profiles = widget::Row::new().spacing(8);
-    for p in Profil::TOUS {
+    for &p in Profil::proposes() {
         let button = if p == sel.profil {
             widget::button::suggested(p.label())
         } else {
@@ -251,12 +260,16 @@ fn recap(app: &App) -> Element<'_, Message> {
                 sel.profil.label()
             )))
             .push(list)
-            .push(widget::text::caption(
+            .push(widget::text::caption(if assistant::couche_windows() {
                 "Bottles est toujours installé: c'est lui qui fait tourner les \
                  applications Windows exigeantes. Une seule autorisation vous sera \
                  demandée pour l'ensemble. L'installation peut prendre plusieurs \
-                 minutes; vous pouvez suivre le détail ci-dessous.",
-            )),
+                 minutes; vous pouvez suivre le détail ci-dessous."
+            } else {
+                "Une seule autorisation vous sera demandée pour l'ensemble. \
+                 L'installation peut prendre plusieurs minutes; vous pouvez \
+                 suivre le détail ci-dessous."
+            })),
     )
 }
 

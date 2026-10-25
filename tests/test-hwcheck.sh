@@ -170,6 +170,24 @@ check "code de sortie 0" "${rc}" "0"
 check "aucune carte" "$(j gpu_count)" "0"
 check "jeu jaune" "$(j gpu_gaming)" "jaune"
 
+echo "== 14. arm64 (Edition ARM): pas de « model name » dans /proc/cpuinfo =="
+arm_cpuinfo() {
+  : > "${AUXINUX_HW_PROC}/cpuinfo"
+  local i
+  for i in 0 1 2 3; do
+    printf 'processor\t: %s\nBogoMIPS\t: 48.00\nCPU implementer\t: 0x61\n\n' "${i}" >> "${AUXINUX_HW_PROC}/cpuinfo"
+  done
+}
+fake_machine 8388608 4; fake_disk vda 100; arm_cpuinfo
+printf '#!/bin/sh\nprintf "Architecture:  aarch64\\nModel name:    Cortex-A76\\n"\n' > "${STUBS}/lscpu"; chmod 755 "${STUBS}/lscpu"
+check "coeurs comptes sans model name" "$(j cpu_cores)" "4"
+check "modele lu par lscpu" "$(j cpu_model)" "Cortex-A76"
+printf '#!/bin/sh\nexit 0\n' > "${STUBS}/lscpu"
+mkdir -p "${AUXINUX_HW_PROC}/device-tree"
+printf 'Apple Virtual Machine\0' > "${AUXINUX_HW_PROC}/device-tree/model"
+check "modele lu dans l'arbre de peripheriques" "$(j cpu_model)" "Apple Virtual Machine"
+rm -f "${STUBS}/lscpu"
+
 echo
 if [[ "${fail}" -eq 0 ]]; then echo "TOUS LES TESTS PASSENT"; else echo "DES TESTS ECHOUENT"; fi
 exit "${fail}"

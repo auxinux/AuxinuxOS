@@ -49,7 +49,8 @@ contains "/etc/issue.net" "${ROOT}/image-builder/overlays/etc/issue.net" "${PRET
 
 echo "== construction de l'ISO =="
 BUILD="${ROOT}/image-builder/build-image.sh"
-contains "nom de l'ISO"      "${BUILD}" "auxinuxos-${VERSION}-amd64.iso"
+# Nom par architecture depuis l'Edition ARM: auxinuxos-<V>-amd64.iso ou -arm64.iso.
+contains "nom de l'ISO"      "${BUILD}" "auxinuxos-${VERSION}-\${ARCH}.iso"
 contains "profil de build"   "${BUILD}" "PROFILE=\"${VERSION}-live\""
 # Deux entrees principales depuis le 2026-10-02: installer (par defaut) et
 # essayer le bureau live.

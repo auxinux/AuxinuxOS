@@ -66,6 +66,11 @@ INSTALLED="7.2.5-auxinuxos-amd64"
 AVAILABLE="7.2.5-auxinuxos-amd64 7.2.6-auxinuxos-amd64 7.2.9-dev-auxinuxos-amd64"
 RUNNING="7.2.5-auxinuxos-amd64"
 
+# Architecture forcee (honoree par auxi SEULEMENT hors root): les cas 1 a 8
+# sont ceux de l'edition amd64, quelle que soit la machine de test; le cas 9
+# passe en arm64 (Edition ARM).
+export AUXI_TEST_ARCH=amd64
+
 source "${AUXI_BIN}" >/dev/null
 set +e
 apt_real() { echo "${WORK}/apt-get"; }
@@ -239,6 +244,33 @@ check "dev off" "${rc}" "0"
 check "le fichier est desactive" "$(ls "${AUXI_SOURCES_D}")" "auxinuxos-kernel-dev.sources.disabled"
 check "l'utilisateur est prevenu" "$(grep -c 'gardés' <<<"${out}")" "1"
 lacks "aucun noyau retire" "purge"
+
+echo "== 9. Edition ARM: seuls les noyaux -auxinuxos-arm64 sont acceptes =="
+if [[ "${EUID}" -eq 0 ]]; then
+  echo "  (saute: AUXI_TEST_ARCH n'est honore que hors root)"
+else
+  AUXI_TEST_ARCH=arm64
+  KERNEL_ARCH=""   # cache de kernel_arch
+  INSTALLED="7.2.12-auxinuxos-arm64"
+  AVAILABLE="7.2.12-auxinuxos-arm64 7.2.13-auxinuxos-arm64 7.2.6-auxinuxos-amd64"
+  RUNNING="7.2.12-auxinuxos-arm64"
+  rm -f "${AUXI_SOURCES_D}"/*
+  run run_kernel_list --porcelain
+  check "arm64: liste reussie" "${rc}" "0"
+  check "arm64: noyau actif" "$(grep -P '^actif\t' <<<"${out}")" $'actif\t7.2.12-auxinuxos-arm64'
+  check "arm64: installe et actif" "$(grep -P '^noyau\t7.2.12-' <<<"${out}")" $'noyau\t7.2.12-auxinuxos-arm64\tstable\tinstalle,actif'
+  check "arm64: stable disponible" "$(grep -P '^noyau\t7.2.13-' <<<"${out}")" $'noyau\t7.2.13-auxinuxos-arm64\tstable\tdisponible'
+  check "arm64: aucun noyau amd64 liste" "$(grep -cP '^noyau\t.*-amd64' <<<"${out}")" "0"
+  run run_kernel_install 7.2.6-auxinuxos-amd64
+  check "arm64: noyau amd64 refuse" "${rc}" "64"
+  check "arm64: l'exemple du message est arm64" "$(grep -c '7.2.5-auxinuxos-arm64' <<<"${out}")" "1"
+  lacks "arm64: aucun apt-get pour un noyau amd64" "apt-get"
+  run run_kernel_install 7.2.13-auxinuxos-arm64
+  check "arm64: stable disponible installe" "${rc}" "0"
+  has "arm64: image et en-tetes" "install -- linux-image-7.2.13-auxinuxos-arm64 linux-headers-7.2.13-auxinuxos-arm64"
+  AUXI_TEST_ARCH=amd64
+  KERNEL_ARCH=""
+fi
 
 if [[ "${fail}" -eq 0 ]]; then
   echo "test-auxi-kernel: OK"

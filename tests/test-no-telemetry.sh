@@ -57,7 +57,9 @@ echo "== 4. Paquets qui rapportent des donnees ou ouvrent un service reseau =="
 for pkg in popularity-contest whoopsie apport ubuntu-report kdeconnect \
            plasma-browser-integration plasma-welcome plasma-discover packagekit \
            zeitgeist-core; do
-  hits="$(grep -rlE "^[[:space:]]*${pkg}[[:space:]]*$" "${LISTS}" 2>/dev/null || true)"
+  # Marqueur d'architecture final permis (`pkg [arm64]`): il ne doit pas
+  # masquer un paquet interdit.
+  hits="$(grep -rlE "^[[:space:]]*${pkg}([[:space:]]+\[[a-z0-9]+\])?[[:space:]]*$" "${LISTS}" 2>/dev/null || true)"
   check "${pkg} absent des listes" "$([[ -z "${hits}" ]] && echo absent || echo "${hits}")" "absent"
 done
 

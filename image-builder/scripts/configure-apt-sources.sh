@@ -3,6 +3,10 @@ set -euo pipefail
 
 ROOTFS="${1:?usage: configure-apt-sources.sh ROOTFS}"
 
+# Architecture native de l'image (exportee par build-image.sh). Les depots
+# AuxiNux sont declares pour elle seule; i386 n'existe qu'en amd64.
+ARCH="${AUXINUX_ARCH:-$(dpkg --print-architecture 2>/dev/null || echo amd64)}"
+
 # ----------------------------------------------------------------------------
 # Empreintes SHA-256 attendues des artefacts telecharges.
 #
@@ -108,6 +112,28 @@ sudo chmod 0755 \
 
 sudo chroot "${ROOTFS}" /usr/local/lib/auxinux/install-auxinux-sources-DEB.sh
 
+# Edition ARM: correction LOCALE du fichier ecrit par le script distant.
+#
+# Ce script est epingle par son sha256 et ecrit « Architectures: amd64 i386 »
+# dans auxinux-debian.sources. On ne le modifie pas (il sert aussi les
+# machines amd64, et toute modification changerait l'empreinte a verifier):
+# en arm64 seulement, on remplace la ligne apres coup par l'architecture
+# native. Sans cela, apt ne chercherait que binary-amd64 et binary-i386 et
+# l'image arm64 ne trouverait aucun paquet Debian. En amd64, rien ne change.
+# A RETIRER le jour ou le script distant ecrira l'architecture de la machine.
+if [[ "${ARCH}" != "amd64" ]]; then
+  DEB_SOURCES_FILE="${ROOTFS}/etc/apt/sources.list.d/auxinux-debian.sources"
+  if [[ ! -f "${DEB_SOURCES_FILE}" ]]; then
+    echo "ERREUR: ${DEB_SOURCES_FILE} absent apres install-auxinux-sources-DEB.sh" >&2
+    exit 70
+  fi
+  sudo sed -i -E "s/^Architectures:.*/Architectures: ${ARCH}/" "${DEB_SOURCES_FILE}"
+  if ! grep -qx "Architectures: ${ARCH}" "${DEB_SOURCES_FILE}"; then
+    echo "ERREUR: ligne Architectures non corrigee dans ${DEB_SOURCES_FILE}" >&2
+    exit 70
+  fi
+fi
+
 # AuxiNuxOS kernel repository. Keep this local and pinned so the build cannot
 # silently fall back to the retired /VIRTUA repository configuration.
 fetch_verified \
@@ -125,14 +151,14 @@ EOF
 # verifier. Actif: ces paquets sont installes dans l'image. La suite s'ecrit APPS, en MAJUSCULES: APT respecte la casse.
 # Forme fixee par ceux qui publient le depot (2026-10-04).
 sudo rm -f "${ROOTFS}/etc/apt/sources.list.d/auxinux-apps.sources.disabled"
-sudo tee "${ROOTFS}/etc/apt/sources.list.d/auxinux-apps.sources" >/dev/null <<'EOF'
+sudo tee "${ROOTFS}/etc/apt/sources.list.d/auxinux-apps.sources" >/dev/null <<EOF
 # Applications AuxiNux: AuxiOffice (AuxiWriter, AuxiSheet, AuxiPresent,
 # AuxiDraw, AuxiPDF), AuxiText, AuxiPak, AuxiNux Shell, auxi et le centre.
 Types: deb
 URIs: https://dep.auxinux.ca/AUXINUXOS
 Suites: APPS
 Components: main
-Architectures: amd64
+Architectures: ${ARCH}
 Signed-By: /usr/share/keyrings/auxinuxos-archive-keyring.gpg
 EOF
 
@@ -147,7 +173,7 @@ EOF
 # Ensuite, la mise a jour du systeme suit les nouveaux noyaux d'essai.
 # `auxi kernel dev on|off` renomme ce fichier.
 sudo rm -f "${ROOTFS}/etc/apt/sources.list.d/auxinuxos-kernel-dev.sources"
-sudo tee "${ROOTFS}/etc/apt/sources.list.d/auxinuxos-kernel-dev.sources.disabled" >/dev/null <<'EOF'
+sudo tee "${ROOTFS}/etc/apt/sources.list.d/auxinuxos-kernel-dev.sources.disabled" >/dev/null <<EOF
 # Noyaux d'AuxiNuxOS en cours d'essai. Pour l'activer: sudo auxi kernel dev on,
 # ou centre de controle, Applications > Noyau. Puis: auxi kernel list, et
 # sudo auxi kernel install VERSION. En cas de probleme, choisir l'ancien noyau
@@ -156,7 +182,7 @@ Types: deb
 URIs: https://dep.auxinux.ca/AUXINUXOS
 Suites: kernel-dev
 Components: main
-Architectures: amd64
+Architectures: ${ARCH}
 Signed-By: /usr/share/keyrings/auxinuxos-archive-keyring.gpg
 EOF
 
@@ -177,9 +203,12 @@ EOF
 # install-auxinux-sources-DEB.sh, qui desactive toute source contenant
 # « debian.org ».
 #
-# Un reliquat peut trainer sur un rootfs reutilise: on le retire.
-sudo rm -f "${ROOTFS}/etc/apt/sources.list.d/debian-i386.sources" \
-  "${ROOTFS}/etc/apt/sources.list.d/debian-i386.sources.disabled"
+# Un reliquat peut trainer sur un rootfs reutilise: on le retire. amd64
+# seulement: l'Edition ARM n'a jamais eu d'i386.
+if [[ "${ARCH}" == "amd64" ]]; then
+  sudo rm -f "${ROOTFS}/etc/apt/sources.list.d/debian-i386.sources" \
+    "${ROOTFS}/etc/apt/sources.list.d/debian-i386.sources.disabled"
+fi
 
 # Brave: methode officielle (brave.com/linux), avec verification d'empreinte.
 #

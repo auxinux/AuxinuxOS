@@ -30,5 +30,5 @@ vainfo
 # Decodage materiel Intel (Quick Sync). va-driver-all n'installe que le pilote
 # libre; celui-ci couvre les generations recentes, ou le libre ne sait rien
 # faire. C'est la difference entre une video 4K a 5 % de CPU et un ventilateur
-# a fond sur un portable.
-intel-media-va-driver-non-free
+# a fond sur un portable. x86 seulement (aucun GPU Intel sur arm64).
+intel-media-va-driver-non-free [amd64]

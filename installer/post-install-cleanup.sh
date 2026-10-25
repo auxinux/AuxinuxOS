@@ -300,6 +300,16 @@ fi
 #     MokManager et grub.cfg. fbx64.efi n'est volontairement PAS copie: il
 #     recreerait les entrees NVRAM puis redemarrerait, en boucle si le
 #     micrologiciel refuse l'ecriture.
+# Noms des binaires EFI selon l'architecture (memes que grub-install et
+# shim): x64 sur amd64, aa64 sur arm64 (Edition ARM). Le script tourne dans le
+# systeme installe (ou a cote, meme architecture): dpkg donne la reponse.
+# AUXINUX_ARCH: surcharge pour les tests (tests/test-post-install.sh).
+efi_arch="${AUXINUX_ARCH:-$(dpkg --print-architecture 2>/dev/null || echo amd64)}"
+case "${efi_arch}" in
+  arm64) efi_sfx="aa64"; grub_efi_pkg="grub-efi-arm64" ;;
+  *)     efi_sfx="x64";  grub_efi_pkg="grub-efi-amd64" ;;
+esac
+efi_sfx_up="$(printf '%s' "${efi_sfx}" | tr '[:lower:]' '[:upper:]')"
 esp="${prefix}/boot/efi"
 if [ -d "${esp}/EFI" ]; then
   vendor=""
@@ -311,7 +321,7 @@ if [ -d "${esp}/EFI" ]; then
       BOOT) bootdir="${d}" ;;
     esac
   done
-  if [ -n "${vendor}" ] && [ -f "${vendor}/grub.cfg" ] && [ -f "${vendor}/grubx64.efi" ]; then
+  if [ -n "${vendor}" ] && [ -f "${vendor}/grub.cfg" ] && [ -f "${vendor}/grub${efi_sfx}.efi" ]; then
     # Chemin de SECOURS: un echec ici ne doit pas faire echouer toute
     # l'installation (set -e). Il est signale, et verify-installed-boot.sh
     # redit l'absence de chemin de secours.
@@ -324,17 +334,17 @@ if [ -d "${esp}/EFI" ]; then
       for f in "${bootdir}"/*; do
         [ -f "${f}" ] || continue
         case "$(basename "${f}" | tr '[:lower:]' '[:upper:]')" in
-          BOOTX64.EFI|GRUBX64.EFI|MMX64.EFI|GRUB.CFG) rm -f "${f}" || return 1 ;;
+          "BOOT${efi_sfx_up}.EFI"|"GRUB${efi_sfx_up}.EFI"|"MM${efi_sfx_up}.EFI"|GRUB.CFG) rm -f "${f}" || return 1 ;;
         esac
       done
-      if [ -f "${vendor}/shimx64.efi" ]; then
-        cp "${vendor}/shimx64.efi" "${bootdir}/BOOTX64.EFI" || return 1
-        cp "${vendor}/grubx64.efi" "${bootdir}/grubx64.efi" || return 1
-        if [ -f "${vendor}/mmx64.efi" ]; then
-          cp "${vendor}/mmx64.efi" "${bootdir}/mmx64.efi" || return 1
+      if [ -f "${vendor}/shim${efi_sfx}.efi" ]; then
+        cp "${vendor}/shim${efi_sfx}.efi" "${bootdir}/BOOT${efi_sfx_up}.EFI" || return 1
+        cp "${vendor}/grub${efi_sfx}.efi" "${bootdir}/grub${efi_sfx}.efi" || return 1
+        if [ -f "${vendor}/mm${efi_sfx}.efi" ]; then
+          cp "${vendor}/mm${efi_sfx}.efi" "${bootdir}/mm${efi_sfx}.efi" || return 1
         fi
       else
-        cp "${vendor}/grubx64.efi" "${bootdir}/BOOTX64.EFI" || return 1
+        cp "${vendor}/grub${efi_sfx}.efi" "${bootdir}/BOOT${efi_sfx_up}.EFI" || return 1
       fi
       cp "${vendor}/grub.cfg" "${bootdir}/grub.cfg" || return 1
     }
@@ -342,14 +352,15 @@ if [ -d "${esp}/EFI" ]; then
       echo "post-install-cleanup: AVERTISSEMENT: chemin de secours EFI/BOOT incomplet (partition EFI pleine ?)." >&2
     fi
     # Et que les mises a jour de GRUB le tiennent a jour: grub-efi-amd64
+    # (grub-efi-arm64 en arm64)
     # relance grub-install a chaque nouvelle version, avec
     # --force-extra-removable si cette question debconf vaut « true ».
-    echo "grub-efi-amd64 grub2/force_efi_extra_removable boolean true" \
+    echo "${grub_efi_pkg} grub2/force_efi_extra_removable boolean true" \
       | chroot "${TARGET_ROOT}" debconf-set-selections 2>/dev/null \
       || echo "post-install-cleanup: AVERTISSEMENT: grub2/force_efi_extra_removable non pose." >&2
-  elif [ -n "${vendor}" ] && [ ! -e "${vendor}/shimx64.efi" ] && [ -s "${vendor}/grubx64.efi" ]; then
+  elif [ -n "${vendor}" ] && [ ! -e "${vendor}/shim${efi_sfx}.efi" ] && [ -s "${vendor}/grub${efi_sfx}.efi" ]; then
     # GRUB autonome (disque chiffre, installateur maison): il a ecrit lui-meme
-    # EFI/BOOT/BOOTX64.EFI avec grub-install --removable.
+    # EFI/BOOT/BOOTX64.EFI (BOOTAA64.EFI) avec grub-install --removable.
     :
   else
     echo "post-install-cleanup: AVERTISSEMENT: EFI/AuxiNuxOS incomplet; chemin de secours EFI/BOOT non ecrit." >&2

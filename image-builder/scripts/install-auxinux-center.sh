@@ -4,14 +4,16 @@
 # Variables:
 #   AUXINUX_CENTER_BIN  chemin d'un binaire deja compile (saute la compilation)
 #
-# Le binaire est natif de l'hote de build (Debian 13 amd64 == cible), donc on
-# peut le compiler sur l'hote et le copier tel quel dans le rootfs.
+# Le binaire est natif de l'hote de build (Debian 13, meme architecture que la
+# cible: amd64, ou arm64 pour l'Edition ARM), donc on peut le compiler sur
+# l'hote et le copier tel quel dans le rootfs.
 set -euo pipefail
 
 ROOTFS="${1:?usage: install-auxinux-center.sh ROOTFS}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 PKG_DIR="${PROJECT_DIR}/packages/auxinux-center"
+ARCH="${AUXINUX_ARCH:-$(dpkg --print-architecture 2>/dev/null || echo amd64)}"
 
 BIN="${AUXINUX_CENTER_BIN:-${PKG_DIR}/target/release/auxinux-center}"
 
@@ -44,9 +46,9 @@ echo "==> Construction des paquets auxi et auxinux-center"
 DEBS_DIR="${AUXINUX_DEBS_DIR:-${PROJECT_DIR}/image-builder/output/debs}"
 mkdir -p "${DEBS_DIR}"
 rm -f "${DEBS_DIR}"/*.deb
-AUXINUX_CENTER_BIN="${BIN}" "${PROJECT_DIR}/packages/build-debs.sh" --out "${DEBS_DIR}" >/dev/null
+AUXINUX_ARCH="${ARCH}" AUXINUX_CENTER_BIN="${BIN}" "${PROJECT_DIR}/packages/build-debs.sh" --out "${DEBS_DIR}" >/dev/null
 AUXI_DEB="$(ls "${DEBS_DIR}"/auxi_*_all.deb)"
-CENTER_DEB="$(ls "${DEBS_DIR}"/auxinux-center_*_amd64.deb)"
+CENTER_DEB="$(ls "${DEBS_DIR}"/auxinux-center_*_"${ARCH}".deb)"
 # Version d'AuxiNux OS et reglages du systeme installe (packages/release).
 RELEASE_DEB="$(ls "${DEBS_DIR}"/auxinuxos-release_*_all.deb)"
 

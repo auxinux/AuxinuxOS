@@ -2,7 +2,29 @@
 set -euo pipefail
 
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-DEFAULT_WORK_DIR="/mnt/build/Auxinuxos-normal"
+
+# Architecture construite: celle de l'HOTE (mmdebstrap et les chroot executent
+# les binaires de l'image, sans emulation). AUXINUX_ARCH ne sert qu'a forcer
+# la valeur (tests a sec); construire de l'arm64 sur un hote amd64 demanderait
+# qemu-user, que ce script ne met pas en place.
+#   amd64: edition principale (UEFI + BIOS, couche Windows).
+#   arm64: Edition ARM (UEFI seulement, sans couche Windows).
+ARCH="${AUXINUX_ARCH:-$(dpkg --print-architecture 2>/dev/null || echo amd64)}"
+case "${ARCH}" in
+  amd64|arm64) ;;
+  *)
+    echo "architecture non prise en charge: ${ARCH} (amd64 ou arm64)" >&2
+    exit 64
+    ;;
+esac
+export AUXINUX_ARCH="${ARCH}"
+
+# amd64 garde son repertoire historique: un rootfs existant reste reutilisable.
+if [[ "${ARCH}" == "amd64" ]]; then
+  DEFAULT_WORK_DIR="/mnt/build/Auxinuxos-normal"
+else
+  DEFAULT_WORK_DIR="/mnt/build/Auxinuxos-${ARCH}"
+fi
 OUTPUT_DIR="${PROJECT_DIR}/image-builder/output"
 WORK_DIR="${AUXINUX_NORMAL_BUILD_DIR:-${DEFAULT_WORK_DIR}}"
 PROFILE="0.4.0-live"
@@ -13,9 +35,10 @@ usage() {
   cat <<EOF
 usage: $0 [--work-dir PATH] [--force] [--reuse-rootfs]
 
-Builds AuxiNux OS 0.4.0 live ISO.
+Builds AuxiNux OS 0.4.0 live ISO (architecture: ${ARCH}).
 
 Defaults:
+  arch     : ${ARCH} (host architecture, AUXINUX_ARCH to override)
   work dir : ${DEFAULT_WORK_DIR}
   output   : ${OUTPUT_DIR}
 EOF
@@ -122,7 +145,7 @@ purge_build_dir() {
 BUILD_DIR="${WORK_DIR}/${PROFILE}"
 ROOTFS_DIR="${BUILD_DIR}/rootfs"
 ISO_ROOT="${BUILD_DIR}/iso-root"
-OUTPUT_ISO="${OUTPUT_DIR}/auxinuxos-0.4.0-amd64.iso"
+OUTPUT_ISO="${OUTPUT_DIR}/auxinuxos-0.4.0-${ARCH}.iso"
 
 if [[ "${FORCE}" -eq 1 && "${REUSE_ROOTFS}" -eq 1 ]]; then
   echo "--force and --reuse-rootfs cannot be used together" >&2
@@ -141,8 +164,15 @@ fi
 
 mkdir -p "${BUILD_DIR}" "${OUTPUT_DIR}"
 
+# Lecture des listes de paquets, filtrees par architecture: une ligne peut
+# finir par `[amd64]` ou `[arm64]` (voir scripts/package-names.sh, seul filtre
+# de la chaine, partage avec check-rootfs.sh).
+package_names() {
+  "${PROJECT_DIR}/image-builder/scripts/package-names.sh" "${ARCH}" "$@"
+}
+
 package_csv() {
-  awk 'NF && $1 !~ /^#/' "$@" | paste -sd,
+  package_names "$@" | paste -sd,
 }
 
 # Listes de paquets. UNE seule declaration sert au bootstrap et a
@@ -174,9 +204,13 @@ BOOTSTRAP_LISTS=(
 #   - auxinux-system.txt contient le noyau, qui vient du depot AuxiNux, qui
 #     n'existe qu'apres configure-apt-sources.sh.
 EXTRA_LISTS=(
-  couche-windows.txt
   auxinux-system.txt
 )
+# La couche Windows (Wine, paquets :i386) n'existe qu'en amd64: Wine n'execute
+# pas de programmes x86 sur arm64.
+if [[ "${ARCH}" == "amd64" ]]; then
+  EXTRA_LISTS=(couche-windows.txt "${EXTRA_LISTS[@]}")
+fi
 
 list_paths() {
   local name
@@ -212,9 +246,10 @@ else
   # 2026-09-12), donc mmdebstrap echouerait a recuperer binary-i386/Packages.
   # L'architecture i386 est ajoutee juste apres, avec son propre depot
   # (configure-apt-sources.sh), et la couche jeu est installee a ce
-  # moment-la.
+  # moment-la. En arm64 (Edition ARM): l'architecture native seule, sans
+  # i386 ensuite; le miroir doit alors porter binary-arm64.
   sudo mmdebstrap \
-    --architectures=amd64 \
+    --architectures="${ARCH}" \
     --variant=apt \
     --components=main,contrib,non-free,non-free-firmware \
     --include="${BASE_PACKAGES}" \
@@ -241,7 +276,7 @@ mount_chroot_api_filesystems
 # -- c'est le cas de brave-browser, dont le depot est desormais desactive.
 # Meme traitement pour retire-du-socle.txt: le bureau Plasma (2026-10-23) et
 # les equivalents des applications AuxiNux.
-mapfile -t HORS_SOCLE < <(awk 'NF && $1 !~ /^#/ {print $1}' \
+mapfile -t HORS_SOCLE < <(package_names \
   "${PROJECT_DIR}/image-builder/package-lists/hors-socle.txt" \
   "${PROJECT_DIR}/image-builder/package-lists/retire-du-socle.txt")
 mapfile -t HORS_SOCLE_PRESENTS < <(sudo chroot "${ROOTFS_DIR}" \
@@ -270,7 +305,9 @@ INSTALL_PACKAGES="$(package_csv "${ALL_PATHS[@]}" | tr ',' ' ')"
 # mmdebstrap ne l'ajoute plus (le miroir ne porte pas i386), donc c'est ICI que
 # l'architecture entre, avec le depot i386 pose par configure-apt-sources.sh
 # juste avant.
-if ! sudo chroot "${ROOTFS_DIR}" dpkg --print-foreign-architectures | grep -qx i386; then
+# amd64 seulement: en arm64, pas de couche Windows, donc pas d'i386.
+if [[ "${ARCH}" == "amd64" ]] &&
+   ! sudo chroot "${ROOTFS_DIR}" dpkg --print-foreign-architectures | grep -qx i386; then
   sudo chroot "${ROOTFS_DIR}" dpkg --add-architecture i386
 fi
 # Mise a jour des index TOUJOURS, et non seulement quand l'architecture vient
@@ -315,12 +352,18 @@ sudo chroot "${ROOTFS_DIR}" apt-get autoremove -y --purge
 # (helper bootloader-config): sans reseau, pas de GRUB. Un lot par cas:
 #   efi  -> grub-efi-amd64      bios -> grub-pc
 #   luks -> cryptsetup-initramfs, keyutils (deverrouillage au demarrage)
+# En arm64: efi -> grub-efi-arm64, et pas de lot bios (UEFI seulement).
 # Les deux paquets GRUB sont incompatibles entre eux: ils ne peuvent pas etre
 # installes dans l'image, seulement prets a l'etre. Retires du systeme installe
 # par post-install-cleanup.sh.
 PAQUETS_INSTALLATEUR="/usr/share/auxinux/installateur/paquets"
 sudo rm -rf "${ROOTFS_DIR}${PAQUETS_INSTALLATEUR}"
-for lot in "efi:grub-efi-amd64" "bios:grub-pc" "luks:cryptsetup-initramfs keyutils"; do
+if [[ "${ARCH}" == "amd64" ]]; then
+  LOTS_INSTALLATEUR=("efi:grub-efi-amd64" "bios:grub-pc" "luks:cryptsetup-initramfs keyutils")
+else
+  LOTS_INSTALLATEUR=("efi:grub-efi-arm64" "luks:cryptsetup-initramfs keyutils")
+fi
+for lot in "${LOTS_INSTALLATEUR[@]}"; do
   nom="${lot%%:*}"
   sudo chroot "${ROOTFS_DIR}" apt-get clean
   # shellcheck disable=SC2086

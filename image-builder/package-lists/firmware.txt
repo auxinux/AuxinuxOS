@@ -38,6 +38,11 @@
 #                                  Hauppauge -- ne justifie pas de trancher
 #                                  cette question a sa place.
 
+# Edition ARM (arm64): ces paquets sont « Architecture: all », la liste vaut
+# telle quelle. firmware-qcom-soc (ecarte ci-dessus) deviendra necessaire pour
+# les portables Snapdragon; inutile dans une VM sur Mac Apple Silicon, premiere
+# cible de l'edition. A ajouter alors avec le marqueur [arm64].
+
 # --- Metapaquets de base ----------------------------------------------------
 firmware-linux
 firmware-linux-nonfree
