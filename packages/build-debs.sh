@@ -13,7 +13,7 @@
 #                               l'assistant des .exe (amd64 seulement), les
 #                               dossiers personnels. ARCH = architecture native
 #                               de l'hote (amd64, ou arm64 pour l'Edition ARM).
-#   auxinuxos-release_<R>_all.deb la VERSION d'AuxiNux OS (une par ISO publiee,
+#   auxinuxos-release_<R>_<arch>.deb la VERSION d'AuxiNux OS (une par ISO publiee,
 #                               R = 0.4.0+AAAAMMJJ[.N]) et les reglages du
 #                               systeme installe (packages/release/root/)
 #
@@ -227,14 +227,24 @@ install -m 0644 "${RELEASE_DIR}/debian/triggers" "${REL_ROOT}/DEBIAN/"
 sed -i "s|@CONFFILES@|$(tr '\n' ' ' <"${REL_ROOT}/DEBIAN/conffiles" | sed 's/ $//')|" "${REL_ROOT}/DEBIAN/preinst"
 # Description longue = nouveautes, une ligne par paragraphe (format deb822).
 NOTES="$(sed -e '/^[[:space:]]*$/d' -e 's/^/ /' "${RELEASE_DIR}/NOUVEAUTES")"
+# Paquet PAR ARCHITECTURE depuis l'Edition ARM (2026-10-25), et non plus
+# « all »: un paquet all est le meme pour toutes les machines, or Debian ne
+# permet pas de conditionner ses Depends a l'architecture. La version amd64
+# tire les applications AuxiNux; la version arm64 seulement ce qui existe en
+# arm64 (les applications y entreront avec leurs paquets arm64).
+REL_DEPENDS="auxi (>= ${VERSION}), auxinux-center (>= ${VERSION}), kernel-auxinuxos, auxinux-shell (>= 0.2.1)"
+if [[ "${ARCH}" == "amd64" ]]; then
+  REL_DEPENDS="${REL_DEPENDS}, auxioffice, auxitext, auxi-mail, auxicorrect, auxipak (>= 1.0.10)"
+fi
+REL_DEPENDS="${REL_DEPENDS}, plymouth, base-files"
 cat >"${REL_ROOT}/DEBIAN/control" <<EOF
 Package: auxinuxos-release
 Version: ${RELEASE}
-Architecture: all
+Architecture: ${ARCH}
 Maintainer: ${MAINTAINER}
 Section: admin
 Priority: important
-Depends: auxi (>= ${VERSION}), auxinux-center (>= ${VERSION}), kernel-auxinuxos, auxinux-shell (>= 0.2.1), auxioffice, auxitext, auxi-mail, auxicorrect, auxipak (>= 1.0.10), plymouth, base-files
+Depends: ${REL_DEPENDS}
 Replaces: auxinux-center (<< 0.2.3)
 Breaks: auxinux-center (<< 0.2.3)
 Homepage: ${HOMEPAGE}
@@ -281,7 +291,7 @@ AUXI_DEB="${OUT_DIR}/auxi_${VERSION}_all.deb"
 CENTER_DEB="${OUT_DIR}/auxinux-center_${VERSION}_${ARCH}.deb"
 dpkg-deb --root-owner-group -Zxz --build "${AUXI_ROOT}" "${AUXI_DEB}" >/dev/null
 dpkg-deb --root-owner-group -Zxz --build "${CENTER_ROOT}" "${CENTER_DEB}" >/dev/null
-RELEASE_DEB="${OUT_DIR}/auxinuxos-release_${RELEASE}_all.deb"
+RELEASE_DEB="${OUT_DIR}/auxinuxos-release_${RELEASE}_${ARCH}.deb"
 dpkg-deb --root-owner-group -Zxz --build "${REL_ROOT}" "${RELEASE_DEB}" >/dev/null
 
 echo "${AUXI_DEB}"

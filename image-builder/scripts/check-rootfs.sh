@@ -245,12 +245,17 @@ if [[ -n "${AUXINUX_RELEASE:-}" ]]; then
   if [[ "${got}" == "${AUXINUX_RELEASE}" ]]; then ok "edition ${got}"
   else fail "auxinuxos-release ${got:-absent} au lieu de l'edition ${AUXINUX_RELEASE} construite"; fi
 fi
-need_package auxioffice "pas d'AuxiOffice: aucune suite bureautique"
-need_package auxitext "pas d'AuxiText, donc pas d'editeur de texte (AuxiText remplace Kate)"
-need_package auxipak "pas d'AuxiPak (demande d'aporler pour la 0.3.0)"
-need_exec /usr/bin/auxipak "commande auxipak absente"
-need_setting /etc/auxipak/config.toml '^program = "(/usr/bin/)?auxi"$' \
-  "AuxiPak passerait par apt-get, bloque sur AuxiNux OS"
+# Applications AuxiNux: publiees en amd64 seulement pour l'instant (Edition
+# ARM, 2026-10-25). En arm64, elles sont absentes de l'image jusqu'a ce que
+# leurs paquets arm64 existent (bureau-auxinux.txt: marqueur [amd64]).
+if [[ "${ARCH}" == "amd64" ]]; then
+  need_package auxioffice "pas d'AuxiOffice: aucune suite bureautique"
+  need_package auxitext "pas d'AuxiText, donc pas d'editeur de texte (AuxiText remplace Kate)"
+  need_package auxipak "pas d'AuxiPak (demande d'aporler pour la 0.3.0)"
+  need_exec /usr/bin/auxipak "commande auxipak absente"
+  need_setting /etc/auxipak/config.toml '^program = "(/usr/bin/)?auxi"$' \
+    "AuxiPak passerait par apt-get, bloque sur AuxiNux OS"
+fi
 need_setting /usr/lib/os-release '^VARIANT_ID=auxinuxos$' \
   "AuxiPak prendrait AuxiNux OS pour une Debian ordinaire (apt-get bloque)"
 # Noyau: celui de la suite prod « kernel » au moment du build, jamais un
@@ -275,20 +280,22 @@ if grep -q '^DefaultSession=auxinux.desktop$' "${ROOTFS}/etc/sddm.conf.d/10-auxi
 else
   fail "SDDM: DefaultSession=auxinux.desktop absent de 10-auxinux.conf"
 fi
-need_file /usr/share/applications/ca.auxinux.AuxiText.desktop \
-  "les fichiers texte seraient associes (mimeapps.list) a un lanceur absent"
-need_setting /etc/xdg/mimeapps.list '^text/plain=ca\.auxinux\.AuxiText\.desktop$' \
-  "les fichiers texte ne s'ouvriraient pas avec AuxiText"
-# Applications AuxiNux (2026-10-23): chacune remplace son equivalent.
-need_package auxi-mail "pas d'AuxiMail: aucun logiciel de courrier"
-need_package auxicorrect "pas d'AuxiCorrect: ni correcteur ni dictionnaire pour AuxiOffice et AuxiMail"
-need_exec /usr/lib/auxicorrect/auxicorrect-cli "AuxiOffice et AuxiMail appellent auxicorrect-cli: correction impossible"
-need_file /usr/share/applications/ca.auxinux.pdf.desktop "les PDF seraient associes (mimeapps.list) a un lanceur absent"
-need_setting /etc/xdg/mimeapps.list '^application/pdf=ca\.auxinux\.pdf\.desktop$' \
-  "les PDF ne s'ouvriraient pas avec AuxiPDF"
-need_file /usr/share/applications/AuxiMail.desktop "les liens mailto: seraient associes a un lanceur absent"
-need_setting /etc/xdg/mimeapps.list '^x-scheme-handler/mailto=AuxiMail\.desktop$' \
-  "un lien « courriel » ouvrirait autre chose qu'AuxiMail"
+if [[ "${ARCH}" == "amd64" ]]; then
+  need_file /usr/share/applications/ca.auxinux.AuxiText.desktop \
+    "les fichiers texte seraient associes (mimeapps.list) a un lanceur absent"
+  need_setting /etc/xdg/mimeapps.list '^text/plain=ca\.auxinux\.AuxiText\.desktop$' \
+    "les fichiers texte ne s'ouvriraient pas avec AuxiText"
+  # Applications AuxiNux (2026-10-23): chacune remplace son equivalent.
+  need_package auxi-mail "pas d'AuxiMail: aucun logiciel de courrier"
+  need_package auxicorrect "pas d'AuxiCorrect: ni correcteur ni dictionnaire pour AuxiOffice et AuxiMail"
+  need_exec /usr/lib/auxicorrect/auxicorrect-cli "AuxiOffice et AuxiMail appellent auxicorrect-cli: correction impossible"
+  need_file /usr/share/applications/ca.auxinux.pdf.desktop "les PDF seraient associes (mimeapps.list) a un lanceur absent"
+  need_setting /etc/xdg/mimeapps.list '^application/pdf=ca\.auxinux\.pdf\.desktop$' \
+    "les PDF ne s'ouvriraient pas avec AuxiPDF"
+  need_file /usr/share/applications/AuxiMail.desktop "les liens mailto: seraient associes a un lanceur absent"
+  need_setting /etc/xdg/mimeapps.list '^x-scheme-handler/mailto=AuxiMail\.desktop$' \
+    "un lien « courriel » ouvrirait autre chose qu'AuxiMail"
+fi
 need_file /etc/apt/sources.list.d/auxinux-apps.sources "AuxiOffice, AuxiText et AuxiPak ne recevraient aucune mise a jour"
 need_file /etc/apt/sources.list.d/auxinuxos-kernel-dev.sources.disabled \
   "le depot des noyaux en essai ne serait pas propose dans le centre de controle"

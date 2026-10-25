@@ -50,7 +50,7 @@ AUXINUX_ARCH="${ARCH}" AUXINUX_CENTER_BIN="${BIN}" "${PROJECT_DIR}/packages/buil
 AUXI_DEB="$(ls "${DEBS_DIR}"/auxi_*_all.deb)"
 CENTER_DEB="$(ls "${DEBS_DIR}"/auxinux-center_*_"${ARCH}".deb)"
 # Version d'AuxiNux OS et reglages du systeme installe (packages/release).
-RELEASE_DEB="$(ls "${DEBS_DIR}"/auxinuxos-release_*_all.deb)"
+RELEASE_DEB="$(ls "${DEBS_DIR}"/auxinuxos-release_*_"${ARCH:-$(dpkg --print-architecture)}".deb)"
 
 echo "==> Installation d'AuxiNux OS Center et d'auxi dans le rootfs"
 sudo install -d -m 0755 "${ROOTFS}/tmp/auxinux-debs"

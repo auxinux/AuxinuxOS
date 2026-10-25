@@ -21,7 +21,7 @@ auxinux-shell
 # Interface graphique d'AuxiPak (Shell 0.3.0) : seulement recommandee par
 # auxinux-shell (auxipak n'existe que pour amd64). Les jeux maison
 # (auxi-shell-games) arrivent seuls : auxinux-shell en depend.
-auxi-shell-auxipak
+auxi-shell-auxipak [amd64]
 gir1.2-wp-0.5
 wlsunset
 wlopm
@@ -73,16 +73,16 @@ kio-extras
 # --- Applications AuxiNux (depot AUXINUXOS/APPS) -------------------------------
 # AuxiOffice: AuxiWriter, AuxiSheet, AuxiPresent, AuxiDraw et AuxiPDF (lecteur
 # PDF par defaut).
-auxioffice
+auxioffice [amd64]
 # AuxiText: editeur de texte brut et de programmation par defaut.
-auxitext
+auxitext [amd64]
 # AuxiMail: courrier (paquet auxi-mail).
-auxi-mail
+auxi-mail [amd64]
 # AuxiCorrect: correcteur et dictionnaire du francais pour AuxiOffice et
 # AuxiMail (dictionnaire SQLite d'environ 240 Mo).
-auxicorrect
+auxicorrect [amd64]
 # AuxiPak: catalogue d'applications multi-plateforme (installe par auxi).
-auxipak
+auxipak [amd64]
 
 # --- Applications KDE gardees ---------------------------------------------
 dolphin
