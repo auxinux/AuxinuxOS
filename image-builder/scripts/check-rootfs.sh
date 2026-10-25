@@ -537,7 +537,13 @@ need_setting /etc/plymouth/plymouthd.conf '^Theme=auxinux$' "Plymouth afficherai
 initrd="$(sudo find "${ROOTFS}/boot" -maxdepth 1 -name 'initrd.img-*auxinuxos*' 2>/dev/null | sort -V | tail -n1)"
 if [[ -z "${initrd}" ]]; then
   fail "aucun initramfs AuxiNux dans /boot"
-elif sudo chroot "${ROOTFS}" lsinitramfs "/boot/$(basename "${initrd}")" 2>/dev/null | grep -q 'usr/share/plymouth/themes/auxinux/auxinux.script'; then
+# grep -c et non grep -q: -q s'arrete au premier resultat et coupe le tube;
+# lsinitramfs meurt alors de SIGPIPE et pipefail le compte comme un echec.
+# Invisible en PC (lsinitramfs finit avant), systematique sous emulation ARM
+# (1re ISO arm64, 2026-10-25): le theme etait present et le controle disait
+# l'inverse.
+elif [[ "$(sudo chroot "${ROOTFS}" lsinitramfs "/boot/$(basename "${initrd}")" 2>/dev/null \
+            | grep -c 'usr/share/plymouth/themes/auxinux/auxinux.script')" -gt 0 ]]; then
   ok "$(basename "${initrd}"): theme Plymouth auxinux present"
 else
   fail "$(basename "${initrd}"): theme Plymouth auxinux absent de l'initramfs — splash muet ou theme Debian"
