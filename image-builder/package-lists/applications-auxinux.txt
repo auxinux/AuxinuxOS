@@ -1,0 +1,19 @@
+# Paquets du DEPOT AuxiNux (dep.auxinux.ca/AUXINUXOS, suite APPS): AuxiNux
+# Shell et les applications AuxiNux.
+#
+# Liste a part, installee APRES configure-apt-sources.sh (EXTRA_LISTS de
+# build-image.sh), comme le noyau (auxinux-system.txt): mmdebstrap ne connait
+# que le miroir Debian. Ils etaient dans la liste du bureau, ce qui faisait
+# echouer toute construction depuis un rootfs NEUF (« Unable to locate package
+# auxinux-shell », constate a la 1re construction ARM le 2026-10-25); en PC,
+# le rootfs etait toujours reutilise et le defaut restait cache.
+#
+# Marqueur [amd64]: applications pas encore publiees en arm64.
+
+auxinux-shell
+auxi-shell-auxipak [amd64]
+auxioffice [amd64]
+auxitext [amd64]
+auxi-mail [amd64]
+auxicorrect [amd64]
+auxipak [amd64]

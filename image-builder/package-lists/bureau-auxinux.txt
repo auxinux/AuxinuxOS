@@ -17,11 +17,11 @@
 # --- Session ---------------------------------------------------------------
 # Recommandations du paquet auxinux-shell, NOMMEES car l'image installe sans
 # les recommandations (liste de docs/phase5.md du Shell).
-auxinux-shell
+# auxinux-shell: voir applications-auxinux.txt (depot AuxiNux, installe apres le bootstrap).
 # Interface graphique d'AuxiPak (Shell 0.3.0) : seulement recommandee par
 # auxinux-shell (auxipak n'existe que pour amd64). Les jeux maison
 # (auxi-shell-games) arrivent seuls : auxinux-shell en depend.
-auxi-shell-auxipak [amd64]
+# auxi-shell-auxipak: voir applications-auxinux.txt (depot AuxiNux, installe apres le bootstrap).
 gir1.2-wp-0.5
 wlsunset
 wlopm
@@ -73,16 +73,16 @@ kio-extras
 # --- Applications AuxiNux (depot AUXINUXOS/APPS) -------------------------------
 # AuxiOffice: AuxiWriter, AuxiSheet, AuxiPresent, AuxiDraw et AuxiPDF (lecteur
 # PDF par defaut).
-auxioffice [amd64]
+# auxioffice: voir applications-auxinux.txt (depot AuxiNux, installe apres le bootstrap).
 # AuxiText: editeur de texte brut et de programmation par defaut.
-auxitext [amd64]
+# auxitext: voir applications-auxinux.txt (depot AuxiNux, installe apres le bootstrap).
 # AuxiMail: courrier (paquet auxi-mail).
-auxi-mail [amd64]
+# auxi-mail: voir applications-auxinux.txt (depot AuxiNux, installe apres le bootstrap).
 # AuxiCorrect: correcteur et dictionnaire du francais pour AuxiOffice et
 # AuxiMail (dictionnaire SQLite d'environ 240 Mo).
-auxicorrect [amd64]
+# auxicorrect: voir applications-auxinux.txt (depot AuxiNux, installe apres le bootstrap).
 # AuxiPak: catalogue d'applications multi-plateforme (installe par auxi).
-auxipak [amd64]
+# auxipak: voir applications-auxinux.txt (depot AuxiNux, installe apres le bootstrap).
 
 # --- Applications KDE gardees ---------------------------------------------
 dolphin

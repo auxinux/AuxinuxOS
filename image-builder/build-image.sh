@@ -198,13 +198,15 @@ BOOTSTRAP_LISTS=(
   codecs-multimedia.txt
   securite.txt
 )
-# Ces deux listes ne peuvent PAS etre traitees par mmdebstrap:
+# Ces listes ne peuvent PAS etre traitees par mmdebstrap:
 #   - couche-windows.txt contient des paquets :i386, et l'architecture
 #     etrangere n'est garantie qu'apres le `dpkg --add-architecture` ci-dessous;
-#   - auxinux-system.txt contient le noyau, qui vient du depot AuxiNux, qui
-#     n'existe qu'apres configure-apt-sources.sh.
+#   - auxinux-system.txt (noyau) et applications-auxinux.txt (Shell,
+#     applications AuxiNux) viennent du depot AuxiNux, qui n'existe qu'apres
+#     configure-apt-sources.sh.
 EXTRA_LISTS=(
   auxinux-system.txt
+  applications-auxinux.txt
 )
 # La couche Windows (Wine, paquets :i386) n'existe qu'en amd64: Wine n'execute
 # pas de programmes x86 sur arm64.
