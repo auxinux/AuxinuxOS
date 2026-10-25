@@ -18,6 +18,10 @@
 # Recommandations du paquet auxinux-shell, NOMMEES car l'image installe sans
 # les recommandations (liste de docs/phase5.md du Shell).
 auxinux-shell
+# Interface graphique d'AuxiPak (Shell 0.3.0) : seulement recommandee par
+# auxinux-shell (auxipak n'existe que pour amd64). Les jeux maison
+# (auxi-shell-games) arrivent seuls : auxinux-shell en depend.
+auxi-shell-auxipak
 gir1.2-wp-0.5
 wlsunset
 wlopm
