@@ -162,8 +162,13 @@ else
   # UEFI seulement: les modules arm64-efi sur l'ISO (meme role que x86_64-efi
   # ci-dessus; le GRUB signe embarque deja l'essentiel), puis un El Torito
   # EFI unique pointant sur la partition EFI ajoutee.
+  # Modules pris dans le ROOTFS (grub-efi-arm64-bin y est, liste
+  # live-installer), et non sur l'hote: l'image ARM peut se construire sur un
+  # hote PC par emulation (qemu-user, virtua-dev), qui n'a pas arm64-efi.
   install -d -m 0755 "${ISO_ROOT}/boot/grub/${GRUB_EFI_PLATFORM}"
-  cp -a "/usr/lib/grub/${GRUB_EFI_PLATFORM}"/*.mod "/usr/lib/grub/${GRUB_EFI_PLATFORM}"/*.lst \
+  grub_mods="${ROOTFS}/usr/lib/grub/${GRUB_EFI_PLATFORM}"
+  [[ -d "${grub_mods}" ]] || grub_mods="/usr/lib/grub/${GRUB_EFI_PLATFORM}"
+  cp -a "${grub_mods}"/*.mod "${grub_mods}"/*.lst \
     "${ISO_ROOT}/boot/grub/${GRUB_EFI_PLATFORM}/" 2>/dev/null || true
 
   echo "==> Assemblage de l'ISO (UEFI seulement)"
