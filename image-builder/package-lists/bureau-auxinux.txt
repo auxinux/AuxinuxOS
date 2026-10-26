@@ -43,6 +43,11 @@ librsvg2-common
 # applications KDE n'affichent aucune icone Breeze. Le Shell en depend depuis
 # 0.3.10 ; nomme ici pour que l'image l'ait des le bootstrap.
 qt6-svg-plugins
+# AuxiFiles (explorateur du Shell, 0.3.12) : disques et clés USB par gvfs (dépendance
+# du Shell), partages réseau smb://, sftp://, téléphones MTP par gvfs-backends,
+# seulement RECOMMANDÉ par le Shell : nommé ici, l'image s'installe sans les
+# recommandations.
+gvfs-backends
 # GARDES alors que le bureau Plasma part: le Shell s'en sert.
 #  - plasma-integration: QT_QPA_PLATFORMTHEME=kde (bin/auxinux-session), et elle
 #    tire breeze, dont les .colors servent au Shell pour ecrire le kdeglobals de
