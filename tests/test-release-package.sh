@@ -116,8 +116,12 @@ AUXINUX_ARCH=arm64 AUXINUX_STRIP=0 AUXINUX_CENTER_BIN="${WORK}/center" AUXINUX_R
 ADEB="${WORK}/arm/auxinuxos-release_0.4.0+20261009.2_arm64.deb"
 check "paquet d'edition arm64 construit" "$([[ -f ${ADEB} ]] && echo oui)" "oui"
 check "architecture arm64" "$(dpkg-deb -f "${ADEB}" Architecture)" "arm64"
-check "arm64: aucune application absente en arm64" \
-  "$(dpkg-deb -f "${ADEB}" Depends | tr ',' '\n' | grep -cE 'auxioffice|auxitext|auxi-mail|auxicorrect|auxipak')" "0"
+# 2026-10-26: AuxiOffice, AuxiText, AuxiCorrect et AuxiPak publies en arm64;
+# AuxiMail pas encore.
+check "arm64: tire AuxiOffice, AuxiText, AuxiCorrect, AuxiPak" \
+  "$(dpkg-deb -f "${ADEB}" Depends | tr ',' '\n' | grep -cE 'auxioffice|auxitext|auxicorrect|auxipak')" "4"
+check "arm64: pas d'AuxiMail (absent en arm64)" \
+  "$(dpkg-deb -f "${ADEB}" Depends | tr ',' '\n' | grep -c 'auxi-mail')" "0"
 check "arm64: noyau, Shell et Plymouth tires" \
   "$(dpkg-deb -f "${ADEB}" Depends | tr ',' '\n' | grep -cE 'kernel-auxinuxos|auxinux-shell|plymouth')" "3"
 

@@ -233,8 +233,11 @@ NOTES="$(sed -e '/^[[:space:]]*$/d' -e 's/^/ /' "${RELEASE_DIR}/NOUVEAUTES")"
 # tire les applications AuxiNux; la version arm64 seulement ce qui existe en
 # arm64 (les applications y entreront avec leurs paquets arm64).
 REL_DEPENDS="auxi (>= ${VERSION}), auxinux-center (>= ${VERSION}), kernel-auxinuxos, auxinux-shell (>= 0.2.1)"
+# Applications AuxiNux publiees pour les deux architectures (arm64 depuis le
+# 2026-10-26); AuxiMail n'existe encore qu'en amd64.
+REL_DEPENDS="${REL_DEPENDS}, auxioffice, auxitext, auxicorrect, auxipak (>= 1.0.10)"
 if [[ "${ARCH}" == "amd64" ]]; then
-  REL_DEPENDS="${REL_DEPENDS}, auxioffice, auxitext, auxi-mail, auxicorrect, auxipak (>= 1.0.10)"
+  REL_DEPENDS="${REL_DEPENDS}, auxi-mail"
 fi
 REL_DEPENDS="${REL_DEPENDS}, plymouth, base-files"
 cat >"${REL_ROOT}/DEBIAN/control" <<EOF
