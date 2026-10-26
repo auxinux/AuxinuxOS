@@ -13,7 +13,7 @@ ISO.
 | Paquet | Contenu |
 |---|---|
 | `auxi_<V>_all.deb` | `/usr/bin/auxi`, le bouclier apt, le hook d'instantané |
-| `auxinux-center_<V>_amd64.deb` | le Center, ses deux helpers, son action polkit, l'autostart de l'assistant |
+| `auxinux-center_<V>_<arch>.deb` (amd64, ou arm64 pour l’Édition ARM) | le Center, ses deux helpers, son action polkit, l'autostart de l'assistant |
 
 Une seule version pour les deux : celle de `auxinux-center/Cargo.toml`. Le
 Center exige le `auxi` de la même livraison.

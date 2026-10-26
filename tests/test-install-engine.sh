@@ -60,7 +60,10 @@ config() { # surcharges CLE=VALEUR...
 }
 simuler() {
   rm -rf "${T}/cible"; mkdir -p "${T}/cible"
+  # Architecture forcee: amd64 par defaut (cas 1 a 6, quelle que soit la
+  # machine de test), arm64 pour l'Edition ARM (cas 7).
   AUXINUX_SIMULATION_CIBLE="${T}/cible" AUXINUX_SIMULATION_EFI="${EFI:-1}" \
+    AUXINUX_SIMULATION_ARCH="${ARCH_SIM:-amd64}" \
     bash "${ENGINE}" "${T}/config" --simuler >"${T}/out" 2>&1
 }
 
@@ -143,6 +146,28 @@ check "neuf etapes" "$(grep -c '^auxinux-etape:' "${T}/out")" "9"
 has "mises a jour" "auxi --yes --progress upgrade --deb"
 has "applications par le programme de l'assistant" "auxinux-assistant-apply --brave --flatpak org.videolan.VLC"
 check "mises a jour AVANT le nettoyage final" "$(( $(ligne 'upgrade --deb') < $(ligne 'post-install-cleanup.sh') ))" "1"
+
+echo "== 7. Edition ARM (arm64): UEFI seulement =="
+config; EFI=0 ARCH_SIM=arm64 simuler; rc=$?
+check "arm64 sans UEFI: refuse" "${rc}" "1"
+check "arm64 sans UEFI: aucune commande lancee" "$(grep -c '^SIMULATION:' "${T}/out")" "0"
+has "arm64 sans UEFI: la raison est dite" "seulement en mode UEFI"
+config; EFI=1 ARCH_SIM=arm64 simuler; rc=$?
+check "arm64: plan complet" "${rc}" "0"
+has "arm64: partition 3 = racine (bios_grub gardee)" "mkfs.btrfs -f -L AuxiNuxOS /dev/nvme0n1p3"
+has "arm64: GRUB signe arm64" "grub-install --target=arm64-efi --efi-directory=/boot/efi --bootloader-id=AuxiNuxOS --force"
+lacks "arm64: aucun GRUB x86_64" "x86_64-efi"
+lacks "arm64: aucun GRUB BIOS" "i386-pc"
+lacks "arm64: aucun lot bios" "paquets/bios"
+has "arm64: lot efi embarque" "paquets/efi/*.deb"
+config "CHIFFREMENT=1" "CLE_LUKS=${T}/luks"; EFI=1 ARCH_SIM=arm64 simuler; rc=$?
+check "arm64 chiffre: plan complet" "${rc}" "0"
+has "arm64 chiffre: GRUB avec cryptodisk" "grub-install --target=arm64-efi --efi-directory=/boot/efi --bootloader-id=AuxiNuxOS --no-uefi-secure-boot --force"
+has "arm64 chiffre: chemin de secours" "grub-install --target=arm64-efi --efi-directory=/boot/efi --removable --no-uefi-secure-boot --force"
+has "arm64 chiffre: outils LUKS embarques" "paquets/luks/*.deb"
+config; EFI=1 ARCH_SIM=sparc64 simuler; rc=$?
+check "architecture inconnue: refusee" "${rc}" "1"
+check "architecture inconnue: aucune commande lancee" "$(grep -c '^SIMULATION:' "${T}/out")" "0"
 
 if [[ "${fail}" -eq 0 ]]; then echo "TOUS LES TESTS PASSENT"; else echo "ECHEC"; fi
 exit "${fail}"

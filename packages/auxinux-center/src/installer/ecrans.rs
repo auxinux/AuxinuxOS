@@ -595,9 +595,12 @@ impl App {
     fn touche_profil(&mut self, k: KeyEvent) -> Option<Sortie> {
         match k.code {
             KeyCode::Left | KeyCode::Right | KeyCode::Char('p') | KeyCode::Char('P') => {
-                let i = Profil::TOUS.iter().position(|p| *p == self.selection.profil).unwrap_or(0);
-                let n = if k.code == KeyCode::Left { i + 2 } else { i + 1 };
-                self.selection.set_profil(Profil::TOUS[n % 3]);
+                // Profils proposes sur cette architecture: pas de Jeu sur
+                // l'Edition ARM (pas de couche Windows).
+                let tous = Profil::proposes();
+                let i = tous.iter().position(|p| *p == self.selection.profil).unwrap_or(0);
+                let n = if k.code == KeyCode::Left { i + tous.len() - 1 } else { i + 1 };
+                self.selection.set_profil(tous[n % tous.len()]);
                 self.curseur = 0;
                 None
             }
@@ -1217,7 +1220,7 @@ impl App {
             q,
         );
         let mut spans = Vec::new();
-        for pr in Profil::TOUS {
+        for &pr in Profil::proposes() {
             let nom = match pr {
                 Profil::Bureautique => self.t("Bureautique", "Office"),
                 Profil::Multimedia => self.t("Multimédia", "Multimedia"),

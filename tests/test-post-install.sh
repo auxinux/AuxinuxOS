@@ -37,6 +37,9 @@ chmod 755 "${STUB_BIN}/sync"
 export PATH="${STUB_BIN}:${PATH}"
 STUBS="${WORK}/bin"
 mkdir -p "${STUBS}"
+# Noms EFI de l'edition amd64 (x64) quelle que soit la machine de test; le
+# cas 1d passe en arm64 (aa64).
+export AUXINUX_ARCH=amd64
 
 cat > "${STUBS}/chroot" <<'STUB'
 #!/usr/bin/env bash
@@ -338,6 +341,32 @@ PATH="${STUBS}:${PATH}" bash "${CLEANUP}" "${TARGET}" >/dev/null 2>&1
 check "sort en 0" "$?" "0"
 check "aucune partition EFI creee" \
   "$([[ -e "${TARGET}/boot/efi" ]] && echo present || echo absent)" "absent"
+
+echo "== 1d. Edition ARM (arm64): chemin de secours EFI/BOOT/BOOTAA64.EFI =="
+TARGET="${WORK}/cible1d"
+make_target "${TARGET}" ""
+rm -f "${TARGET}"/boot/efi/EFI/AuxiNuxOS/*x64.efi "${TARGET}/boot/efi/EFI/boot/bootx64.efi"
+printf 'SHIM' > "${TARGET}/boot/efi/EFI/AuxiNuxOS/shimaa64.efi"
+printf 'GRUB' > "${TARGET}/boot/efi/EFI/AuxiNuxOS/grubaa64.efi"
+printf 'MOK'  > "${TARGET}/boot/efi/EFI/AuxiNuxOS/mmaa64.efi"
+printf 'GRUB' > "${TARGET}/boot/efi/EFI/boot/bootaa64.efi"
+: > "${CHROOT_LOG}"
+AUXINUX_ARCH=arm64 PATH="${STUBS}:${PATH}" bash "${CLEANUP}" "${TARGET}" >/dev/null 2>&1
+check "sort en 0" "$?" "0"
+check "arm64: shim en BOOTAA64.EFI" \
+  "$(cat "${TARGET}"/boot/efi/EFI/boot/BOOTAA64.EFI 2>/dev/null)" "SHIM"
+check "arm64: GRUB a cote de shim" \
+  "$(cat "${TARGET}"/boot/efi/EFI/boot/grubaa64.efi 2>/dev/null)" "GRUB"
+check "arm64: MokManager" \
+  "$(cat "${TARGET}"/boot/efi/EFI/boot/mmaa64.efi 2>/dev/null)" "MOK"
+check "arm64: grub.cfg present" \
+  "$(cmp -s "${TARGET}/boot/efi/EFI/boot/grub.cfg" "${TARGET}/boot/efi/EFI/AuxiNuxOS/grub.cfg" && echo identique)" "identique"
+check "arm64: une seule image de demarrage" \
+  "$(ls "${TARGET}/boot/efi/EFI/boot" | grep -ci '^bootaa64\.efi$')" "1"
+check "arm64: aucun nom x64" \
+  "$(ls "${TARGET}/boot/efi/EFI/boot" | grep -ci 'x64')" "0"
+check "arm64: mises a jour de GRUB, chemin de secours maintenu" \
+  "$(grep -c 'debconf-set-selections' "${CHROOT_LOG}")" "1"
 
 echo "== 2. Rollback: modele snapper sous /usr/share (Debian 13) =="
 TARGET="${WORK}/cible2"

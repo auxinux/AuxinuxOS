@@ -167,6 +167,21 @@ EFI=0
 [[ -d /sys/firmware/efi ]] && EFI=1
 [[ "${SIMULER}" -eq 1 && -n "${AUXINUX_SIMULATION_EFI:-}" ]] && EFI="${AUXINUX_SIMULATION_EFI}"
 
+# Architecture du systeme installe: celle du live (le squashfs est copie tel
+# quel). amd64: UEFI ou BIOS. arm64 (Edition ARM): UEFI SEULEMENT -- il n'y a
+# pas de GRUB BIOS pour arm64, et l'image n'en embarque aucun. Refus AVANT
+# toute action sur le disque.
+ARCH="$(dpkg --print-architecture 2>/dev/null || echo amd64)"
+[[ "${SIMULER}" -eq 1 && -n "${AUXINUX_SIMULATION_ARCH:-}" ]] && ARCH="${AUXINUX_SIMULATION_ARCH}"
+case "${ARCH}" in
+  amd64) GRUB_EFI_TARGET="x86_64-efi" ;;
+  arm64)
+    GRUB_EFI_TARGET="arm64-efi"
+    [[ "${EFI}" -eq 1 ]] || erreur "AuxiNux OS Édition ARM s'installe seulement en mode UEFI, et cette machine a démarré sans UEFI (/sys/firmware/efi absent)."
+    ;;
+  *) erreur "architecture non prise en charge: ${ARCH}" ;;
+esac
+
 # Partitions: nvme0n1 -> nvme0n1p3, sda -> sda3.
 partition() {
   if [[ "${DISQUE}" =~ [0-9]$ ]]; then echo "${DISQUE}p$1"; else echo "${DISQUE}$1"; fi
@@ -206,7 +221,8 @@ run wipefs -a "${DISQUE}"
 run sgdisk --zap-all "${DISQUE}"
 # Trois partitions, pour demarrer en UEFI COMME en BIOS: bios_grub (1 Mio,
 # ou GRUB BIOS loge son code sur un disque GPT), EFI (512 Mio, comme
-# Calamares), et la racine BTRFS.
+# Calamares), et la racine BTRFS. En arm64 (UEFI seulement), bios_grub est
+# gardee quand meme: inoffensive, et la racine reste la partition 3 partout.
 run sgdisk -n1:0:+1M -t1:ef02 -c1:bios_grub \
            -n2:0:+512M -t2:ef00 -c2:EFI \
            -n3:0:0 -t3:8300 -c3:AuxiNuxOS "${DISQUE}"
@@ -469,17 +485,18 @@ if [[ "${EFI}" -eq 1 ]]; then
     # facon pas pris en charge (noyau non signe): on construit un GRUB qui
     # embarque cryptodisk, luks2 et btrfs, et on l'installe AUSSI sur le
     # chemin de secours EFI/BOOT, qu'il sait amorcer tel quel.
-    dans_cible grub-install --target=x86_64-efi --efi-directory=/boot/efi \
+    dans_cible grub-install --target="${GRUB_EFI_TARGET}" --efi-directory=/boot/efi \
       --bootloader-id=AuxiNuxOS --no-uefi-secure-boot --force
-    dans_cible grub-install --target=x86_64-efi --efi-directory=/boot/efi \
+    dans_cible grub-install --target="${GRUB_EFI_TARGET}" --efi-directory=/boot/efi \
       --removable --no-uefi-secure-boot --force
   else
     # Exactement la commande du module bootloader de Calamares; le chemin de
     # secours EFI/BOOT est ecrit par post-install-cleanup.sh (6c).
-    dans_cible grub-install --target=x86_64-efi --efi-directory=/boot/efi \
+    dans_cible grub-install --target="${GRUB_EFI_TARGET}" --efi-directory=/boot/efi \
       --bootloader-id=AuxiNuxOS --force
   fi
 else
+  # Jamais en arm64: refuse plus haut, avant toute action sur le disque.
   dans_cible grub-install --target=i386-pc "${DISQUE}"
 fi
 dans_cible grub-mkconfig -o /boot/grub/grub.cfg

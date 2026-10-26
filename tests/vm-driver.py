@@ -16,6 +16,11 @@ serie en socket UNIX journalisee dans serial.log.
   vm.py qmp   NAME JSON
   vm.py sh    NAME COMMANDE [--timeout S]   console serie (shell deja ouvert)
   vm.py send  NAME TEXTE                    ecrit brut sur la console serie
+
+AUXINUX_VM_ARCH=arm64 (Edition ARM): qemu-system-aarch64, machine « virt »,
+micrologiciel AAVMF (paquet qemu-efi-aarch64), UEFI seulement. Pas de q35 ni
+d'ICH9: disque nvme ou virtio, ISO en lecteur SCSI virtio ou en cle USB,
+clavier USB (la machine virt n'a pas de clavier PS/2). Defaut: amd64, inchange.
 """
 import json
 import os
@@ -30,6 +35,11 @@ import uuid
 # octet ecrit pouvait bloquer QEMU -- donc TOUT l'invite (constate le
 # 2026-09-29: invite fige sur ldconfig.service pendant treize minutes).
 BASE = os.environ.get("E2E_BASE", "/dev/shm/e2e")
+
+# Architecture de l'invite: amd64 (defaut, comportement historique) ou arm64.
+VM_ARCH = os.environ.get("AUXINUX_VM_ARCH", "amd64")
+AAVMF_CODE = "/usr/share/AAVMF/AAVMF_CODE.fd"
+AAVMF_VARS = "/usr/share/AAVMF/AAVMF_VARS.fd"
 
 
 def vmdir(name):
@@ -148,6 +158,15 @@ def start(name, argv):
     a = ap.parse_args(argv)
     if os.environ.get("AUXINUX_VM_ISO_USB") == "1":
         a.iso_usb = True
+    if VM_ARCH not in ("amd64", "arm64"):
+        sys.exit("AUXINUX_VM_ARCH inconnue: %s (amd64 ou arm64)" % VM_ARCH)
+    if VM_ARCH == "arm64":
+        if a.bios:
+            sys.exit("--bios: l'Edition ARM est UEFI seulement")
+        if a.diskif == "sata":
+            sys.exit("--diskif sata: pas de controleur AHCI sur la machine virt (nvme ou virtio)")
+        if a.vga != "virtio":
+            sys.exit("--vga %s: seul virtio (virtio-gpu-pci) est pris en charge en arm64" % a.vga)
     d = vmdir(name)
     os.makedirs(d, exist_ok=True)
     if not os.path.exists(a.disk):
@@ -155,12 +174,19 @@ def start(name, argv):
     # noreboot: le chien de garde TCO emule redemarre la VM quand le noyau
     # invite, sature par l'emulation, ne le relance pas a temps -- constate le
     # 2026-09-29 en pleine installation. Artefact de TCG, pas du systeme teste.
-    args = ["qemu-system-x86_64", "-machine", "q35", "-global", "ICH9-LPC.noreboot=true",
+    if VM_ARCH == "arm64":
+        # KVM seulement sur un hote arm64; sinon TCG (lent, mais complet).
+        kvm_ok = os.access("/dev/kvm", os.R_OK | os.W_OK) and os.uname().machine == "aarch64"
+        machine = ["qemu-system-aarch64", "-machine", "virt"]
+    else:
+        kvm_ok = os.access("/dev/kvm", os.R_OK | os.W_OK)
+        machine = ["qemu-system-x86_64", "-machine", "q35", "-global", "ICH9-LPC.noreboot=true"]
+    args = machine + [
             # KVM quand l'hote l'offre (executeurs GitHub Actions): dix fois
             # plus vite que TCG, seul choix sur virtua-dev (conteneur sans
             # /dev/kvm). AUXINUX_VM_ACCEL force l'un ou l'autre.
             "-accel", os.environ.get("AUXINUX_VM_ACCEL") or
-                      ("kvm" if os.access("/dev/kvm", os.R_OK | os.W_OK) else "tcg,thread=multi"),
+                      ("kvm" if kvm_ok else "tcg,thread=multi"),
             "-cpu", "max", "-m", a.mem, "-smp", a.cpus,
             "-display", "none",
             "-qmp", "unix:%s/qmp.sock,server=on,wait=off" % d,
@@ -173,7 +199,10 @@ def start(name, argv):
             "-rtc", os.environ.get("AUXINUX_VM_RTC", "base=utc"),
             "-device", "qemu-xhci", "-device", "usb-tablet",
             "-pidfile", "%s/qemu.pid" % d]
-    if a.vga == "virtio":
+    if VM_ARCH == "arm64":
+        # virtio-vga suppose un VGA PC; la machine virt n'a ni VGA ni PS/2.
+        args += ["-device", "virtio-gpu-pci", "-device", "usb-kbd"]
+    elif a.vga == "virtio":
         args += ["-device", "virtio-vga"]
     else:
         args += ["-vga", a.vga]
@@ -193,6 +222,12 @@ def start(name, argv):
     if a.iso and not a.no_cdrom and a.iso_usb:
         args += ["-drive", "file=%s,format=raw,if=none,id=usb0,readonly=on" % a.iso,
                  "-device", "usb-storage,drive=usb0,removable=on,bootindex=2"]
+    elif a.iso and not a.no_cdrom and VM_ARCH == "arm64":
+        # Pas de bus IDE sur la machine virt: lecteur SCSI virtio, toujours
+        # APRES le disque dans l'ordre d'amorcage (voir ci-dessous).
+        args += ["-drive", "file=%s,format=raw,if=none,id=cd0,media=cdrom,readonly=on" % a.iso,
+                 "-device", "virtio-scsi-pci,id=scsi0",
+                 "-device", "scsi-cd,drive=cd0,bus=scsi0.0,bootindex=2"]
     elif a.iso and not a.no_cdrom:
         # Le lecteur passe APRES le disque, comme sur un PC dont le disque
         # interne est le premier peripherique d'amorcage: le live demarre tant
@@ -200,7 +235,13 @@ def start(name, argv):
         # « Terminé », media encore insere -- le cas le plus courant.
         args += ["-drive", "file=%s,format=raw,if=none,id=cd0,media=cdrom,readonly=on" % a.iso,
                  "-device", "ide-cd,drive=cd0,bus=ide.2,bootindex=2"]
-    if not a.bios:
+    if VM_ARCH == "arm64":
+        vars_file = a.vars or os.path.join(d, "AAVMF_VARS.fd")
+        if not os.path.exists(vars_file):
+            subprocess.check_call(["cp", AAVMF_VARS, vars_file])
+        args += ["-drive", "if=pflash,format=raw,unit=0,readonly=on,file=%s" % AAVMF_CODE,
+                 "-drive", "if=pflash,format=raw,unit=1,file=%s" % vars_file]
+    elif not a.bios:
         vars_file = a.vars or os.path.join(d, "OVMF_VARS.fd")
         if not os.path.exists(vars_file):
             subprocess.check_call(["cp", "/usr/share/OVMF/OVMF_VARS_4M.fd", vars_file])

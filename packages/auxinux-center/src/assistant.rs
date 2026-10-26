@@ -58,6 +58,28 @@ pub const TOUJOURS: [App; 1] = [flatpak(
     "Applications Windows, chacune dans son espace isolé (Proton, DXVK)",
 )];
 
+/// La couche Windows (Wine, Bottles, Proton, et donc les jeux Steam) n'existe
+/// que sur x86_64. Sur l'Edition ARM (aarch64), Bottles n'est pas impose et le
+/// profil Jeu n'est pas propose: ils meneraient a des programmes Windows qui
+/// ne peuvent pas tourner.
+pub fn couche_windows() -> bool {
+    couche_windows_pour(std::env::consts::ARCH)
+}
+
+/// `couche_windows` pour une architecture donnee (`std::env::consts::ARCH`).
+pub fn couche_windows_pour(arch: &str) -> bool {
+    arch == "x86_64"
+}
+
+/// Applications installees quels que soient les choix, sur cette architecture.
+pub fn toujours_pour(arch: &str) -> &'static [App] {
+    if couche_windows_pour(arch) {
+        &TOUJOURS
+    } else {
+        &[]
+    }
+}
+
 pub const NAVIGATEURS: [App; 5] = [
     flatpak("org.mozilla.firefox", "Firefox", "Navigateur libre de la fondation Mozilla"),
     App {
@@ -104,6 +126,22 @@ pub enum Profil {
 
 impl Profil {
     pub const TOUS: [Profil; 3] = [Profil::Bureautique, Profil::Multimedia, Profil::Jeu];
+    /// Sans couche Windows (Edition ARM): pas de profil Jeu dans l'assistant.
+    const SANS_JEU: [Profil; 2] = [Profil::Bureautique, Profil::Multimedia];
+
+    /// Profils proposes par l'assistant sur cette machine.
+    pub fn proposes() -> &'static [Profil] {
+        Self::proposes_pour(std::env::consts::ARCH)
+    }
+
+    /// `proposes` pour une architecture donnee.
+    pub fn proposes_pour(arch: &str) -> &'static [Profil] {
+        if couche_windows_pour(arch) {
+            &Self::TOUS
+        } else {
+            &Self::SANS_JEU
+        }
+    }
 
     /// Nom compris par `auxinux-profile set`.
     pub fn id(self) -> &'static str {
@@ -203,6 +241,12 @@ impl Selection {
     /// Toutes les applications qui seront installees, dans l'ordre affiche
     /// par le recapitulatif.
     pub fn applications(&self) -> Vec<App> {
+        self.applications_pour(std::env::consts::ARCH)
+    }
+
+    /// `applications` pour une architecture donnee: sans couche Windows,
+    /// Bottles n'est pas ajoute d'office.
+    pub fn applications_pour(&self, arch: &str) -> Vec<App> {
         let mut apps = Vec::new();
         if let Some(app) = self.navigateur.and_then(|i| NAVIGATEURS.get(i)) {
             apps.push(*app);
@@ -220,7 +264,7 @@ impl Selection {
                 apps.push(*app);
             }
         }
-        apps.extend(TOUJOURS);
+        apps.extend_from_slice(toujours_pour(arch));
         // Une meme application ne doit pas etre installee deux fois si deux
         // etapes la proposent un jour.
         let mut seen = std::collections::HashSet::new();
@@ -385,8 +429,10 @@ pub fn open_at_login_now() -> bool {
 mod tests {
     use super::*;
 
+    /// Catalogue de l'edition x86_64 (avec couche Windows), quelle que soit
+    /// l'architecture qui execute les tests.
     fn ids(sel: &Selection) -> Vec<&'static str> {
-        sel.applications().iter().map(|a| a.id).collect()
+        sel.applications_pour("x86_64").iter().map(|a| a.id).collect()
     }
 
     #[test]
@@ -407,6 +453,23 @@ mod tests {
         // courrielleur a installer.
         assert!(!ids.contains(&"org.libreoffice.LibreOffice"));
         assert!(!ids.contains(&"org.mozilla.Thunderbird"));
+    }
+
+    #[test]
+    fn arm_has_no_windows_layer_and_no_gaming_profile() {
+        // Edition ARM (aarch64): ni Bottles impose, ni profil Jeu propose.
+        let mut sel = Selection::default();
+        sel.navigateur = None;
+        sel.lecteur = None;
+        sel.suggestions = vec![false; sel.suggestions.len()];
+        sel.vie_privee = vec![false; VIE_PRIVEE.len()];
+        assert!(sel.applications_pour("aarch64").is_empty());
+        assert_eq!(ids(&sel), vec!["com.usebottles.bottles"]);
+        assert!(!couche_windows_pour("aarch64"));
+        assert!(couche_windows_pour("x86_64"));
+        assert_eq!(Profil::proposes_pour("aarch64"), &[Profil::Bureautique, Profil::Multimedia]);
+        assert!(!Profil::proposes_pour("aarch64").contains(&Profil::Jeu));
+        assert_eq!(Profil::proposes_pour("x86_64"), &Profil::TOUS);
     }
 
     #[test]
@@ -502,17 +565,19 @@ mod tests {
         assert!(b.ok);
         assert!(b.echecs.is_empty());
         assert_eq!(b.installees.len(), sel.applications().len());
-        assert!(b.installees.contains(&"Bottles"));
+        assert_eq!(b.installees.contains(&"Bottles"), couche_windows());
     }
 
     #[test]
     fn bilan_echec_partiel_juge_chaque_application() {
         let sel = Selection::default();
-        let result = ActionResult::err("flatpak: erreur réseau\nÉchec pour: com.usebottles.bottles");
-        let b = bilan(&sel, &result, |app| app.name != "Bottles");
+        // Firefox et non Bottles: le cas doit valoir aussi sur l'Edition ARM,
+        // ou Bottles n'est pas dans la selection.
+        let result = ActionResult::err("flatpak: erreur réseau\nÉchec pour: org.mozilla.firefox");
+        let b = bilan(&sel, &result, |app| app.name != "Firefox");
         assert!(!b.ok);
-        assert_eq!(b.echecs, vec!["Bottles"]);
-        assert!(!b.installees.contains(&"Bottles"));
+        assert_eq!(b.echecs, vec!["Firefox"]);
+        assert!(!b.installees.contains(&"Firefox"));
         assert!(!b.profil_echoue);
     }
 

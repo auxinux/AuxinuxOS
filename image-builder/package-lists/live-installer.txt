@@ -5,12 +5,26 @@ e2fsprogs
 parted
 gdisk
 squashfs-tools
-grub-efi-amd64-bin
-grub-efi-amd64-signed
-grub-pc-bin
+# Chaine de demarrage par architecture (marqueur final [amd64] / [arm64],
+# filtre par image-builder/scripts/package-names.sh). L'Edition ARM est UEFI
+# seulement: aucun GRUB BIOS.
+grub-efi-amd64-bin [amd64]
+grub-efi-amd64-signed [amd64]
+grub-pc-bin [amd64]
+grub-efi-arm64-bin [arm64]
+grub-efi-arm64-signed [arm64]
 shim-signed
 grub-common
 grub2-common
 efibootmgr
 os-prober
 initramfs-tools
+
+# Outils invites des machines virtuelles (Edition ARM: d'abord des VM sur Mac
+# Apple Silicon -- UTM/QEMU, VMware Fusion; Parallels n'a pas d'outils dans
+# Debian). Presse-papiers partage et redimensionnement de l'ecran avec la
+# fenetre: sans eux, la VM parait cassee. Tous publies en arm64 par Debian 13.
+spice-vdagent [arm64]
+qemu-guest-agent [arm64]
+open-vm-tools [arm64]
+open-vm-tools-desktop [arm64]

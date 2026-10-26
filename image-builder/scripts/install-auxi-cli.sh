@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOTFS="${1:?usage: install-auxi-cli.sh ROOTFS}"
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+ARCH="${AUXINUX_ARCH:-$(dpkg --print-architecture 2>/dev/null || echo amd64)}"
 
 # /usr/bin/auxi, le bouclier apt (/usr/lib/auxinux/wrappers/apt-wrapper) et le
 # hook d'instantane viennent du paquet `auxi`, installe par
@@ -14,7 +15,15 @@ if [[ ! -x "${ROOTFS}/usr/bin/auxi" ]]; then
   exit 70
 fi
 # auxinux-windows-wizard (ouverture des .exe) vient du paquet auxinux-center.
-sudo install -D -m 0755 "${PROJECT_DIR}/packages/windows-support/auxinux-windows-setup" "${ROOTFS}/usr/bin/auxinux-windows-setup"
+# Couche Windows: amd64 seulement. En arm64 (Edition ARM), ni l'outil ni son
+# entree de menu (posee par les overlays, appliques juste avant): Wine
+# n'execute pas de programmes x86 sur arm64.
+if [[ "${ARCH}" == "amd64" ]]; then
+  sudo install -D -m 0755 "${PROJECT_DIR}/packages/windows-support/auxinux-windows-setup" "${ROOTFS}/usr/bin/auxinux-windows-setup"
+else
+  sudo rm -f "${ROOTFS}/usr/bin/auxinux-windows-setup" \
+    "${ROOTFS}/usr/share/applications/auxinux-windows-setup.desktop"
+fi
 sudo install -D -m 0755 "${PROJECT_DIR}/packages/welcome/auxinux-welcome" "${ROOTFS}/usr/bin/auxinux-welcome"
 sudo install -D -m 0755 "${PROJECT_DIR}/packages/welcome/auxinux-install-launcher" "${ROOTFS}/usr/lib/auxinux/auxinux-install-launcher"
 

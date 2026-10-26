@@ -26,7 +26,16 @@
 # la cle Debian, GRUB lit /boot/grub/grub.cfg sur l'ISO9660. Aucune cle a
 # enroler, aucune manipulation.
 #
+# Edition ARM (arm64): meme chaine, binaires aa64 de Debian, et UEFI
+# SEULEMENT -- aucune partie BIOS (ni i386-pc, ni El Torito BIOS, ni
+# boot_hybrid.img): une machine arm64 n'a pas de BIOS PC.
+#   EFI/BOOT/BOOTAA64.EFI <- shimaa64.efi.signed
+#   EFI/BOOT/grubaa64.efi <- gcdaa64.efi.signed
+#   EFI/BOOT/mmaa64.efi   <- mmaa64.efi.signed
+#
 # Usage: make-iso.sh ISO_ROOT ROOTFS OUTPUT_ISO
+# Architecture: AUXINUX_ARCH (exportee par build-image.sh), sinon celle de
+# l'hote.
 set -euo pipefail
 
 ISO_ROOT="${1:?usage: make-iso.sh ISO_ROOT ROOTFS OUTPUT_ISO}"
@@ -38,9 +47,30 @@ ESP_IMG="$(dirname "${OUTPUT_ISO}")/.esp-$$.img"
 cleanup() { rm -f "${ESP_IMG}"; }
 trap cleanup EXIT
 
-SHIM="${ROOTFS}/usr/lib/shim/shimx64.efi.signed"
-MOK="${ROOTFS}/usr/lib/shim/mmx64.efi.signed"
-GRUB_EFI="${ROOTFS}/usr/lib/grub/x86_64-efi-signed/gcdx64.efi.signed"
+ARCH="${AUXINUX_ARCH:-$(dpkg --print-architecture 2>/dev/null || echo amd64)}"
+case "${ARCH}" in
+  amd64)
+    EFI_SUFFIX="x64"           # BOOTX64.EFI, grubx64.efi, mmx64.efi
+    GRUB_EFI_PLATFORM="x86_64-efi"
+    GRUB_EFI_PKG="grub-efi-amd64-signed"
+    BIOS=1
+    ;;
+  arm64)
+    EFI_SUFFIX="aa64"          # BOOTAA64.EFI, grubaa64.efi, mmaa64.efi
+    GRUB_EFI_PLATFORM="arm64-efi"
+    GRUB_EFI_PKG="grub-efi-arm64-signed"
+    BIOS=0
+    ;;
+  *)
+    echo "architecture non prise en charge: ${ARCH}" >&2
+    exit 64
+    ;;
+esac
+EFI_SUFFIX_UP="$(printf '%s' "${EFI_SUFFIX}" | tr '[:lower:]' '[:upper:]')"
+
+SHIM="${ROOTFS}/usr/lib/shim/shim${EFI_SUFFIX}.efi.signed"
+MOK="${ROOTFS}/usr/lib/shim/mm${EFI_SUFFIX}.efi.signed"
+GRUB_EFI="${ROOTFS}/usr/lib/grub/${GRUB_EFI_PLATFORM}-signed/gcd${EFI_SUFFIX}.efi.signed"
 
 # Fail-closed: une ISO qui perdrait la chaine signee redeviendrait
 # silencieusement inamorcable en Secure Boot, et personne ne le verrait avant
@@ -48,7 +78,7 @@ GRUB_EFI="${ROOTFS}/usr/lib/grub/x86_64-efi-signed/gcdx64.efi.signed"
 for f in "${SHIM}" "${MOK}" "${GRUB_EFI}"; do
   if [[ ! -s "${f}" ]]; then
     echo "binaire EFI signe manquant: ${f}" >&2
-    echo "verifiez que shim-signed et grub-efi-amd64-signed sont installes dans le rootfs" >&2
+    echo "verifiez que shim-signed et ${GRUB_EFI_PKG} sont installes dans le rootfs" >&2
     exit 70
   fi
 done
@@ -77,13 +107,13 @@ if ! mdir -i "${ESP_IMG}" :: >/dev/null 2>&1; then
   exit 70
 fi
 mmd -i "${ESP_IMG}" ::/EFI ::/EFI/BOOT
-mcopy -i "${ESP_IMG}" "${SHIM}"     ::/EFI/BOOT/BOOTX64.EFI
-mcopy -i "${ESP_IMG}" "${GRUB_EFI}" ::/EFI/BOOT/grubx64.efi
-mcopy -i "${ESP_IMG}" "${MOK}"      ::/EFI/BOOT/mmx64.efi
+mcopy -i "${ESP_IMG}" "${SHIM}"     "::/EFI/BOOT/BOOT${EFI_SUFFIX_UP}.EFI"
+mcopy -i "${ESP_IMG}" "${GRUB_EFI}" "::/EFI/BOOT/grub${EFI_SUFFIX}.efi"
+mcopy -i "${ESP_IMG}" "${MOK}"      "::/EFI/BOOT/mm${EFI_SUFFIX}.efi"
 
 # Le micrologiciel cherche EXACTEMENT ce chemin sur un media amovible.
-if ! mdir -i "${ESP_IMG}" ::/EFI/BOOT 2>/dev/null | grep -qi "BOOTX64"; then
-  echo "EFI/BOOT/BOOTX64.EFI absent de la partition EFI" >&2
+if ! mdir -i "${ESP_IMG}" ::/EFI/BOOT 2>/dev/null | grep -qi "BOOT${EFI_SUFFIX_UP}"; then
+  echo "EFI/BOOT/BOOT${EFI_SUFFIX_UP}.EFI absent de la partition EFI" >&2
   exit 70
 fi
 
@@ -91,42 +121,69 @@ fi
 # partition EFI, d'autres (et les cles USB copiees fichier par fichier)
 # cherchent EFI/BOOT sur le systeme de fichiers principal.
 install -d -m 0755 "${ISO_ROOT}/EFI/BOOT"
-install -m 0644 "${SHIM}"     "${ISO_ROOT}/EFI/BOOT/BOOTX64.EFI"
-install -m 0644 "${GRUB_EFI}" "${ISO_ROOT}/EFI/BOOT/grubx64.efi"
-install -m 0644 "${MOK}"      "${ISO_ROOT}/EFI/BOOT/mmx64.efi"
+install -m 0644 "${SHIM}"     "${ISO_ROOT}/EFI/BOOT/BOOT${EFI_SUFFIX_UP}.EFI"
+install -m 0644 "${GRUB_EFI}" "${ISO_ROOT}/EFI/BOOT/grub${EFI_SUFFIX}.efi"
+install -m 0644 "${MOK}"      "${ISO_ROOT}/EFI/BOOT/mm${EFI_SUFFIX}.efi"
 
-echo "==> Construction de l'amorce BIOS"
-install -d -m 0755 "${ISO_ROOT}/boot/grub/i386-pc" "${ISO_ROOT}/boot/grub/x86_64-efi"
-# Les modules doivent etre SUR l'ISO: le noyau GRUB embarque le strict
-# necessaire pour lire l'ISO9660 et charger le reste.
-cp -a /usr/lib/grub/i386-pc/*.mod /usr/lib/grub/i386-pc/*.lst \
-  "${ISO_ROOT}/boot/grub/i386-pc/" 2>/dev/null || true
-cp -a /usr/lib/grub/x86_64-efi/*.mod /usr/lib/grub/x86_64-efi/*.lst \
-  "${ISO_ROOT}/boot/grub/x86_64-efi/" 2>/dev/null || true
+if [[ "${BIOS}" -eq 1 ]]; then
+  echo "==> Construction de l'amorce BIOS"
+  install -d -m 0755 "${ISO_ROOT}/boot/grub/i386-pc" "${ISO_ROOT}/boot/grub/x86_64-efi"
+  # Les modules doivent etre SUR l'ISO: le noyau GRUB embarque le strict
+  # necessaire pour lire l'ISO9660 et charger le reste.
+  cp -a /usr/lib/grub/i386-pc/*.mod /usr/lib/grub/i386-pc/*.lst \
+    "${ISO_ROOT}/boot/grub/i386-pc/" 2>/dev/null || true
+  cp -a /usr/lib/grub/x86_64-efi/*.mod /usr/lib/grub/x86_64-efi/*.lst \
+    "${ISO_ROOT}/boot/grub/x86_64-efi/" 2>/dev/null || true
 
-grub-mkimage -O i386-pc-eltorito -p /boot/grub \
-  -o "${ISO_ROOT}/boot/grub/i386-pc/eltorito.img" \
-  biosdisk iso9660 part_msdos search search_fs_uuid search_label configfile \
-  normal linux linux16 echo test all_video gfxterm videoinfo loadenv minicmd \
-  reboot halt sleep
+  grub-mkimage -O i386-pc-eltorito -p /boot/grub \
+    -o "${ISO_ROOT}/boot/grub/i386-pc/eltorito.img" \
+    biosdisk iso9660 part_msdos search search_fs_uuid search_label configfile \
+    normal linux linux16 echo test all_video gfxterm videoinfo loadenv minicmd \
+    reboot halt sleep
 
-echo "==> Assemblage de l'ISO"
-xorriso -as mkisofs \
-  -iso-level 3 \
-  -full-iso9660-filenames \
-  -volid "${VOLID}" \
-  -rational-rock \
-  -eltorito-boot boot/grub/i386-pc/eltorito.img \
-    -no-emul-boot -boot-load-size 4 -boot-info-table \
-    --grub2-boot-info \
-    --grub2-mbr /usr/lib/grub/i386-pc/boot_hybrid.img \
-  -eltorito-alt-boot \
+  echo "==> Assemblage de l'ISO"
+  xorriso -as mkisofs \
+    -iso-level 3 \
+    -full-iso9660-filenames \
+    -volid "${VOLID}" \
+    -rational-rock \
+    -eltorito-boot boot/grub/i386-pc/eltorito.img \
+      -no-emul-boot -boot-load-size 4 -boot-info-table \
+      --grub2-boot-info \
+      --grub2-mbr /usr/lib/grub/i386-pc/boot_hybrid.img \
+    -eltorito-alt-boot \
+      -e --interval:appended_partition_2:all:: \
+      -no-emul-boot \
+    -append_partition 2 0xef "${ESP_IMG}" \
+    -partition_offset 16 \
+    -o "${OUTPUT_ISO}" \
+    "${ISO_ROOT}"
+else
+  # UEFI seulement: les modules arm64-efi sur l'ISO (meme role que x86_64-efi
+  # ci-dessus; le GRUB signe embarque deja l'essentiel), puis un El Torito
+  # EFI unique pointant sur la partition EFI ajoutee.
+  # Modules pris dans le ROOTFS (grub-efi-arm64-bin y est, liste
+  # live-installer), et non sur l'hote: l'image ARM peut se construire sur un
+  # hote PC par emulation (qemu-user, virtua-dev), qui n'a pas arm64-efi.
+  install -d -m 0755 "${ISO_ROOT}/boot/grub/${GRUB_EFI_PLATFORM}"
+  grub_mods="${ROOTFS}/usr/lib/grub/${GRUB_EFI_PLATFORM}"
+  [[ -d "${grub_mods}" ]] || grub_mods="/usr/lib/grub/${GRUB_EFI_PLATFORM}"
+  cp -a "${grub_mods}"/*.mod "${grub_mods}"/*.lst \
+    "${ISO_ROOT}/boot/grub/${GRUB_EFI_PLATFORM}/" 2>/dev/null || true
+
+  echo "==> Assemblage de l'ISO (UEFI seulement)"
+  xorriso -as mkisofs \
+    -iso-level 3 \
+    -full-iso9660-filenames \
+    -volid "${VOLID}" \
+    -rational-rock \
     -e --interval:appended_partition_2:all:: \
-    -no-emul-boot \
-  -append_partition 2 0xef "${ESP_IMG}" \
-  -partition_offset 16 \
-  -o "${OUTPUT_ISO}" \
-  "${ISO_ROOT}"
+      -no-emul-boot \
+    -append_partition 2 0xef "${ESP_IMG}" \
+    -partition_offset 16 \
+    -o "${OUTPUT_ISO}" \
+    "${ISO_ROOT}"
+fi
 
 echo "==> Verification de l'amorcabilite"
 xorriso -indev "${OUTPUT_ISO}" -report_el_torito plain 2>/dev/null \

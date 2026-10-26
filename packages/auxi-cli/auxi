@@ -933,7 +933,8 @@ run_upgrade() {
 #
 # Elles ne consultent PAS le reglage DEB, et ce n'est pas une porte derobee:
 # seuls les paquets linux-image-<v> / linux-headers-<v> dont <v> se termine par
-# -auxinuxos-amd64 sont acceptes (voir kernel_valid).
+# -auxinuxos-<architecture native> sont acceptes (voir kernel_valid):
+# -auxinuxos-amd64, ou -auxinuxos-arm64 sur l'Edition ARM.
 #
 # Chemins reglables UNIQUEMENT pour les tests (tests/test-auxi-kernel.sh).
 GRUB_CFG="${AUXI_GRUB_CFG:-/boot/grub/grub.cfg}"
@@ -943,8 +944,26 @@ SOURCES_D="${AUXI_SOURCES_D:-/etc/apt/sources.list.d}"
 KERNEL_PIN_FILE="50-auxinux-noyau.cfg"
 KERNEL_DEV_SOURCE="auxinuxos-kernel-dev.sources"
 
+# Architecture native (dpkg), lue une fois. AUXI_TEST_ARCH la force pour les
+# tests, et SEULEMENT hors root: un appel par sudo ne peut pas faire accepter
+# le noyau d'une autre architecture.
+KERNEL_ARCH=""
+kernel_arch() {
+  if [[ -z "${KERNEL_ARCH}" ]]; then
+    if [[ "${EUID}" -ne 0 && -n "${AUXI_TEST_ARCH:-}" ]]; then
+      KERNEL_ARCH="${AUXI_TEST_ARCH}"
+    else
+      KERNEL_ARCH="$(dpkg --print-architecture 2>/dev/null || true)"
+      [[ -n "${KERNEL_ARCH}" ]] || KERNEL_ARCH="amd64"
+    fi
+  fi
+  printf '%s' "${KERNEL_ARCH}"
+}
+
 kernel_valid() {
-  [[ "$1" =~ ^[0-9][0-9a-z.+~-]*-auxinuxos-amd64$ ]]
+  # Appel direct (pas de sous-shell): la valeur reste en cache.
+  kernel_arch >/dev/null
+  [[ "$1" =~ ^[0-9][0-9a-z.+~-]*-auxinuxos-${KERNEL_ARCH}$ ]]
 }
 
 kernel_channel() {
@@ -1030,8 +1049,8 @@ kernel_grub_id() {
 kernel_require_valid() {
   if [[ -z "${1:-}" ]] || ! kernel_valid "$1"; then
     say_err \
-      "Version de noyau invalide: ${1:-(vide)}. Exemple: 7.2.5-auxinuxos-amd64 (voir auxi kernel list)." \
-      "Invalid kernel version: ${1:-(empty)}. Example: 7.2.5-auxinuxos-amd64 (see auxi kernel list)."
+      "Version de noyau invalide: ${1:-(vide)}. Exemple: 7.2.5-auxinuxos-$(kernel_arch) (voir auxi kernel list)." \
+      "Invalid kernel version: ${1:-(empty)}. Example: 7.2.5-auxinuxos-$(kernel_arch) (see auxi kernel list)."
     exit 64
   fi
 }

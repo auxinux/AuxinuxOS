@@ -237,6 +237,13 @@ fi
 #     racine par son UUID. Un UUID perime ou un fichier absent, et la machine
 #     s'arrete sur une invite « grub> » avant meme de lire /boot.
 ESP="${prefix}/boot/efi"
+# Noms des binaires EFI: x64 sur amd64, aa64 sur arm64 (Edition ARM).
+# AUXINUX_ARCH: surcharge pour les tests (tests/test-verify-boot.sh).
+case "${AUXINUX_ARCH:-$(dpkg --print-architecture 2>/dev/null || echo amd64)}" in
+  arm64) efi_sfx="aa64" ;;
+  *)     efi_sfx="x64" ;;
+esac
+efi_sfx_up="$(printf '%s' "${efi_sfx}" | tr '[:lower:]' '[:upper:]')"
 # Surchargeable UNIQUEMENT pour les tests (tests/test-verify-boot.sh): ils
 # doivent pouvoir simuler une machine UEFI comme une machine BIOS, quel que
 # soit le micrologiciel de l'hote qui les execute.
@@ -259,14 +266,14 @@ if [ -d "${EFI_SYSFS}" ]; then
   # lire son menu), embarque sa configuration -- deverrouillage et chemin
   # du menu: il n'a pas de grub.cfg, et c'est normal.
   autonome=0
-  if [ -n "${vendor}" ] && [ ! -e "${vendor}/shimx64.efi" ] && [ ! -e "${vendor}/grub.cfg" ] &&
-     [ -s "${vendor}/grubx64.efi" ] &&
-     { grep -aq cryptomount "${vendor}/grubx64.efi" ||
-       { [ -n "${root_uuid}" ] && grep -aq "${root_uuid}" "${vendor}/grubx64.efi"; }; }; then
+  if [ -n "${vendor}" ] && [ ! -e "${vendor}/shim${efi_sfx}.efi" ] && [ ! -e "${vendor}/grub.cfg" ] &&
+     [ -s "${vendor}/grub${efi_sfx}.efi" ] &&
+     { grep -aq cryptomount "${vendor}/grub${efi_sfx}.efi" ||
+       { [ -n "${root_uuid}" ] && grep -aq "${root_uuid}" "${vendor}/grub${efi_sfx}.efi"; }; }; then
     autonome=1
   fi
-  if [ -z "${vendor}" ] || [ ! -s "${vendor}/grubx64.efi" ]; then
-    fail "EFI/AuxiNuxOS/grubx64.efi absent de la partition EFI — le micrologiciel n'a rien a demarrer."
+  if [ -z "${vendor}" ] || [ ! -s "${vendor}/grub${efi_sfx}.efi" ]; then
+    fail "EFI/AuxiNuxOS/grub${efi_sfx}.efi absent de la partition EFI — le micrologiciel n'a rien a demarrer."
   elif [ "${autonome}" -eq 1 ]; then
     ok "partition EFI: GRUB autonome (configuration embarquee: disque chiffre)"
   elif [ ! -s "${vendor}/grub.cfg" ]; then
@@ -278,9 +285,9 @@ if [ -d "${EFI_SYSFS}" ]; then
   fi
   # Le chemin de secours n'est pas bloquant: l'entree NVRAM suffit a la
   # plupart des machines. Mais son absence se dit.
-  if [ -n "${fallback}" ] && ls "${fallback}" 2>/dev/null | grep -qi '^bootx64\.efi$' &&
+  if [ -n "${fallback}" ] && ls "${fallback}" 2>/dev/null | grep -qix "boot${efi_sfx}\\.efi" &&
      { [ -s "${fallback}/grub.cfg" ] || [ "${autonome}" -eq 1 ]; }; then
-    ok "partition EFI: chemin de secours EFI/BOOT/BOOTX64.EFI complet"
+    ok "partition EFI: chemin de secours EFI/BOOT/BOOT${efi_sfx_up}.EFI complet"
   else
     echo "verify-installed-boot: AVERTISSEMENT: chemin de secours EFI/BOOT incomplet; une machine qui oublie l'entree NVRAM ne demarrera pas." >&2
   fi

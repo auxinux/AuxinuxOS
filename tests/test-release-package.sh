@@ -30,14 +30,14 @@ check() {
   if [[ "$2" == "$3" ]]; then echo "  OK   $1"; else echo "  ECHEC $1: attendu [$3] obtenu [$2]"; fail=1; fi
 }
 build() {
-  AUXINUX_STRIP=0 AUXINUX_CENTER_BIN="${WORK}/center" AUXINUX_RELEASE="$1" \
+  AUXINUX_ARCH=amd64 AUXINUX_STRIP=0 AUXINUX_CENTER_BIN="${WORK}/center" AUXINUX_RELEASE="$1" \
     "${ROOT}/packages/build-debs.sh" --out "$2" >/dev/null 2>"${WORK}/err"
 }
 
 echo "== 1. Edition du jour, seconde ISO du meme jour =="
 build "0.4.0+20261009.2" "${WORK}/out"
 check "construit" "$?" "0"
-DEB="${WORK}/out/auxinuxos-release_0.4.0+20261009.2_all.deb"
+DEB="${WORK}/out/auxinuxos-release_0.4.0+20261009.2_amd64.deb"
 check "paquet d'edition present" "$([[ -f ${DEB} ]] && echo oui)" "oui"
 field() { dpkg-deb -f "${DEB}" "$1"; }
 check "version" "$(field Version)" "0.4.0+20261009.2"
@@ -108,6 +108,18 @@ check "postinst: le reste intact" "$(grep -c '^SNAPPER_CONFIGS="root"$' "${WORK}
 echo "== 3. Kiorc quitte le paquet du centre =="
 CDEB="${WORK}/out/auxinux-center_${VERSION}_amd64.deb"
 check "plus de /etc/xdg/kiorc dans auxinux-center" "$(dpkg-deb -c "${CDEB}" | grep -c 'etc/xdg/kiorc')" "0"
+
+echo "== 3 bis. Edition par architecture (Edition ARM, 2026-10-25) =="
+check "paquet d'edition amd64 (plus « all »)" "$(dpkg-deb -f "${DEB}" Architecture)" "amd64"
+AUXINUX_ARCH=arm64 AUXINUX_STRIP=0 AUXINUX_CENTER_BIN="${WORK}/center" AUXINUX_RELEASE="0.4.0+20261009.2" \
+  "${ROOT}/packages/build-debs.sh" --out "${WORK}/arm" >/dev/null 2>"${WORK}/err"
+ADEB="${WORK}/arm/auxinuxos-release_0.4.0+20261009.2_arm64.deb"
+check "paquet d'edition arm64 construit" "$([[ -f ${ADEB} ]] && echo oui)" "oui"
+check "architecture arm64" "$(dpkg-deb -f "${ADEB}" Architecture)" "arm64"
+check "arm64: aucune application absente en arm64" \
+  "$(dpkg-deb -f "${ADEB}" Depends | tr ',' '\n' | grep -cE 'auxioffice|auxitext|auxi-mail|auxicorrect|auxipak')" "0"
+check "arm64: noyau, Shell et Plymouth tires" \
+  "$(dpkg-deb -f "${ADEB}" Depends | tr ',' '\n' | grep -cE 'kernel-auxinuxos|auxinux-shell|plymouth')" "3"
 
 echo "== 4. Editions refusees =="
 for bad in "0.3.0+20261009" "0.4.0" "0.4.0+2026109" "0.4.0+20261009-2"; do

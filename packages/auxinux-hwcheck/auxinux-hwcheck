@@ -50,6 +50,16 @@ ram_gib=$(awk -v k="${ram_kb}" 'BEGIN{printf "%.1f", k/1048576}')
 cpu_cores=$(awk '/^processor/ {n++} END{print n+0}' "${PROC}/cpuinfo" 2>/dev/null)
 [ "${cpu_cores:-0}" -gt 0 ] 2>/dev/null || cpu_cores=0
 cpu_model=$(awk -F': ' '/^model name/ {print $2; exit}' "${PROC}/cpuinfo" 2>/dev/null)
+# arm64 (Edition ARM): /proc/cpuinfo n'a pas de « model name ». lscpu en
+# deduit un nom (« Model name: Cortex-A76 », ou le coeur d'une VM sur Mac
+# Apple Silicon); a defaut, le modele de la machine dans l'arbre de
+# peripheriques (chaine terminee par un octet nul).
+if [ -z "${cpu_model:-}" ] && command -v lscpu >/dev/null 2>&1; then
+  cpu_model=$(LC_ALL=C lscpu 2>/dev/null | awk -F': *' '/^Model name:/ {print $2; exit}')
+fi
+if [ -z "${cpu_model:-}" ] && [ -r "${PROC}/device-tree/model" ]; then
+  cpu_model=$(tr -d '\000' < "${PROC}/device-tree/model" 2>/dev/null)
+fi
 [ -n "${cpu_model:-}" ] || cpu_model="inconnu"
 
 # Le plus GRAND disque, pas la somme: on installe sur un seul.

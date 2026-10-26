@@ -15,10 +15,12 @@
 #      les liens existants servir un contenu different sous le meme nom.
 #
 # Usage:
-#   publish-iso.sh --iso CHEMIN_DISTANT [--name NOM] [--deploy]
+#   publish-iso.sh --iso CHEMIN_DISTANT [--name NOM] [--arch ARCH] [--deploy]
 #
 #   --iso     chemin de l'ISO SUR l'hote de build (obligatoire)
-#   --name    nom publie (defaut: <base>-<AAAAMMJJ>-amd64.iso deduit de l'ISO)
+#   --name    nom publie (defaut: <base>-<AAAAMMJJ>-<ARCH>.iso deduit de l'ISO)
+#   --arch    architecture de l'ISO: amd64 (defaut) ou arm64 (Edition ARM);
+#             fixe le suffixe du nom et l'index APPS verifie (binary-<ARCH>)
 #   --deploy  effectue reellement la publication; sans cette option, le script
 #             se contente de verifier et d'afficher ce qu'il ferait
 set -euo pipefail
@@ -30,19 +32,25 @@ PUBLIC_URL="${AUXINUX_PUBLIC_URL:-https://dep.auxinux.ca/DOWNLOAD/ISO}"
 
 ISO_REMOTE=""
 PUBLISH_NAME=""
+ARCH="amd64"
 DEPLOY=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --iso)    ISO_REMOTE="${2:?--iso demande un chemin}"; shift 2 ;;
     --name)   PUBLISH_NAME="${2:?--name demande un nom}"; shift 2 ;;
+    --arch)   ARCH="${2:?--arch demande une architecture}"; shift 2 ;;
     --deploy) DEPLOY=1; shift ;;
-    -h|--help) sed -n '2,26p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,25p' "$0"; exit 0 ;;
     *) echo "argument inconnu: $1" >&2; exit 64 ;;
   esac
 done
 
 [[ -n "${ISO_REMOTE}" ]] || { echo "--iso est obligatoire" >&2; exit 64; }
+case "${ARCH}" in
+  amd64|arm64) ;;
+  *) echo "architecture non prise en charge: ${ARCH} (amd64 ou arm64)" >&2; exit 64 ;;
+esac
 
 base="$(basename "${ISO_REMOTE}")"
 
@@ -56,9 +64,9 @@ if [[ -n "${RELEASE}" ]]; then
   if [[ -z "${PUBLISH_NAME}" ]]; then
     # 0.2.0+20261009.2 -> auxinuxos-0.2.0-20261009-2-amd64.iso
     ver="${RELEASE%%+*}"; id="${RELEASE#*+}"
-    PUBLISH_NAME="auxinuxos-${ver}-${id//./-}-amd64.iso"
+    PUBLISH_NAME="auxinuxos-${ver}-${id//./-}-${ARCH}.iso"
   fi
-  APPS_INDEX="${AUXINUX_APPS_INDEX:-https://dep.auxinux.ca/AUXINUXOS/dists/APPS/main/binary-amd64/Packages}"
+  APPS_INDEX="${AUXINUX_APPS_INDEX:-https://dep.auxinux.ca/AUXINUXOS/dists/APPS/main/binary-${ARCH}/Packages}"
   if ! curl -fsS "${APPS_INDEX}" | awk -v r="${RELEASE}" '
         $1 == "Package:" { p = $2 } $1 == "Version:" && p == "auxinuxos-release" && $2 == r { f = 1 }
         END { exit !f }'; then
@@ -73,7 +81,7 @@ else
 fi
 if [[ -z "${PUBLISH_NAME}" ]]; then
   # auxinuxos-0.2.0-amd64.iso -> auxinuxos-0.2.0-20260912-amd64.iso
-  PUBLISH_NAME="${base%-amd64.iso}-$(date +%Y%m%d)-amd64.iso"
+  PUBLISH_NAME="${base%-"${ARCH}".iso}-$(date +%Y%m%d)-${ARCH}.iso"
 fi
 
 echo "==> Source : ${BUILD_HOST}:${ISO_REMOTE}"

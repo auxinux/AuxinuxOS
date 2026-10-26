@@ -40,6 +40,9 @@ export AUXINUX_EFI_SYSFS="${WORK}/pas-d-efi"
 # Et sans grub-fstest: les cas 1 a 12 ne dependent pas de l'outil de l'hote,
 # qui lirait sinon le VRAI disque de la machine qui execute ce banc.
 export AUXINUX_GRUB_FSTEST="${WORK}/grub-fstest-absent"
+# Noms EFI de l'edition amd64 (x64) quelle que soit la machine de test; le cas
+# 12d passe en arm64 (aa64).
+export AUXINUX_ARCH=amd64
 
 fail=0
 check() {
@@ -201,6 +204,19 @@ rm -f "${T}/boot/efi/EFI/AuxiNuxOS/shimx64.efi" "${T}/boot/efi/EFI/AuxiNuxOS/gru
 out="$(AUXINUX_EFI_SYSFS="${WORK}/efi-sysfs" bash "${VERIFY}" "${T}" 2>&1)"; rc=$?
 check "sort en 1" "${rc}" "1"
 check "annonce l'invite grub>" "$(grep -c 'invite « grub> »' <<<"${out}")" "1"
+
+echo "== 12d. Edition ARM (arm64): noms aa64 sur la partition EFI =="
+T="${WORK}/uefi-arm64"; make_target "${T}" 12288 34816; make_esp "${T}"
+for f in "${T}"/boot/efi/EFI/AuxiNuxOS/*x64.efi; do mv "${f}" "${f%x64.efi}aa64.efi"; done
+mv "${T}/boot/efi/EFI/BOOT/BOOTX64.EFI" "${T}/boot/efi/EFI/BOOT/BOOTAA64.EFI"
+out="$(AUXINUX_ARCH=arm64 AUXINUX_EFI_SYSFS="${WORK}/efi-sysfs" bash "${VERIFY}" "${T}" 2>&1)"; rc=$?
+check "arm64: sort en 0" "${rc}" "0"
+check "arm64: partition EFI jugee complete" "$(grep -c 'EFI/AuxiNuxOS complet' <<<"${out}")" "1"
+check "arm64: chemin de secours BOOTAA64.EFI complet" "$(grep -c 'chemin de secours EFI/BOOT/BOOTAA64.EFI complet' <<<"${out}")" "1"
+# Les memes fichiers, lus avec les noms amd64: rien a demarrer.
+out="$(AUXINUX_ARCH=amd64 AUXINUX_EFI_SYSFS="${WORK}/efi-sysfs" bash "${VERIFY}" "${T}" 2>&1)"; rc=$?
+check "noms aa64 sur une machine amd64: echoue" "${rc}" "1"
+check "nomme grubx64.efi" "$(grep -c 'grubx64.efi absent' <<<"${out}")" "1"
 rm -f "${STUBS}/findmnt"
 
 # --- Relecture par le pilote de GRUB (grub-fstest) --------------------------
