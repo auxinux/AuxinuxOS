@@ -33,6 +33,11 @@ playerctl
 xwayland
 qt6-wayland
 qt6-translations-l10n
+# Chargeur SVG de GTK (gdk-pixbuf) : GTK 4 ne fait que le RECOMMANDER. Sans lui
+# (constate en ARM64, 2026-10-26), toutes les icones SVG du Shell et des
+# applications GTK s'affichent en « image manquante ». Le Shell en depend
+# depuis 0.3.6 ; nomme ici pour que l'image l'ait des le bootstrap.
+librsvg2-common
 # GARDES alors que le bureau Plasma part: le Shell s'en sert.
 #  - plasma-integration: QT_QPA_PLATFORMTHEME=kde (bin/auxinux-session), et elle
 #    tire breeze, dont les .colors servent au Shell pour ecrire le kdeglobals de
