@@ -74,7 +74,7 @@ published_version() {
 # jusqu'au 2026-10-25, encore accepte; depuis le
 # 2026-10-09): une par ISO, elle doit TOUJOURS etre plus recente que celle en
 # ligne -- c'est elle qui annonce la nouvelle version aux machines installees.
-RELEASE_DEB="$(ssh "${BUILD_HOST}" "cd '${REMOTE_DIR}' && ls auxinuxos-release_*_${ARCH}.deb auxinuxos-release_*_all.deb 2>/dev/null" | sort -V | tail -n1)"
+RELEASE_DEB="$(ssh "${BUILD_HOST}" "cd '${REMOTE_DIR}' && ls auxinuxos-release_*_${ARCH}.deb auxinuxos-release_*_all.deb 2>/dev/null; true" | sort -V | tail -n1)"
 [[ -n "${RELEASE_DEB}" ]] || { echo "ERREUR: aucun auxinuxos-release_*_${ARCH}.deb dans ${BUILD_HOST}:${REMOTE_DIR}" >&2; exit 66; }
 RELEASE="${RELEASE_DEB#auxinuxos-release_}"; RELEASE="${RELEASE%_*.deb}"
 

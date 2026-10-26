@@ -234,6 +234,28 @@ check "--deb d'un paquet installe (mise a jour): accepte" "$?" "0"
 check "--deb de l'assistant: accepte" "$?" "0"
 has "--deb de l'assistant: apt-get install" "install -- brave-browser"
 
+# --allow-deb (2026-10-26): DEB permis pour CETTE commande seulement.
+printf 'DEB_APPS=0\n' >"${APPS_CONF}"
+: >"${CALLS}"
+( set -e; run_install --deb --allow-deb vlc gimp ) </dev/null >/dev/null 2>&1
+check "--deb --allow-deb, DEB desactive: accepte" "$?" "0"
+has "--allow-deb: les paquets nommes, une transaction" "install -- vlc gimp"
+lacks "--allow-deb n'est pas passe a apt" "allow-deb"
+: >"${CALLS}"
+( set -e; run_install --allow-deb --deb vlc ) </dev/null >/dev/null 2>&1
+check "--allow-deb avant --deb: accepte aussi" "$?" "0"
+check "le reglage n'est pas change" "$(cat "${APPS_CONF}")" "DEB_APPS=0"
+: >"${CALLS}"
+( set -e; run_install --deb vlc ) </dev/null >/dev/null 2>&1
+check "commande suivante sans --allow-deb: refus" "$?" "1"
+FLATPAK_SEARCH_OUT=""
+: >"${CALLS}"
+( set -e; run_install --allow-deb htop ) </dev/null >/dev/null 2>&1
+check "sans --deb: Flatpak d'abord, puis DEB permis cette fois" "$?" "0"
+has "  -> apt-get install htop" "install -- htop"
+out="$( (set -e; run_install --deb vlc) </dev/null 2>&1)"
+check "le refus indique --allow-deb" "$(grep -c -- '--allow-deb' <<<"${out}")" "1"
+
 # La recherche ne liste les DEB que si leur installation est activee.
 : >"${CALLS}"
 ( set -e; run_search gimp ) </dev/null >/dev/null 2>&1
