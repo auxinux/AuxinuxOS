@@ -63,6 +63,7 @@ Usage:
   auxi install [--deb|--flatpak] PACKAGE_OR_APP...
   auxi uninstall [--deb|--flatpak] PACKAGE_OR_APP
   auxi purge PACKAGE
+  auxi autoremove [--deb|--flatpak]
   auxi clean
   auxi autoclean
   auxi snapshot [DESCRIPTION]
@@ -80,6 +81,11 @@ exists for the requested application.
 os update tells whether a new AuxiNux OS version is available; os upgrade
 installs it with every system DEB package (kernels included), after a named
 snapshot. Neither, nor kernel, depends on that setting.
+
+autoremove removes DEB packages that nothing needs any more (old kernels
+included, never the running one) and unused Flatpak runtimes; autoclean
+deletes downloaded DEB files that can no longer be installed, clean all of
+them. A snapshot is taken before any DEB removal.
 
 Global options (before the command):
   --yes       answer yes to every question, keep modified configuration files
@@ -104,6 +110,7 @@ Usage:
   auxi install [--deb|--flatpak] PAQUET_OU_APP...
   auxi uninstall [--deb|--flatpak] PAQUET_OU_APP
   auxi purge PAQUET
+  auxi autoremove [--deb|--flatpak]
   auxi clean
   auxi autoclean
   auxi snapshot [DESCRIPTION]
@@ -121,6 +128,11 @@ seulement quand aucun Flatpak n'existe pour l'application demandée.
 os update dit si une nouvelle version d'AuxiNux OS est disponible; os upgrade
 l'installe avec tous les paquets DEB du système (noyaux compris), après un
 instantané nommé. Ni l'un ni l'autre, ni kernel, ne dépend de ce réglage.
+
+autoremove retire les paquets DEB dont plus rien n'a besoin (anciens noyaux
+compris, jamais celui en cours) et les environnements Flatpak inutilisés;
+autoclean supprime les paquets DEB téléchargés qui ne peuvent plus servir,
+clean les supprime tous. Un instantané est pris avant tout retrait DEB.
 
 Options globales (avant la commande):
   --yes       répond oui à toutes les questions, garde les fichiers de
@@ -713,6 +725,39 @@ select_mode() {
     shift
   fi
   ARGS=("$@")
+}
+
+# Nettoyage (demande d'aporler, 2026-10-26: « auxi autoclean et auxi
+# autoremove doivent etre fonctionnels »). autoremove n'existait pas, et
+# `apt autoremove` etait refuse par le bouclier apt.
+#
+# DEB: `apt-get autoremove --purge`. Les anciens noyaux peuvent partir, mais
+# jamais celui en cours ni les plus recents: apt les protege lui-meme
+# (APT::VersionedKernelPackages, protection integree a l'apt de Debian 13;
+# verifie le 2026-10-26 sur l'image 0.4.0 avec 7.2.5 et 7.2.11 installes:
+# rien a retirer). Un noyau installe EXPRES (auxi kernel install le nomme a
+# apt-get install) est marque manuel et reste. L'instantane BTRFS est pose par
+# le hook dpkg, comme pour toute transaction.
+# Flatpak: `flatpak uninstall --unused`, les environnements (runtimes,
+# extensions) dont plus aucune application n'a besoin.
+run_autoremove() {
+  select_mode "$@"
+  if [[ "${#ARGS[@]}" -gt 0 ]]; then
+    say_err \
+      "autoremove ne prend pas de nom de paquet: auxi uninstall PAQUET" \
+      "autoremove takes no package name: auxi uninstall PACKAGE"
+    exit 64
+  fi
+  if [[ "${MODE}" == "both" || "${MODE}" == "deb" ]]; then
+    require_root_for_deb autoremove "$@"
+  fi
+  flatpak_opts
+  if [[ "${MODE}" == "both" || "${MODE}" == "deb" ]]; then
+    apt_get autoremove --purge
+  fi
+  if [[ "${MODE}" == "both" || "${MODE}" == "flatpak" ]] && command -v flatpak >/dev/null 2>&1; then
+    flatpak uninstall --unused "${FLATPAK_OPTS[@]}"
+  fi
 }
 
 run_update() {
@@ -1539,6 +1584,9 @@ case "${1:-}" in
     shift
     require_root_for_deb purge "$@"
     apt_get purge -- "$@"
+    ;;
+  autoremove)
+    shift; run_autoremove "$@"
     ;;
   clean)
     require_root_for_deb clean

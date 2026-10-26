@@ -122,6 +122,11 @@ else
   run "${WORK}/bin/apt" full-upgrade >/dev/null; check "apt full-upgrade -> auxi os upgrade (ne retire rien)" "$(last)" "auxi os upgrade"
   check "apt upgrade firefox: refuse" "$(run "${WORK}/bin/apt" upgrade firefox)" "1"
   check "  rien n'est lance" "$(last)" ""
+  # Nettoyage (2026-10-26): confie a auxi, plus refuse.
+  run "${WORK}/bin/apt" autoremove >/dev/null; check "apt autoremove -> auxi autoremove --deb" "$(last)" "auxi autoremove --deb"
+  run "${WORK}/bin/apt-get" -y autoremove >/dev/null; check "apt-get -y autoremove -> --yes" "$(last)" "auxi --yes autoremove --deb"
+  run "${WORK}/bin/apt" autoclean >/dev/null; check "apt autoclean -> auxi autoclean" "$(last)" "auxi autoclean"
+  run "${WORK}/bin/apt-get" clean >/dev/null; check "apt-get clean -> auxi clean" "$(last)" "auxi clean"
   check "apt install vlc: toujours refuse" "$(run "${WORK}/bin/apt" install vlc)" "1"
   check "  rien n'est lance" "$(last)" ""
 fi
