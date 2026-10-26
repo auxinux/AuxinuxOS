@@ -1,3 +1,4 @@
+Édition ARM : AuxiOffice (avec AuxiPDF), AuxiText, AuxiCorrect et AuxiPak arrivent sur les ordinateurs ARM64 ; AuxiMail suivra.
 AuxiNux OS 0.4.0 : plus léger. Le bureau KDE Plasma n'est plus installé d'office ; AuxiNux Shell est le bureau, et Plasma s'installe ou se retire dans le centre de contrôle (Réglages, « Bureau »). Les ordinateurs qui ont déjà Plasma le gardent.
 Nouvelles applications AuxiNux : AuxiMail pour le courrier et AuxiCorrect, le correcteur et dictionnaire du français d'AuxiOffice et d'AuxiMail.
 Les PDF s'ouvrent avec AuxiPDF, et les liens « courriel » avec AuxiMail ; Okular n'est plus installé d'office.

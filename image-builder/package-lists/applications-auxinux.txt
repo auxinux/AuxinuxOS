@@ -8,12 +8,13 @@
 # auxinux-shell », constate a la 1re construction ARM le 2026-10-25); en PC,
 # le rootfs etait toujours reutilise et le defaut restait cache.
 #
-# Marqueur [amd64]: applications pas encore publiees en arm64.
+# Marqueur [amd64]: applications pas encore publiees en arm64 (2026-10-26:
+# seul AuxiMail; AuxiOffice, AuxiText, AuxiCorrect et AuxiPak le sont).
 
 auxinux-shell
-auxi-shell-auxipak [amd64]
-auxioffice [amd64]
-auxitext [amd64]
+auxi-shell-auxipak
+auxioffice
+auxitext
 auxi-mail [amd64]
-auxicorrect [amd64]
-auxipak [amd64]
+auxicorrect
+auxipak
