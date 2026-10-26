@@ -214,6 +214,15 @@ impl HealthReport {
     }
 }
 
+/// Verification d'integrite d'AuxiNux OS (`auxi check`): paquets AuxiNux,
+/// dependances du Shell, fichiers, installations interrompues.
+#[derive(Clone, Debug)]
+pub struct IntegrityReport {
+    pub report: HealthReport,
+    /// `auxi repair` a quelque chose a corriger.
+    pub repairable: bool,
+}
+
 // ---------------------------------------------------------------------------
 // Restauration
 // ---------------------------------------------------------------------------

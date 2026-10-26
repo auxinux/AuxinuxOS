@@ -6,22 +6,32 @@
 
 use cosmic::{iced, widget, Element};
 
-use crate::model::{HealthCheck, Severity};
+use crate::model::{HealthCheck, IntegrityReport, Severity};
 use crate::ui::{widgets, App, Loading, Message};
 
 pub fn view(app: &App) -> Element<'_, Message> {
     let header = widgets::header(
         "Santé du système",
         "Diagnostic de l'espace disque, de la mémoire, des services et des sauvegardes",
-        vec![widget::button::standard("Réanalyser")
-            .on_press(Message::RefreshHealth)
-            .into()],
+        vec![
+            widget::button::standard("Vérifier l'intégrité")
+                .on_press_maybe(
+                    (!matches!(app.integrity, Loading::Busy)).then_some(Message::CheckIntegrity),
+                )
+                .into(),
+            widget::button::standard("Réanalyser")
+                .on_press(Message::RefreshHealth)
+                .into(),
+        ],
     );
 
     let body: Element<Message> = match &app.health {
         Loading::Idle | Loading::Busy => widgets::busy("Analyse du système…"),
         Loading::Ready(report) => {
-            let mut col = widget::Column::new().spacing(8).push(summary(report));
+            let mut col = widget::Column::new()
+                .spacing(8)
+                .push(summary(report))
+                .push(integrity_section(app));
             for c in &report.checks {
                 col = col.push(check_card(c));
             }
@@ -33,6 +43,95 @@ pub fn view(app: &App) -> Element<'_, Message> {
     };
 
     widget::Column::new().spacing(16).push(header).push(body).into()
+}
+
+/// Integrite d'AuxiNux OS (`auxi check`): le Shell, les commandes et
+/// applications AuxiNux, leurs dependances et leurs fichiers. A la demande:
+/// le diagnostic courant ne voit pas un Shell RETENU par la mise a jour.
+fn integrity_section(app: &App) -> Element<'_, Message> {
+    let report = match &app.integrity {
+        Loading::Idle => {
+            return widget::container(
+                widget::Row::new()
+                    .spacing(12)
+                    .align_y(iced::Alignment::Center)
+                    .push(widget::icon::from_name("system-search-symbolic").size(20))
+                    .push(
+                        widget::Column::new()
+                            .spacing(2)
+                            .width(iced::Length::Fill)
+                            .push(widget::text::heading("Intégrité d'AuxiNux OS"))
+                            .push(widget::text::caption(
+                                "Vérifie AuxiNux Shell, les commandes et applications AuxiNux, \
+                                 leurs dépendances et leurs fichiers. Utile si quelque chose \
+                                 fonctionne mal après une mise à jour, même quand tout semble aller.",
+                            )),
+                    )
+                    .push(
+                        widget::button::standard("Vérifier").on_press(Message::CheckIntegrity),
+                    ),
+            )
+            .class(super::apparence::carte())
+            .padding(12)
+            .width(iced::Length::Fill)
+            .into();
+        }
+        Loading::Busy => return widgets::busy("Actualisation des listes et vérification de l'intégrité d'AuxiNux OS…"),
+        Loading::Ready(report) => report,
+    };
+
+    let mut col = widget::Column::new()
+        .spacing(8)
+        .push(integrity_summary(app, report));
+    for c in &report.report.checks {
+        col = col.push(check_card(c));
+    }
+    col.into()
+}
+
+fn integrity_summary<'a>(app: &App, integrity: &'a IntegrityReport) -> Element<'a, Message> {
+    let report = &integrity.report;
+    let overall = report.overall();
+    let (title, detail) = if integrity.repairable {
+        (
+            "Intégrité d'AuxiNux OS: réparation possible",
+            "Un instantané est créé avant: la restauration peut annuler la réparation. \
+             Si la fenêtre de mot de passe ne s'affiche pas, ouvrez un terminal et \
+             tapez « sudo auxi repair ».",
+        )
+    } else if overall == Severity::Ok {
+        ("Intégrité d'AuxiNux OS: tout est en place", "")
+    } else {
+        (
+            "Intégrité d'AuxiNux OS: rien à réparer automatiquement",
+            "Suivez le conseil de chaque point ci-dessous.",
+        )
+    };
+
+    let mut text = widget::Column::new()
+        .spacing(2)
+        .width(iced::Length::Fill)
+        .push(widget::text::heading(title));
+    if !detail.is_empty() {
+        text = text.push(widget::text::caption(detail));
+    }
+    let mut row = widget::Row::new()
+        .spacing(12)
+        .align_y(iced::Alignment::Center)
+        .push(widget::icon::from_name(severity_icon(overall)).size(24))
+        .push(text);
+    if integrity.repairable {
+        row = row.push(
+            widget::button::suggested("Réparer")
+                .on_press_maybe((!app.op_running()).then_some(Message::RepairSystem)),
+        );
+    }
+
+    widget::container(row)
+        .class(super::apparence::carte())
+        .padding(12)
+        .width(iced::Length::Fill)
+        .into()
 }
 
 fn summary(report: &crate::model::HealthReport) -> Element<'_, Message> {

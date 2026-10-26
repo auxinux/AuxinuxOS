@@ -14,7 +14,7 @@
 #
 # Couvre:
 #   1. auxinux-refresh-helper (actualiser, sans mot de passe: aucun argument)
-#   2. auxinux-update-helper (system | os | package <installes seulement>)
+#   2. auxinux-update-helper (system | os | repair | package <installes seulement>)
 #   3. la politique polkit des deux helpers
 #   4. apt-wrapper: `apt update` / `apt upgrade` confies a auxi, apt masque
 #   5. auxi: relais par sudo dans un terminal, erreur sans terminal
@@ -67,6 +67,8 @@ echo "== 2. Mettre a jour le systeme =="
 H="${HELPERS}/auxinux-update-helper"
 run "${H}" system >/dev/null; check "system: auxi upgrade" "$(last)" "auxi --yes --progress upgrade"
 run "${H}" os >/dev/null; check "os: auxi os upgrade" "$(last)" "auxi --yes --progress os upgrade"
+run "${H}" repair >/dev/null; check "repair: auxi repair (Sante)" "$(last)" "auxi --yes --progress repair"
+check "repair avec argument refuse" "$(run "${H}" repair --deb)" "64"
 check "package installe" "$(run "${H}" package liblzma5:i386)" "0"
 check "package: install --deb du paquet installe" "$(last)" "auxi --yes --progress install --deb liblzma5:i386"
 check "package NON installe refuse" "$(run "${H}" package vlc)" "64"

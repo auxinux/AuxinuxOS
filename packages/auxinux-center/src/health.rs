@@ -4,7 +4,7 @@
 //! clair. Un centre de controle qui affiche "swap: 94%" sans dire quoi faire
 //! ne sert qu'a ceux qui savaient deja.
 
-use crate::model::{HealthCheck, HealthReport, Severity, SystemReport};
+use crate::model::{ActionResult, HealthCheck, HealthReport, IntegrityReport, Severity, SystemReport};
 use crate::util::run;
 
 /// Seuils d'occupation disque. Au-dela de 95%, APT et les instantanes
@@ -225,6 +225,97 @@ fn apt_policy_check() -> HealthCheck {
     }
 }
 
+/// Verification d'integrite d'AuxiNux OS, a la demande (bouton « Vérifier
+/// l'intégrité »).
+///
+/// DEMANDE A L'ORIGINE (2026-10-26, aporler): une machine installee depuis une
+/// ISO ancienne puis mise a jour avait la fenetre de mot de passe absente, le
+/// filigrane du bureau absent et AuxiFiles avec des rates, alors que cette
+/// page disait « Tout va bien »: le Shell etait RETENU en 0.3.5 par la mise a
+/// jour, et des paquets que seule l'ISO installe manquaient. Les controles
+/// eux-memes sont dans `auxi check`, utilisable aussi en terminal.
+///
+/// Plusieurs secondes (dpkg --verify des paquets AuxiNux): tache de fond.
+pub fn integrity() -> IntegrityReport {
+    // Listes de paquets fraiches d'abord: sinon un paquet RETENU passe pour
+    // a jour, et un paquet AuxiNux recent pour introuvable. L'action
+    // d'actualisation ne demande pas de mot de passe a la session active: elle
+    // marche meme quand l'agent d'autorisation est en panne. Un echec (hors
+    // ligne) n'empeche pas la verification, faite alors sur les listes du jour.
+    run("pkexec", &[crate::updates::REFRESH_HELPER]);
+    let out = run("auxi", &["check", "--porcelain"]);
+    let parsed = parse_integrity(&out.stdout);
+    if parsed.report.checks.is_empty() {
+        // auxi d'avant la 0.2.11, ou introuvable: pas de verification possible.
+        return IntegrityReport {
+            report: HealthReport {
+                checks: vec![check(
+                    "integrity",
+                    "Vérification d'intégrité",
+                    "indisponible avec cette version d'auxi",
+                    Severity::Warning,
+                    "Mettez le système à jour (onglet « Mises à jour »), puis relancez la vérification.",
+                )],
+            },
+            repairable: false,
+        };
+    }
+    parsed
+}
+
+/// Sortie de `auxi check --porcelain`:
+/// `ETAT<tab>ID<tab>TITRE<tab>DETAIL<tab>CONSEIL`, puis `reparable<tab>oui|non`.
+fn parse_integrity(stdout: &str) -> IntegrityReport {
+    let mut checks = Vec::new();
+    let mut repairable = false;
+    for line in stdout.lines() {
+        let fields: Vec<&str> = line.split('\t').collect();
+        if fields.first() == Some(&"reparable") {
+            repairable = fields.get(1) == Some(&"oui");
+            continue;
+        }
+        if fields.len() < 4 {
+            continue;
+        }
+        let severity = match fields[0] {
+            "ok" => Severity::Ok,
+            "attention" => Severity::Warning,
+            "critique" => Severity::Critical,
+            _ => continue,
+        };
+        checks.push(check(
+            &format!("integrity:{}", fields[1]),
+            fields[2],
+            fields[3],
+            severity,
+            fields.get(4).copied().unwrap_or(""),
+        ));
+    }
+    IntegrityReport { report: HealthReport { checks }, repairable }
+}
+
+/// Repare AuxiNux OS (`auxi repair`, instantane nomme d'abord), sous l'action
+/// polkit des mises a jour.
+pub fn repair(on_line: &mut dyn FnMut(&str)) -> ActionResult {
+    let result = crate::progress::privileged(
+        &[crate::updates::UPDATE_HELPER, "repair"],
+        on_line,
+        "AuxiNux OS est réparé. Fermez la session puis rouvrez-la pour charger le Shell réparé.",
+    );
+    // Le message de refus generique nomme `sudo auxi os upgrade`; ici, c'est
+    // la reparation qu'il faut lancer en terminal. C'est justement le cas
+    // d'une machine dont l'agent d'autorisation est en panne.
+    if !result.ok && result.message == crate::progress::AUTH_REFUSED {
+        return ActionResult::err(REPAIR_AUTH_REFUSED);
+    }
+    result
+}
+
+pub const REPAIR_AUTH_REFUSED: &str = "Réparation annulée: l'autorisation administrateur n'a pas été donnée. \
+     Rien n'a été modifié.\n\
+     Si la fenêtre d'autorisation n'est pas apparue, c'est peut-être justement ce qu'il faut réparer: \
+     ouvrez un terminal et tapez sudo auxi repair";
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -248,6 +339,28 @@ mod tests {
     fn empty_report_is_ok_not_a_panic() {
         let report = HealthReport { checks: vec![] };
         assert_eq!(report.overall(), Severity::Ok);
+    }
+
+    #[test]
+    fn integrity_porcelain_is_parsed() {
+        let out = "ok\tdpkg\tInstallation des paquets\taucune installation interrompue\t\n\
+                   critique\tpaquets\tPaquets AuxiNux OS\tretenus: auxinux-shell 0.3.5 → 0.3.13\tLa réparation les installe.\n\
+                   attention\tdependances\tDépendances du bureau\t1 absente(s): polkit-kde-agent-1\t\n\
+                   reparable\toui\n";
+        let parsed = parse_integrity(out);
+        assert!(parsed.repairable);
+        assert_eq!(parsed.report.checks.len(), 3);
+        assert_eq!(parsed.report.overall(), Severity::Critical);
+        assert_eq!(parsed.report.checks[1].id, "integrity:paquets");
+        assert_eq!(parsed.report.checks[1].advice, "La réparation les installe.");
+        assert_eq!(parsed.report.checks[2].advice, "");
+    }
+
+    #[test]
+    fn integrity_nothing_to_repair() {
+        let parsed = parse_integrity("ok\tapt\tDépendances\taucune\t\nreparable\tnon\n");
+        assert!(!parsed.repairable);
+        assert_eq!(parsed.report.overall(), Severity::Ok);
     }
 
     #[test]
