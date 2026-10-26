@@ -150,6 +150,11 @@ pub enum Message {
     // Sante
     RefreshHealth,
     HealthLoaded(HealthReport),
+    /// Verification d'integrite d'AuxiNux OS (`auxi check`), a la demande.
+    CheckIntegrity,
+    IntegrityLoaded(crate::model::IntegrityReport),
+    /// `auxi repair`, instantane nomme d'abord.
+    RepairSystem,
     SystemLoaded(SystemReport),
 
     // Restauration
@@ -242,6 +247,8 @@ pub struct App {
     // Sante
     health: Loading<HealthReport>,
     system: Loading<SystemReport>,
+    /// Lancee seulement a la demande: dpkg --verify prend plusieurs secondes.
+    integrity: Loading<crate::model::IntegrityReport>,
 
     // Restauration
     recovery: Loading<RecoveryState>,
@@ -400,6 +407,12 @@ impl App {
         background(crate::health::report, Message::HealthLoaded)
     }
 
+    fn load_integrity(&mut self) -> Task<Message> {
+        self.integrity = Loading::Busy;
+        self.start();
+        background(crate::health::integrity, Message::IntegrityLoaded)
+    }
+
     fn load_recovery(&mut self) -> Task<Message> {
         self.recovery = Loading::Busy;
         self.start();
@@ -428,6 +441,12 @@ impl App {
         match self.page {
             Page::Apps => self.reload_apps(),
             Page::Updates => self.load_updates(),
+            // Une verification deja faite est refaite: apres une reparation ou
+            // une mise a jour, l'ancien constat serait faux.
+            Page::Health if !matches!(self.integrity, Loading::Idle) => {
+                let health = self.load_health();
+                Task::batch(vec![health, self.load_integrity()])
+            }
             Page::Health => self.load_health(),
             Page::Recovery => self.load_recovery(),
             Page::Sources => self.load_sources(),
@@ -501,6 +520,7 @@ impl Application for App {
             os_version: crate::updates::os_version(),
             os_update: None,
             health: Loading::Idle,
+            integrity: Loading::Idle,
             system: Loading::Idle,
             recovery: Loading::Idle,
             snapshot_description: String::new(),
@@ -771,6 +791,15 @@ impl Application for App {
                 self.health = Loading::Ready(report);
                 Task::none()
             }
+            Message::CheckIntegrity => self.load_integrity(),
+            Message::IntegrityLoaded(report) => {
+                self.finish();
+                self.integrity = Loading::Ready(report);
+                Task::none()
+            }
+            Message::RepairSystem => {
+                self.launch("Réparation d'AuxiNux OS".into(), crate::health::repair)
+            }
             Message::SystemLoaded(report) => {
                 self.finish();
                 self.system = Loading::Ready(report);
@@ -1019,6 +1048,12 @@ impl Application for App {
                 // paquets qu'il vient de mettre a jour, et recommencerait.
                 if self.page != Page::Updates {
                     self.updates = Loading::Idle;
+                }
+                // Meme raison pour la verification d'integrite: elle sera
+                // refaite a la demande (sur la page Sante, elle l'est tout de
+                // suite par reload_current_page).
+                if self.page != Page::Health {
+                    self.integrity = Loading::Idle;
                 }
                 // Meme raison pour les noyaux: une mise a jour du systeme ou la
                 // page Sources peuvent les avoir changes.

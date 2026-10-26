@@ -57,6 +57,13 @@ for dep in "auxinux-shell (>= 0.2.1)" auxioffice auxitext "auxipak (>= 1.0.10)" 
   check "tire ${dep}" "$(field Depends | tr ',' '\n' | sed 's/^ *//' | grep -cxF "${dep}")" "1"
 done
 
+echo "== 1 ter. Socle du bureau pour auxi check/repair (2026-10-26) =="
+SOCLE="$(dpkg-deb --fsys-tarfile "${DEB}" | tar -xO ./usr/share/auxinuxos/socle-bureau.list)"
+check "agent polkit de repli" "$(grep -cx polkit-kde-agent-1 <<<"${SOCLE}")" "1"
+check "portail wlr" "$(grep -cx xdg-desktop-portal-wlr <<<"${SOCLE}")" "1"
+check "applications KDE exclues" "$(grep -cxE 'dolphin|konsole|zenity' <<<"${SOCLE}")" "0"
+check "noms seuls (ni commentaire de liste ni marqueur)" "$(grep -v '^#' <<<"${SOCLE}" | grep -c '[][ ]')" "0"
+
 echo "== 1 bis. Ecran de demarrage (0.3.0) =="
 check "quiet splash par grub.d" \
   "$(dpkg-deb --fsys-tarfile "${DEB}" | tar -xO ./etc/default/grub.d/50-auxinux-splash.cfg \

@@ -64,6 +64,8 @@ Usage:
   auxi uninstall [--deb|--flatpak] PACKAGE_OR_APP
   auxi purge PACKAGE
   auxi autoremove [--deb|--flatpak]
+  auxi check [--porcelain]
+  auxi repair
   auxi clean
   auxi autoclean
   auxi snapshot [DESCRIPTION]
@@ -87,6 +89,10 @@ autoremove removes DEB packages that nothing needs any more (old kernels
 included, never the running one) and unused Flatpak runtimes; autoclean
 deletes downloaded DEB files that can no longer be installed, clean all of
 them. A snapshot is taken before any DEB removal.
+
+check verifies AuxiNux OS (AuxiNux packages kept back or missing, AuxiNux
+Shell dependencies, altered files, interrupted installations) without changing
+anything; repair fixes what can be fixed, after a named snapshot.
 
 Global options (before the command):
   --yes       answer yes to every question, keep modified configuration files
@@ -112,6 +118,8 @@ Usage:
   auxi uninstall [--deb|--flatpak] PAQUET_OU_APP
   auxi purge PAQUET
   auxi autoremove [--deb|--flatpak]
+  auxi check [--porcelain]
+  auxi repair
   auxi clean
   auxi autoclean
   auxi snapshot [DESCRIPTION]
@@ -136,6 +144,10 @@ autoremove retire les paquets DEB dont plus rien n'a besoin (anciens noyaux
 compris, jamais celui en cours) et les environnements Flatpak inutilisés;
 autoclean supprime les paquets DEB téléchargés qui ne peuvent plus servir,
 clean les supprime tous. Un instantané est pris avant tout retrait DEB.
+
+check vérifie AuxiNux OS (paquets AuxiNux retenus ou absents, dépendances
+d'AuxiNux Shell, fichiers altérés, installations interrompues) sans rien
+modifier; repair corrige ce qui peut l'être, après un instantané nommé.
 
 Options globales (avant la commande):
   --yes       répond oui à toutes les questions, garde les fichiers de
@@ -823,10 +835,12 @@ run_osupdate() {
   fi
   if [[ "${snap}" -eq 1 ]]; then
     AUXI_NO_SNAPSHOT=1 apt_get upgrade --with-new-pkgs
+    AUXI_NO_SNAPSHOT=1 release_catch_up
     AUXI_NO_SNAPSHOT=1 release_ensure_installed
     AUXI_NO_SNAPSHOT=1 kernel_update_channels
   else
     apt_get upgrade --with-new-pkgs
+    release_catch_up
     release_ensure_installed
     kernel_update_channels
   fi
@@ -954,6 +968,411 @@ os_release_label() {
     else printf ', édition du %s%s' "${day}" "${n}"; fi
   fi
   printf '\n'
+}
+
+# --- Integrite d'AuxiNux OS: auxi check / auxi repair ------------------------
+#
+# DEMANDE A L'ORIGINE (2026-10-26, aporler): une machine installee depuis une
+# ISO ancienne puis mise a jour « fonctionne mal » -- fenetre de mot de passe
+# absente, filigrane du bureau absent, AuxiFiles avec des rates -- alors que la
+# page Sante du centre dit que tout va bien. Deux causes connues:
+#   - une recommandation NOUVELLE du Shell qu'`apt-get upgrade --with-new-pkgs`
+#     ne peut pas satisfaire fait RETENIR auxinux-shell (« kept back », sortie
+#     en 0): des PC sont restes en Shell 0.3.5, sans aucun message;
+#   - ce que l'ISO installe sans qu'aucun paquet n'en depende (agent polkit de
+#     repli, portails, theme Qt...) n'arrive jamais par les mises a jour sur
+#     une machine installee avant son ajout.
+#
+# auxi check VERIFIE, sans rien modifier et sans root:
+#   - dpkg: installations interrompues (dpkg --audit);
+#   - apt: dependances cassees (apt-get check);
+#   - paquets AuxiNux (version, auxi, centre, noyau, Shell, applications):
+#     presents et a la version des depots, en distinguant une mise a jour en
+#     attente d'un paquet RETENU;
+#   - dependances du bureau: recommandations du Shell et socle du bureau de
+#     l'image (socle-bureau.list, livre par auxinuxos-release);
+#   - fichiers des paquets AuxiNux (dpkg --verify, configuration exclue);
+#   - session: Shell en cours plus ancien que celui installe.
+# auxi repair corrige tout ce qui peut l'etre, apres un instantane NOMME.
+#
+# --porcelain (centre de controle): une ligne par controle,
+#   ETAT<tab>ID<tab>TITRE<tab>DETAIL<tab>CONSEIL   (ETAT: ok|attention|critique)
+# puis « reparable<tab>oui|non ».
+SOCLE_LIST="${AUXI_SOCLE_LIST:-/usr/share/auxinuxos/socle-bureau.list}"
+INTEG_BASE=(auxinuxos-release auxi auxinux-center kernel-auxinuxos auxinux-shell auxi-shell-games)
+
+msg() {
+  if is_english; then printf '%s' "$2"; else printf '%s' "$1"; fi
+}
+
+# Champ Depends/Recommends -> un groupe d'alternatives par ligne (« b|c »),
+# sans versions ni qualificatifs d'architecture.
+dep_groups() {
+  tr ',' '\n' <<<"$1" \
+    | sed -e 's/([^)]*)//g' -e 's/\[[^]]*\]//g' -e 's/:[a-z0-9]*//g' -e 's/[[:space:]]//g' \
+    | grep -v '^$' || true
+}
+
+# Paquets AuxiNux du systeme: la base, plus ce que la version installee
+# d'AuxiNux OS tire (applications AuxiNux). Les paquets Debian qu'elle tire
+# aussi (plymouth, base-files) ne sont pas a nous.
+integ_core() {
+  local deps
+  deps="$(dpkg-query -W -f='${Depends}' auxinuxos-release 2>/dev/null || true)"
+  { printf '%s\n' "${INTEG_BASE[@]}"; dep_groups "${deps}" | cut -d'|' -f1; } \
+    | grep -vxE 'plymouth|base-files' | awk '!seen[$0]++' || true
+}
+
+# Groupes d'alternatives attendus autour du Shell: ses recommandations (une
+# image installe sans elles et les NOMME, une mise a jour ne les ajoute pas)
+# et le socle du bureau de l'image.
+integ_wanted_groups() {
+  local recs
+  recs="$(dpkg-query -W -f='${Recommends}' auxinux-shell 2>/dev/null || true)"
+  {
+    dep_groups "${recs}"
+    if [[ -r "${SOCLE_LIST}" ]]; then
+      sed -e 's/#.*//' -e 's/[[:space:]]//g' "${SOCLE_LIST}" | grep -v '^$' || true
+    fi
+  } | awk '!seen[$0]++' || true
+}
+
+# « nom installee candidate » pour chaque paquet connu des depots ((none) si
+# absent). Un paquet inconnu des depots n'a pas de ligne.
+policy_table() {
+  [[ $# -gt 0 ]] || return 0
+  LC_ALL=C apt_cache policy "$@" 2>/dev/null | awk '
+    /^[^ ].*:$/ { name = substr($0, 1, length($0) - 1); inst = ""; next }
+    /^  Installed:/ { inst = $2; next }
+    /^  Candidate:/ { print name, inst, $2 }' || true
+}
+
+# Paquets que la mise a jour ordinaire (`upgrade --with-new-pkgs`) installerait.
+# Un paquet AuxiNux en retard ABSENT de cette liste est retenu.
+integ_upgradable() {
+  local bin
+  bin="$(apt_real apt-get 2>/dev/null)" || return 0
+  LC_ALL=C "${bin}" -s -o Debug::NoLocking=1 upgrade --with-new-pkgs 2>/dev/null \
+    | awk '/^Inst /{ print $2 }' || true
+}
+
+# Fichiers d'un paquet alteres ou manquants (fichiers de configuration exclus:
+# les modifier est permis).
+integ_altered() {
+  dpkg --verify "$1" 2>/dev/null | awk '$2 != "c"' || true
+}
+
+# Elements separes par « , ».
+join_list() {
+  local out="" item
+  for item in "$@"; do out+="${out:+, }${item}"; done
+  printf '%s' "${out}"
+}
+
+integ_add() {
+  INTEG_LINES+=("$1"$'\t'"$2"$'\t'"$3"$'\t'"$4"$'\t'"${5:-}")
+}
+
+# Utilisateur de la session (auxi lance par sudo ou par pkexec: celui qui l'a
+# demande).
+integ_uid() {
+  printf '%s' "${PKEXEC_UID:-${SUDO_UID:-${EUID}}}"
+}
+
+# Analyse complete; remplit INTEG_LINES et les listes de travail de repair.
+integ_analyse() {
+  INTEG_LINES=()
+  INTEG_DPKG=0
+  INTEG_APT=0
+  INTEG_INSTALL=()
+  INTEG_DEPS=()
+  INTEG_REINSTALL=()
+  INTEG_SESSION=0
+
+  # 1. Installations interrompues.
+  if [[ -n "$(dpkg --audit 2>/dev/null || true)" ]]; then
+    INTEG_DPKG=1
+    integ_add critique dpkg "$(msg 'Installation des paquets' 'Package installation')" \
+      "$(msg 'des paquets sont à moitié installés ou configurés' 'some packages are half-installed or half-configured')" \
+      "$(msg 'Une installation a été interrompue; la réparation la termine.' 'An installation was interrupted; repair completes it.')"
+  else
+    integ_add ok dpkg "$(msg 'Installation des paquets' 'Package installation')" \
+      "$(msg 'aucune installation interrompue' 'no interrupted installation')"
+  fi
+
+  # 2. Dependances cassees.
+  local bin
+  if bin="$(apt_real apt-get 2>/dev/null)" \
+     && ! LC_ALL=C "${bin}" -qq -o Debug::NoLocking=1 check >/dev/null 2>&1; then
+    INTEG_APT=1
+    integ_add critique apt "$(msg 'Dépendances des paquets' 'Package dependencies')" \
+      "$(msg 'des dépendances sont cassées' 'some dependencies are broken')" \
+      "$(msg 'La réparation installe ce qui manque.' 'Repair installs what is missing.')"
+  else
+    integ_add ok apt "$(msg 'Dépendances des paquets' 'Package dependencies')" \
+      "$(msg 'aucune dépendance cassée' 'no broken dependency')"
+  fi
+
+  # 3. Paquets AuxiNux: absents, retenus, en attente.
+  local -a core missing=() unknown=() held=() pending=()
+  local -A seen=()
+  mapfile -t core < <(integ_core)
+  local upgradable name inst cand
+  upgradable=" $(integ_upgradable | tr '\n' ' ') "
+  while read -r name inst cand; do
+    seen["${name}"]=1
+    if [[ "${inst}" == "(none)" ]]; then
+      if [[ "${cand}" == "(none)" ]]; then unknown+=("${name}"); else missing+=("${name}"); fi
+    elif [[ "${cand}" != "(none)" ]] && dpkg --compare-versions "${cand}" gt "${inst}"; then
+      if [[ "${upgradable}" == *" ${name} "* ]]; then
+        pending+=("${name} ${inst} → ${cand}")
+      else
+        held+=("${name} ${inst} → ${cand}")
+      fi
+    fi
+  done < <(policy_table "${core[@]}")
+  for name in "${core[@]}"; do
+    [[ -n "${seen[${name}]:-}" ]] || deb_installed "${name}" || unknown+=("${name}")
+  done
+  INTEG_INSTALL=("${missing[@]}")
+  local entry
+  for entry in "${held[@]}" "${pending[@]}"; do
+    INTEG_INSTALL+=("${entry%% *}")
+  done
+  local title detail="" advice="" state=ok
+  title="$(msg 'Paquets AuxiNux OS' 'AuxiNux OS packages')"
+  if [[ ${#missing[@]} -gt 0 || ${#unknown[@]} -gt 0 ]]; then
+    state=critique
+    detail="$(msg 'absents' 'missing'): $(join_list "${missing[@]}" "${unknown[@]}")"
+  fi
+  if [[ ${#held[@]} -gt 0 ]]; then
+    state=critique
+    detail+="${detail:+; }$(msg 'retenus par la mise à jour' 'kept back by the update'): $(join_list "${held[@]}")"
+    advice="$(msg "La mise à jour ordinaire ne les installera pas: c'est une version ancienne qui tourne." \
+                  'The regular update will not install them: an old version is running.') "
+  fi
+  if [[ ${#pending[@]} -gt 0 ]]; then
+    [[ "${state}" == critique ]] || state=attention
+    detail+="${detail:+; }$(msg 'mise à jour en attente' 'update pending'): $(join_list "${pending[@]}")"
+  fi
+  if [[ ${#unknown[@]} -gt 0 ]]; then
+    advice+="$(msg "Introuvables dans les listes de paquets: ${unknown[*]}. Actualisez les listes (sudo auxi update); si rien ne change, vérifiez le dépôt AuxiNux dans « Sources »." \
+                   "Not found in the package lists: ${unknown[*]}. Refresh the lists (sudo auxi update); if nothing changes, check the AuxiNux repository in « Sources ».")"
+  elif [[ "${state}" != ok ]]; then
+    advice+="$(msg 'La réparation les installe.' 'Repair installs them.')"
+  fi
+  if [[ "${state}" == ok ]]; then
+    detail="$(msg "${#core[@]} paquets présents et à jour" "${#core[@]} packages present and up to date")"
+  fi
+  integ_add "${state}" paquets "${title}" "${detail}" "${advice}"
+
+  # 4. Dependances du bureau (recommandations du Shell, socle de l'image).
+  local -a groups parts alts=() absent=() unavailable=()
+  local -A installed=() candidate=()
+  mapfile -t groups < <(integ_wanted_groups)
+  local group alt
+  for group in "${groups[@]}"; do
+    IFS='|' read -ra parts <<<"${group}"
+    alts+=("${parts[@]}")
+  done
+  while read -r name inst cand; do
+    installed["${name}"]="${inst}"
+    candidate["${name}"]="${cand}"
+  done < <(policy_table "${alts[@]}")
+  for group in "${groups[@]}"; do
+    IFS='|' read -ra parts <<<"${group}"
+    local ok=0 pick=""
+    for alt in "${parts[@]}"; do
+      if [[ -n "${installed[${alt}]:-}" && "${installed[${alt}]}" != "(none)" ]]; then ok=1; break; fi
+      if [[ -z "${pick}" && -n "${candidate[${alt}]:-}" && "${candidate[${alt}]}" != "(none)" ]]; then pick="${alt}"; fi
+    done
+    [[ "${ok}" -eq 0 ]] || continue
+    if [[ -n "${pick}" ]]; then absent+=("${pick}"); else unavailable+=("${group}"); fi
+  done
+  INTEG_DEPS=("${absent[@]}")
+  title="$(msg 'Dépendances du bureau' 'Desktop dependencies')"
+  local note=""
+  [[ ${#unavailable[@]} -eq 0 ]] || note="$(msg 'Non disponibles pour cette machine (sans effet)' 'Not available for this machine (no effect)'): ${unavailable[*]}"
+  if [[ ${#absent[@]} -gt 0 ]]; then
+    integ_add attention dependances "${title}" \
+      "$(msg "${#absent[@]} absente(s)" "${#absent[@]} missing"): ${absent[*]}" \
+      "$(msg "Installées par l'ISO actuelle, jamais par une mise à jour. La réparation les installe." \
+             'Installed by the current ISO, never by an update. Repair installs them.')${note:+ ${note}}"
+  elif [[ ${#groups[@]} -eq 0 ]]; then
+    integ_add attention dependances "${title}" \
+      "$(msg 'AuxiNux Shell absent: rien à comparer' 'AuxiNux Shell missing: nothing to compare')"
+  else
+    integ_add ok dependances "${title}" \
+      "$(msg "${#groups[@]} dépendances présentes" "${#groups[@]} dependencies present")" "${note}"
+  fi
+
+  # 5. Fichiers des paquets AuxiNux installes.
+  local -a altered=()
+  local count lines
+  count=0
+  for name in "${core[@]}"; do
+    deb_installed "${name}" || continue
+    lines="$(integ_altered "${name}")"
+    if [[ -n "${lines}" ]]; then
+      INTEG_REINSTALL+=("${name}")
+      altered+=("${name} ($(wc -l <<<"${lines}"))")
+    fi
+    count=$((count + 1))
+  done
+  title="$(msg 'Fichiers des paquets AuxiNux' 'AuxiNux package files')"
+  if [[ ${#altered[@]} -gt 0 ]]; then
+    integ_add critique fichiers "${title}" \
+      "$(msg 'fichiers modifiés ou manquants' 'files modified or missing'): $(join_list "${altered[@]}")" \
+      "$(msg 'La réparation réinstalle ces paquets.' 'Repair reinstalls these packages.')"
+  else
+    integ_add ok fichiers "${title}" \
+      "$(msg "fichiers intacts ($count paquets vérifiés)" "files intact ($count packages checked)")"
+  fi
+
+  # 6. Session: le Shell en cours date-t-il d'avant sa mise a jour?
+  local pid age since stamp
+  pid="$(pgrep -o -u "$(integ_uid)" -f 'python3 -m auxinux_shell' 2>/dev/null || true)"
+  stamp="$(stat -c %Y /var/lib/dpkg/info/auxinux-shell.list 2>/dev/null || true)"
+  if [[ -n "${pid}" && -n "${stamp}" ]] \
+     && age="$(ps -o etimes= -p "${pid}" 2>/dev/null | tr -d ' ')" && [[ -n "${age}" ]]; then
+    since=$(( $(date +%s) - age ))
+    if (( stamp > since )); then
+      INTEG_SESSION=1
+      integ_add attention session "$(msg 'Session AuxiNux Shell' 'AuxiNux Shell session')" \
+        "$(msg 'la session utilise encore la version d’avant la mise à jour' 'the session still runs the version from before the update')" \
+        "$(msg 'Fermez la session puis rouvrez-la.' 'Log out and back in.')"
+    else
+      integ_add ok session "$(msg 'Session AuxiNux Shell' 'AuxiNux Shell session')" \
+        "$(msg 'la session utilise la version installée' 'the session runs the installed version')"
+    fi
+  fi
+}
+
+# Quelque chose a reparer (la session ne se repare pas: il faut la rouvrir).
+integ_repairable() {
+  [[ "${INTEG_DPKG}" -eq 1 || "${INTEG_APT}" -eq 1 || ${#INTEG_INSTALL[@]} -gt 0 \
+     || ${#INTEG_DEPS[@]} -gt 0 || ${#INTEG_REINSTALL[@]} -gt 0 ]]
+}
+
+integ_print() {
+  local line state id title detail advice mark
+  for line in "${INTEG_LINES[@]}"; do
+    IFS=$'\t' read -r state id title detail advice <<<"${line}"
+    case "${state}" in
+      ok) mark="[ok]" ;;
+      attention) mark="[!!]" ;;
+      *) mark="[XX]" ;;
+    esac
+    printf '%s %s: %s\n' "${mark}" "${title}" "${detail}"
+    [[ -z "${advice}" ]] || printf '     %s\n' "${advice}"
+  done
+}
+
+run_check() {
+  local porcelain=0
+  case "${1:-}" in
+    --porcelain) porcelain=1 ;;
+    "") ;;
+    *) say_err "Usage: auxi check [--porcelain]" "Usage: auxi check [--porcelain]"; exit 64 ;;
+  esac
+  integ_analyse
+  if [[ "${porcelain}" -eq 1 ]]; then
+    printf '%s\n' "${INTEG_LINES[@]}"
+    if integ_repairable; then printf 'reparable\toui\n'; else printf 'reparable\tnon\n'; fi
+  else
+    integ_print
+    if integ_repairable; then
+      say "Pour réparer (un instantané est créé avant): sudo auxi repair" \
+          "To repair (a snapshot is taken first): sudo auxi repair"
+    fi
+  fi
+  # 1 des qu'un point n'est pas ok, reparable ou non (scripts, supervision).
+  local line
+  for line in "${INTEG_LINES[@]}"; do
+    [[ "${line%%$'\t'*}" == ok ]] || return 1
+  done
+  return 0
+}
+
+# apt-get install en gardant la marque « automatique » des paquets qui l'ont:
+# installer explicitement auxi-shell-games (tire par le Shell) ne doit pas le
+# faire survivre a un retrait du Shell.
+integ_install_keep_marks() {
+  local -a auto
+  mapfile -t auto < <(apt-mark showauto -- "$@" 2>/dev/null || true)
+  apt_get install -- "$@" || return 1
+  [[ ${#auto[@]} -eq 0 ]] || apt-mark auto -- "${auto[@]}" >/dev/null || true
+}
+
+run_repair() {
+  require_root_for_deb repair "$@"
+  apt_get update || true
+  integ_analyse
+  if ! integ_repairable; then
+    say "Rien à réparer: AuxiNux OS est intact." "Nothing to repair: AuxiNux OS is intact."
+    [[ "${INTEG_SESSION}" -eq 0 ]] || say "Fermez la session puis rouvrez-la pour charger le Shell installé." \
+                                         "Log out and back in to load the installed Shell."
+    return 0
+  fi
+  local snap=0 failed=0
+  if os_snapshot "$(msg 'Avant la réparation d’AuxiNux OS' 'Before the AuxiNux OS repair')"; then
+    snap=1
+  fi
+  [[ "${snap}" -eq 0 ]] || export AUXI_NO_SNAPSHOT=1
+
+  if [[ "${INTEG_DPKG}" -eq 1 ]]; then
+    say "Fin des installations interrompues." "Completing interrupted installations."
+    dpkg --force-confdef --force-confold --configure -a || failed=1
+  fi
+  if [[ "${INTEG_DPKG}" -eq 1 || "${INTEG_APT}" -eq 1 ]]; then
+    say "Réparation des dépendances." "Fixing dependencies."
+    apt_get install -f || failed=1
+  fi
+  if [[ ${#INTEG_INSTALL[@]} -gt 0 ]]; then
+    say "Paquets AuxiNux: ${INTEG_INSTALL[*]}" "AuxiNux packages: ${INTEG_INSTALL[*]}"
+    integ_install_keep_marks "${INTEG_INSTALL[@]}" || failed=1
+  fi
+  if [[ ${#INTEG_DEPS[@]} -gt 0 ]]; then
+    say "Dépendances du bureau: ${INTEG_DEPS[*]}" "Desktop dependencies: ${INTEG_DEPS[*]}"
+    apt_get install -o APT::Install-Recommends=0 -- "${INTEG_DEPS[@]}" || failed=1
+  fi
+  # Un paquet qui vient d'etre installe a neuf a deja ses fichiers.
+  local -a reinstall=()
+  local name
+  for name in "${INTEG_REINSTALL[@]}"; do
+    [[ " ${INTEG_INSTALL[*]} " == *" ${name} "* ]] || reinstall+=("${name}")
+  done
+  if [[ ${#reinstall[@]} -gt 0 ]]; then
+    say "Réinstallation: ${reinstall[*]}" "Reinstalling: ${reinstall[*]}"
+    apt_get install --reinstall -- "${reinstall[@]}" || failed=1
+  fi
+
+  say "Vérification après réparation:" "Check after repair:"
+  integ_analyse
+  integ_print
+  if integ_repairable || [[ "${failed}" -eq 1 ]]; then
+    say_err "La réparation n'a pas tout corrigé (voir ci-dessus)." "The repair did not fix everything (see above)."
+    return 1
+  fi
+  say "AuxiNux OS est réparé. Fermez la session puis rouvrez-la pour charger le Shell réparé." \
+      "AuxiNux OS is repaired. Log out and back in to load the repaired Shell."
+}
+
+# Paquets AuxiNux encore en retard APRES `upgrade --with-new-pkgs`: retenus
+# (voir plus haut). Une installation explicite passe outre une recommandation
+# impossible a satisfaire, la ou upgrade conserve l'ancienne version.
+release_catch_up() {
+  local -a core held=()
+  local name inst cand
+  mapfile -t core < <(integ_core)
+  while read -r name inst cand; do
+    [[ "${inst}" != "(none)" && "${cand}" != "(none)" ]] || continue
+    dpkg --compare-versions "${cand}" gt "${inst}" && held+=("${name}")
+  done < <(policy_table "${core[@]}")
+  [[ ${#held[@]} -gt 0 ]] || return 0
+  say "Paquets AuxiNux retenus par la mise à jour, installés explicitement: ${held[*]}" \
+      "AuxiNux packages kept back by the update, installed explicitly: ${held[*]}"
+  integ_install_keep_marks "${held[@]}"
 }
 
 run_upgrade() {
@@ -1606,6 +2025,12 @@ case "${1:-}" in
     ;;
   autoremove)
     shift; run_autoremove "$@"
+    ;;
+  check)
+    shift; run_check "$@"
+    ;;
+  repair)
+    shift; run_repair "$@"
     ;;
   clean)
     require_root_for_deb clean

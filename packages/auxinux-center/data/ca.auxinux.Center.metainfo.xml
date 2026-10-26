@@ -38,6 +38,23 @@
   </developer>
   <content_rating type="oars-1.1" />
   <releases>
+    <release version="0.2.11" date="2026-10-26">
+      <description>
+        <p>
+          System health: new « Check integrity » button (AuxiNux Shell, AuxiNux
+          commands and applications, their dependencies and files) and a
+          « Repair » button, also available as sudo auxi repair. AuxiNux packages
+          kept back by an update are now installed by the system update.
+        </p>
+        <p xml:lang="fr">
+          Santé du système : nouveau bouton « Vérifier l'intégrité » (AuxiNux
+          Shell, commandes et applications AuxiNux, leurs dépendances et leurs
+          fichiers) et bouton « Réparer », aussi en terminal avec sudo auxi
+          repair. Les paquets AuxiNux retenus par une mise à jour sont désormais
+          installés par la mise à jour du système.
+        </p>
+      </description>
+    </release>
     <release version="0.2.10" date="2026-10-26">
       <description>
         <p>

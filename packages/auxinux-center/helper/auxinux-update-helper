@@ -10,6 +10,7 @@
 #   auxinux-update-helper system          # auxi upgrade (Flatpak + systeme)
 #   auxinux-update-helper os              # auxi os upgrade (systeme seul)
 #   auxinux-update-helper package PAQ...  # paquets DEB DEJA installes
+#   auxinux-update-helper repair          # auxi repair (Sante du systeme)
 #
 # Comme les autres helpers, il vit a un emplacement fixe appartenant a root et
 # revalide tout ce qu'il recoit. `package` n'accepte que des paquets deja
@@ -45,6 +46,9 @@ case "${1:-}" in
   os)
     [[ $# -eq 1 ]] || die "usage: os"
     exec "${AUXI}" --yes --progress os upgrade ;;
+  repair)
+    [[ $# -eq 1 ]] || die "usage: repair"
+    exec "${AUXI}" --yes --progress repair ;;
   package)
     shift
     [[ $# -ge 1 ]] || die "usage: package PAQUET..."
@@ -54,5 +58,5 @@ case "${1:-}" in
     done
     exec "${AUXI}" --yes --progress install --deb "$@" ;;
   *)
-    die "usage: system | os | package PAQUET..." ;;
+    die "usage: system | os | repair | package PAQUET..." ;;
 esac

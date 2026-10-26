@@ -217,6 +217,19 @@ find "${REL_ROOT}" -type f -exec chmod go-w,a+r {} +
 # L'edition est ecrite dans os-release (champ standard BUILD_ID): c'est ce que
 # le centre affiche, et ce qu'il compare a la version disponible.
 printf 'BUILD_ID=%s\n' "${BUILD_ID}" >>"${REL_ROOT}/usr/lib/os-release"
+# Socle du bureau de l'image (bureau-auxinux.txt), lu par `auxi check` et
+# `auxi repair` (2026-10-26): l'ISO installe ces paquets sans qu'aucun paquet
+# n'en depende, une machine installee AVANT leur ajout ne les recoit donc
+# jamais par les mises a jour (agent polkit de repli, portails...). Les
+# applications KDE en sont exclues: les retirer est un choix de l'utilisateur.
+BUREAU_LIST="${SCRIPT_DIR}/../image-builder/package-lists/bureau-auxinux.txt"
+install -d -m 0755 "${REL_ROOT}/usr/share/auxinuxos"
+awk '/^# --- / { skip = /Applications KDE/ } !skip' "${BUREAU_LIST}" >"${WORK}/socle-bureau.txt"
+{
+  printf '# Socle du bureau d%sAuxiNux OS %s (%s), genere depuis bureau-auxinux.txt.\n' "'" "${RELEASE}" "${ARCH}"
+  "${SCRIPT_DIR}/../image-builder/scripts/package-names.sh" "${ARCH}" "${WORK}/socle-bureau.txt"
+} >"${REL_ROOT}/usr/share/auxinuxos/socle-bureau.list"
+chmod 0644 "${REL_ROOT}/usr/share/auxinuxos/socle-bureau.list"
 install -d -m 0755 "${REL_ROOT}/DEBIAN"
 install -m 0755 "${RELEASE_DIR}/debian/preinst" "${RELEASE_DIR}/debian/postinst" \
   "${RELEASE_DIR}/debian/postrm" "${REL_ROOT}/DEBIAN/"
