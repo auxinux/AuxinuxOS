@@ -38,6 +38,11 @@ qt6-translations-l10n
 # applications GTK s'affichent en « image manquante ». Le Shell en depend
 # depuis 0.3.6 ; nomme ici pour que l'image l'ait des le bootstrap.
 librsvg2-common
+# Meme piege cote Qt : libqt6gui6 ne fait que RECOMMANDER le lecteur d'icones
+# SVG. Sans lui (constate en ARM64, 2026-10-26), Dolphin, Konsole et les autres
+# applications KDE n'affichent aucune icone Breeze. Le Shell en depend depuis
+# 0.3.10 ; nomme ici pour que l'image l'ait des le bootstrap.
+qt6-svg-plugins
 # GARDES alors que le bureau Plasma part: le Shell s'en sert.
 #  - plasma-integration: QT_QPA_PLATFORMTHEME=kde (bin/auxinux-session), et elle
 #    tire breeze, dont les .colors servent au Shell pour ecrire le kdeglobals de
