@@ -60,7 +60,7 @@ Usage:
   auxi kernel update
   auxi kernel dev on|off
   auxi search [--deb|--flatpak] TERM
-  auxi install [--deb|--flatpak] PACKAGE_OR_APP...
+  auxi install [--deb|--flatpak] [--allow-deb] PACKAGE_OR_APP...
   auxi uninstall [--deb|--flatpak] PACKAGE_OR_APP
   auxi purge PACKAGE
   auxi autoremove [--deb|--flatpak]
@@ -76,7 +76,8 @@ Usage:
 
 Applications are installed from Flatpak (Flathub). DEB installation is only
 used when enabled (auxi set deb=true), and even then only when no Flatpak
-exists for the requested application.
+exists for the requested application. --allow-deb allows DEB installation for
+that one command only, without changing the setting.
 
 os update tells whether a new AuxiNux OS version is available; os upgrade
 installs it with every system DEB package (kernels included), after a named
@@ -107,7 +108,7 @@ Usage:
   auxi kernel update
   auxi kernel dev on|off
   auxi search [--deb|--flatpak] TERME
-  auxi install [--deb|--flatpak] PAQUET_OU_APP...
+  auxi install [--deb|--flatpak] [--allow-deb] PAQUET_OU_APP...
   auxi uninstall [--deb|--flatpak] PAQUET_OU_APP
   auxi purge PAQUET
   auxi autoremove [--deb|--flatpak]
@@ -124,6 +125,8 @@ Usage:
 Les applications s'installent depuis Flatpak (Flathub). L'installation DEB
 n'est utilisée que si elle est activée (auxi set deb=true), et même alors
 seulement quand aucun Flatpak n'existe pour l'application demandée.
+--allow-deb autorise l'installation DEB pour cette commande seulement, sans
+changer le réglage.
 
 os update dit si une nouvelle version d'AuxiNux OS est disponible; os upgrade
 l'installe avec tous les paquets DEB du système (noyaux compris), après un
@@ -270,7 +273,13 @@ apt_enabled() {
   [[ -r "${APT_CONF}" ]] && grep -Eq '^APT_ENABLED=1$' "${APT_CONF}"
 }
 
+# DEB_UNE_FOIS=1: `auxi install --allow-deb ...` (demande d'aporler,
+# 2026-10-26: « un argument qui permet juste cette fois l'installation des DEB
+# mentionnes »). Vaut pour CETTE commande seulement: /etc/auxinux/apps.conf
+# n'est pas touche, le reglage reste desactive apres.
+DEB_UNE_FOIS=0
 deb_apps_enabled() {
+  [[ "${DEB_UNE_FOIS}" -eq 1 ]] && return 0
   [[ -r "${APPS_CONF}" ]] && grep -Eq '^DEB_APPS=1$' "${APPS_CONF}"
 }
 
@@ -305,6 +314,9 @@ deb_disabled_hint() {
   say_err \
     "L'installation DEB est désactivée. Pour l'activer: sudo auxi set deb=true (ou Réglages du centre AuxiNux)." \
     "DEB installation is disabled. To enable it: sudo auxi set deb=true (or the AuxiNux Center settings)."
+  say_err \
+    "Pour cette fois seulement: sudo auxi install --allow-deb --deb PAQUET..." \
+    "Just this once: sudo auxi install --allow-deb --deb PACKAGE..."
 }
 
 # Forme comparable d'un nom: minuscules, lettres et chiffres seulement.
@@ -1449,6 +1461,13 @@ run_search() {
 }
 
 run_install() {
+  # --allow-deb, ou qu'il soit (avant ou apres --deb): autorisation DEB pour
+  # cette commande seulement, sans changer le reglage.
+  local a rest=()
+  for a in "$@"; do
+    if [[ "${a}" == "--allow-deb" ]]; then DEB_UNE_FOIS=1; else rest+=("${a}"); fi
+  done
+  set -- "${rest[@]}"
   select_mode "$@"
   local item="${ARGS[0]:-}"
   if [[ -z "${item}" ]]; then

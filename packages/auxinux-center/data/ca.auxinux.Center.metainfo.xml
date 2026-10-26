@@ -43,12 +43,15 @@
         <p>
           New auxi autoremove command (unneeded DEB packages and unused Flatpak
           runtimes); apt autoremove, autoclean and clean now go through auxi.
-          ARM64 kernels are recognized.
+          ARM64 kernels are recognized. auxi install --allow-deb installs DEB
+          packages once without changing the DEB setting.
         </p>
         <p xml:lang="fr">
           Nouvelle commande auxi autoremove (paquets DEB devenus inutiles et
           environnements Flatpak inutilisés) ; apt autoremove, autoclean et
           clean passent désormais par auxi. Les noyaux ARM64 sont reconnus.
+          auxi install --allow-deb installe des paquets DEB une seule fois, sans
+          changer le réglage DEB.
         </p>
       </description>
     </release>
