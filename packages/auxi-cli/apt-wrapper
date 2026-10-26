@@ -49,6 +49,13 @@ if [[ "${extra}" -eq 0 && -x "${auxi_bin}" ]]; then
     update)
       echo "AuxiNux OS: ${name} update -> auxi update --deb" >&2
       exec "${auxi_bin}" "${global[@]}" update --deb ;;
+    # Nettoyage (2026-10-26): confie a auxi au lieu d'etre refuse.
+    autoremove|autopurge)
+      exec "${auxi_bin}" "${global[@]}" autoremove --deb ;;
+    autoclean|auto-clean)
+      exec "${auxi_bin}" "${global[@]}" autoclean ;;
+    clean)
+      exec "${auxi_bin}" "${global[@]}" clean ;;
     upgrade|full-upgrade|dist-upgrade)
       if is_english; then echo "AuxiNux OS: ${name} ${subcmd} -> auxi os upgrade (system update, restore point included)" >&2
       else echo "AuxiNux OS: ${name} ${subcmd} -> auxi os upgrade (mise à jour du système, point de restauration compris)" >&2; fi

@@ -243,6 +243,26 @@ printf 'DEB_APPS=1\n' >"${APPS_CONF}"
 ( set -e; run_search gimp ) </dev/null >/dev/null 2>&1
 has "recherche, DEB active: apt-cache aussi" "apt-cache search -- gimp"
 
+echo "== 9. Nettoyage: autoremove (2026-10-26) =="
+ASSUME_YES=1 PROGRESS=0
+: >"${CALLS}"
+( set -e; run_autoremove ) </dev/null >/dev/null 2>&1
+check "autoremove reussit sans terminal" "$?" "0"
+has "DEB: apt-get autoremove --purge, sans question" "apt-get -y -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold autoremove --purge"
+has "Flatpak: environnements inutilises" "flatpak uninstall --unused -y --noninteractive"
+: >"${CALLS}"
+( set -e; run_autoremove --deb ) </dev/null >/dev/null 2>&1
+has "--deb: apt seulement" "autoremove --purge"
+lacks "--deb: pas de Flatpak" "flatpak uninstall"
+: >"${CALLS}"
+( set -e; run_autoremove --flatpak ) </dev/null >/dev/null 2>&1
+has "--flatpak: Flatpak seulement" "flatpak uninstall --unused"
+lacks "--flatpak: pas d'apt" "apt-get"
+: >"${CALLS}"
+( set -e; run_autoremove firefox ) </dev/null >/dev/null 2>&1
+check "autoremove avec un nom de paquet: refuse" "$?" "64"
+check "  rien n'est lance" "$(wc -l <"${CALLS}" | tr -d ' ')" "0"
+
 if [[ "${fail}" -eq 0 ]]; then
   echo "test-auxi-noninteractive: OK"
 else
