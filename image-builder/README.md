@@ -30,6 +30,12 @@ qu'elle contient (`auxi`, `auxinux-center`, `auxinuxos-release` de son édition)
 sont dans `image-builder/output/debs/`. Publication : d'abord ces paquets
 (`packages/publish-debs.sh --dir …/image-builder/output/debs --deploy`), puis
 l'ISO (`image-builder/publish-iso.sh --iso … --deploy`), qui le vérifie.
+La publication fait aussi pointer les liens fixes
+`https://dep.auxinux.ca/DOWNLOAD/ISO/auxinuxos-<arch>.iso` (et `.iso.sha256`)
+vers la nouvelle ISO, et publie sa fiche `auxinuxos-<arch>.json` (version,
+noyau, Debian, Shell, applications, nouveautés, taille, sha256) : le site
+os.auxinux.ca s'en sert, il n'y a plus rien à y recopier. Pour une ISO déjà en
+ligne : `publish-iso.sh --iso … --name NOM_PUBLIÉ --relink --deploy`.
 `--force` supprime le répertoire de construction du profil avant de repartir.
 `--reuse-rootfs` réutilise un rootfs existant ; ces options sont incompatibles.
 
