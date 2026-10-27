@@ -14,7 +14,7 @@
 #                               dossiers personnels. ARCH = architecture native
 #                               de l'hote (amd64, ou arm64 pour l'Edition ARM).
 #   auxinuxos-release_<R>_<arch>.deb la VERSION d'AuxiNux OS (une par ISO publiee,
-#                               R = 0.4.0+AAAAMMJJ[.N]) et les reglages du
+#                               R = 0.5.0+AAAAMMJJ[.N]) et les reglages du
 #                               systeme installe (packages/release/root/)
 #
 # auxinuxos-release (depuis le 2026-10-09): chaque ISO publiee est une
@@ -36,7 +36,7 @@
 #   packages/build-debs.sh [--out DIR]
 # Variables:
 #   AUXINUX_CENTER_BIN  binaire du Center deja compile (sinon target/release)
-#   AUXINUX_RELEASE     version d'AuxiNux OS: 0.4.0+AAAAMMJJ[.N]
+#   AUXINUX_RELEASE     version d'AuxiNux OS: 0.5.0+AAAAMMJJ[.N]
 #                       (defaut: version de os-release + date du jour)
 #   AUXINUX_STRIP=0     ne pas stripper le binaire (tests avec un faux binaire)
 #   AUXINUX_ARCH        architecture du paquet auxinux-center (defaut: celle
@@ -85,7 +85,7 @@ if [[ "${BIN_VERSION}" != "auxinux-center ${VERSION}" ]]; then
   exit 65
 fi
 
-# Version d'AuxiNux OS: celle de os-release (0.4.0), plus l'edition (la date
+# Version d'AuxiNux OS: celle de os-release (0.5.0), plus l'edition (la date
 # de l'ISO, et .N pour une seconde ISO le meme jour).
 RELEASE_DIR="${SCRIPT_DIR}/release"
 OS_VERSION="$(sed -n 's/^VERSION="\([^ "]*\).*/\1/p' "${RELEASE_DIR}/root/usr/lib/os-release")"
@@ -245,10 +245,10 @@ NOTES="$(sed -e '/^[[:space:]]*$/d' -e 's/^/ /' "${RELEASE_DIR}/NOUVEAUTES")"
 # permet pas de conditionner ses Depends a l'architecture. La version amd64
 # tire les applications AuxiNux; la version arm64 seulement ce qui existe en
 # arm64 (les applications y entreront avec leurs paquets arm64).
-REL_DEPENDS="auxi (>= ${VERSION}), auxinux-center (>= ${VERSION}), kernel-auxinuxos, auxinux-shell (>= 0.2.1)"
+REL_DEPENDS="auxi (>= ${VERSION}), auxinux-center (>= ${VERSION}), kernel-auxinuxos, auxinux-shell (>= 0.3.23)"
 # Applications AuxiNux publiees pour les deux architectures (arm64 depuis le
 # 2026-10-26); AuxiMail n'existe encore qu'en amd64.
-REL_DEPENDS="${REL_DEPENDS}, auxioffice, auxitext, auxicorrect, auxipak (>= 1.0.10)"
+REL_DEPENDS="${REL_DEPENDS}, auxioffice, auxitext, auxicorrect, auxipak (>= 1.0.11)"
 if [[ "${ARCH}" == "amd64" ]]; then
   REL_DEPENDS="${REL_DEPENDS}, auxi-mail"
 fi

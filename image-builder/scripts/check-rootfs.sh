@@ -511,6 +511,12 @@ need_file /etc/systemd/system/multi-user.target.wants/systemd-oomd.service \
 need_package zram-tools "pas d'echange compresse en RAM"
 need_file /etc/systemd/system/multi-user.target.wants/zramswap.service "zram installe mais non active"
 
+echo "-- Pare-feu"
+# firewalld depuis la 0.5.0: le Shell (Parametres > Securite) ne pilote plus ufw.
+need_package firewalld "aucun pare-feu: Parametres > Securite dirait « non protege »"
+need_file /etc/systemd/system/multi-user.target.wants/firewalld.service \
+  "firewalld installe mais NON ACTIVE: la machine n'est pas protegee"
+
 echo "-- Ecran de demarrage"
 # Depuis la 0.3.0, logo + roue orange (Plymouth, theme auxinux) au lieu du
 # texte de la console (demande d'aporler: le texte fait peur a qui arrive de

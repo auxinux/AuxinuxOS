@@ -35,13 +35,13 @@ build() {
 }
 
 echo "== 1. Edition du jour, seconde ISO du meme jour =="
-build "0.4.0+20261009.2" "${WORK}/out"
+build "0.5.0+20261009.2" "${WORK}/out"
 check "construit" "$?" "0"
-DEB="${WORK}/out/auxinuxos-release_0.4.0+20261009.2_amd64.deb"
+DEB="${WORK}/out/auxinuxos-release_0.5.0+20261009.2_amd64.deb"
 check "paquet d'edition present" "$([[ -f ${DEB} ]] && echo oui)" "oui"
 field() { dpkg-deb -f "${DEB}" "$1"; }
-check "version" "$(field Version)" "0.4.0+20261009.2"
-check "resume lisible" "$(field Description | head -n1)" "AuxiNux OS 0.4.0, édition du 2026-10-09 (2)"
+check "version" "$(field Version)" "0.5.0+20261009.2"
+check "resume lisible" "$(field Description | head -n1)" "AuxiNux OS 0.5.0, édition du 2026-10-09 (2)"
 check "nouveautes = description longue" \
   "$(dpkg-deb -f "${DEB}" Description | tail -n +2 | grep -c 'Programmes Windows')" "1"
 check "tire auxi et le centre de la livraison" \
@@ -53,7 +53,7 @@ check "os-release dit toujours AuxiNux OS" \
   "$(dpkg-deb --fsys-tarfile "${DEB}" | tar -xO ./usr/lib/os-release | grep -c '^PRETTY_NAME="AuxiNux OS ')" "1"
 check "os-release nomme la variante pour AuxiPak" \
   "$(dpkg-deb --fsys-tarfile "${DEB}" | tar -xO ./usr/lib/os-release | grep -c '^VARIANT_ID=auxinuxos$')" "1"
-for dep in "auxinux-shell (>= 0.2.1)" auxioffice auxitext "auxipak (>= 1.0.10)" plymouth; do
+for dep in "auxinux-shell (>= 0.3.23)" auxioffice auxitext "auxipak (>= 1.0.11)" plymouth; do
   check "tire ${dep}" "$(field Depends | tr ',' '\n' | sed 's/^ *//' | grep -cxF "${dep}")" "1"
 done
 
@@ -118,9 +118,9 @@ check "plus de /etc/xdg/kiorc dans auxinux-center" "$(dpkg-deb -c "${CDEB}" | gr
 
 echo "== 3 bis. Edition par architecture (Edition ARM, 2026-10-25) =="
 check "paquet d'edition amd64 (plus « all »)" "$(dpkg-deb -f "${DEB}" Architecture)" "amd64"
-AUXINUX_ARCH=arm64 AUXINUX_STRIP=0 AUXINUX_CENTER_BIN="${WORK}/center" AUXINUX_RELEASE="0.4.0+20261009.2" \
+AUXINUX_ARCH=arm64 AUXINUX_STRIP=0 AUXINUX_CENTER_BIN="${WORK}/center" AUXINUX_RELEASE="0.5.0+20261009.2" \
   "${ROOT}/packages/build-debs.sh" --out "${WORK}/arm" >/dev/null 2>"${WORK}/err"
-ADEB="${WORK}/arm/auxinuxos-release_0.4.0+20261009.2_arm64.deb"
+ADEB="${WORK}/arm/auxinuxos-release_0.5.0+20261009.2_arm64.deb"
 check "paquet d'edition arm64 construit" "$([[ -f ${ADEB} ]] && echo oui)" "oui"
 check "architecture arm64" "$(dpkg-deb -f "${ADEB}" Architecture)" "arm64"
 # 2026-10-26: AuxiOffice, AuxiText, AuxiCorrect et AuxiPak publies en arm64;
@@ -133,7 +133,7 @@ check "arm64: noyau, Shell et Plymouth tires" \
   "$(dpkg-deb -f "${ADEB}" Depends | tr ',' '\n' | grep -cE 'kernel-auxinuxos|auxinux-shell|plymouth')" "3"
 
 echo "== 4. Editions refusees =="
-for bad in "0.3.0+20261009" "0.4.0" "0.4.0+2026109" "0.4.0+20261009-2"; do
+for bad in "0.4.0+20261009" "0.5.0" "0.5.0+2026109" "0.5.0+20261009-2"; do
   build "${bad}" "${WORK}/bad"
   check "« ${bad} » refusee" "$?" "65"
 done

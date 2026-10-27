@@ -74,6 +74,11 @@ power-profiles-daemon
 # Bascule GPU integre/dedie pour les machines hybrides (profil jeu).
 switcheroo-control
 kio-extras
+# Partages reseau (smb://, sftp://, ftp://), telephones et « Se connecter a un
+# serveur » d'AuxiFiles. Le Shell ne le RECOMMANDE plus (0.3.13: une
+# recommandation nouvelle impossible a satisfaire retenait le Shell a la mise a
+# jour): l'image le nomme.
+gvfs-backends
 
 # --- Applications AuxiNux (depot AUXINUXOS/APPS) -------------------------------
 # AuxiOffice: AuxiWriter, AuxiSheet, AuxiPresent, AuxiDraw et AuxiPDF (lecteur
@@ -90,8 +95,8 @@ kio-extras
 # auxipak: voir applications-auxinux.txt (depot AuxiNux, installe apres le bootstrap).
 
 # --- Applications KDE gardees ---------------------------------------------
-dolphin
-konsole
+# Dolphin et Konsole sont partis en 0.5.0 (retire-du-socle.txt): AuxiFiles et
+# AuxiTerm (AuxiNux Shell 0.3.12 et 0.3.23) les remplacent.
 ark
 gwenview
 kcalc
