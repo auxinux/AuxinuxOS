@@ -20,7 +20,13 @@ l'est.
 | Debian 14 | forky | ~2027 (prévue) | ~3 ans après la sortie | ~5 ans après la sortie | Base prévue de la 2.x |
 
 Les dates de fin de Debian sont celles annoncées par le projet Debian
-(sécurité : environ 3 ans après la sortie ; LTS : environ 5 ans). Voir
+(sécurité : environ 3 ans après la sortie ; LTS : environ 5 ans).
+Il n'y a pas d'édition « LTS » séparée : chez Debian, les mises à jour LTS sont
+publiées dans le même dépôt de sécurité (`trixie-security`), qu'AuxiNux OS
+utilise déjà. Elles arrivent donc automatiquement avec les mises à jour
+habituelles. Note : pendant la période LTS, Debian ne couvre plus tout à fait
+tous les paquets (quelques-uns sont exclus et listés par le paquet
+`debian-security-support`). Voir
 <https://www.debian.org/releases/> et <https://wiki.debian.org/LTS>.
 
 Ce qu'AuxiNux fournit lui-même (noyau AuxiNux, AuxiNux Center, AuxiNux Shell,
