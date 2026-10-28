@@ -9,4 +9,10 @@
 #
 # Le pare-feu reste: c'est une protection active par defaut, sans interface
 # imposee (regle depuis AuxiNux Shell et le centre de controle; plasma-firewall part avec Plasma le 2026-10-23).
-ufw
+#
+# firewalld (nftables) a la place d'ufw depuis la 0.5.0 (decision d'aporler,
+# 2026-10-27): Parametres > Securite > Pare-feu d'AuxiNux Shell (0.3.17) ne
+# pilote plus que firewalld (profils, regles, retour arriere a 60 s). Dans
+# l'image, il est actif des le premier demarrage, sans Internet; le Shell
+# reprend les regles d'une machine qui avait ufw.
+firewalld

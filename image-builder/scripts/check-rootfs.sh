@@ -352,6 +352,7 @@ need_exec /usr/bin/auxinux-welcome "premier ecran de la session live"
 if [[ "${ARCH}" == "amd64" ]]; then
   need_exec /usr/bin/auxinux-windows-wizard "ouverture des fichiers .exe"
   need_package wine32:i386 "Wine ne lancerait aucun programme 32 bits, donc presque aucun installateur Windows"
+  need_package wine64 "Wine ne lancerait aucun programme Windows 64 bits"
   need_owned /usr/bin/auxinux-windows-wizard auxinux-center "l'assistant des .exe ne recevrait aucun correctif"
 fi
 need_setting /etc/xdg/kiorc '^behaviourOnLaunch=execute$' \
@@ -510,6 +511,19 @@ need_file /etc/systemd/system/multi-user.target.wants/systemd-oomd.service \
   "systemd-oomd installe mais NON ACTIVE: il ne protegera rien"
 need_package zram-tools "pas d'echange compresse en RAM"
 need_file /etc/systemd/system/multi-user.target.wants/zramswap.service "zram installe mais non active"
+
+echo "-- Fonctions du Shell et d'AuxiFiles"
+# Paquets que la 0.4.0 n'avait que par accident (voir bureau-auxinux.txt).
+need_package accountsservice "Parametres > Comptes: ni nom, ni photo, ni autres utilisateurs"
+need_package gvfs-backends "AuxiFiles: aucun partage reseau (smb, sftp, ftp)"
+need_package openssh-client "AuxiFiles: sftp:// impossible (gvfs lance ssh)"
+need_package fonts-liberation "documents Windows sans les metriques d'Arial et Times New Roman"
+
+echo "-- Pare-feu"
+# firewalld depuis la 0.5.0: le Shell (Parametres > Securite) ne pilote plus ufw.
+need_package firewalld "aucun pare-feu: Parametres > Securite dirait « non protege »"
+need_file /etc/systemd/system/multi-user.target.wants/firewalld.service \
+  "firewalld installe mais NON ACTIVE: la machine n'est pas protegee"
 
 echo "-- Ecran de demarrage"
 # Depuis la 0.3.0, logo + roue orange (Plymouth, theme auxinux) au lieu du

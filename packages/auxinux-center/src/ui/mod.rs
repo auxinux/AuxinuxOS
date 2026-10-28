@@ -22,6 +22,7 @@
 mod apparence;
 mod apps_page;
 mod assistant_page;
+mod features_page;
 mod health_page;
 mod kernel_view;
 mod operation;
@@ -65,9 +66,14 @@ pub enum Page {
     Health,
     Recovery,
     Sources,
+    /// Fonctionnalites propres a AuxiNux OS (lecteurs virtuels, mode PRO).
+    Features,
     Settings,
     Assistant,
 }
+
+/// Position de l'Assistant dans la barre laterale (voir la liste dans `init`).
+const ASSISTANT_POSITION: u16 = 7;
 
 /// Contenu actuellement affiche dans la page Applications.
 ///
@@ -178,6 +184,16 @@ pub enum Message {
     CustomKeyUrl(String),
     AddCustomSource,
 
+    // Fonctionnalites AuxiNux
+    RefreshFeatures,
+    FeaturesLoaded(crate::features::FeaturesState),
+    SetDrives(bool),
+    /// « linux » ou « windows ».
+    SetDrivesDisplay(String),
+    OpenDriveOptions,
+    /// Page des Parametres d'AuxiNux Shell (liste fermee: features::SETTINGS_PAGES).
+    OpenShellSettings(String),
+
     // Reglages
     ToggleAptPolicy(bool),
     ToggleDebApps(bool),
@@ -274,6 +290,7 @@ pub struct App {
     profile: crate::profile::ProfileState,
     /// Bureau ouvert a la connexion (AuxiNux Shell ou KDE Plasma).
     desktop: crate::session::DesktopState,
+    features: Loading<crate::features::FeaturesState>,
 
     // Assistant de premier demarrage
     assistant_step: usize,
@@ -407,6 +424,12 @@ impl App {
         background(crate::health::report, Message::HealthLoaded)
     }
 
+    fn load_features(&mut self) -> Task<Message> {
+        self.features = Loading::Busy;
+        self.start();
+        background(crate::features::state, Message::FeaturesLoaded)
+    }
+
     fn load_integrity(&mut self) -> Task<Message> {
         self.integrity = Loading::Busy;
         self.start();
@@ -450,6 +473,7 @@ impl App {
             Page::Health => self.load_health(),
             Page::Recovery => self.load_recovery(),
             Page::Sources => self.load_sources(),
+            Page::Features => self.load_features(),
             Page::Settings | Page::Assistant => Task::none(),
         }
     }
@@ -492,6 +516,7 @@ impl Application for App {
             ("Santé du système", ["utilities-system-monitor-symbolic", "speedometer"], Page::Health),
             ("Restauration", ["document-revert-symbolic", "edit-undo"], Page::Recovery),
             ("Sources", ["application-x-addon-symbolic", "repository"], Page::Sources),
+            ("Fonctionnalités AuxiNux", ["starred-symbolic", "rating"], Page::Features),
             ("Réglages", ["preferences-system-symbolic", "configure"], Page::Settings),
             ("Assistant", ["tools-wizard-symbolic", "tools-wizard"], Page::Assistant),
         ] {
@@ -536,6 +561,7 @@ impl Application for App {
             deb_apps: crate::sources::deb_apps_enabled(),
             profile: crate::profile::state(),
             desktop: crate::session::state(),
+            features: Loading::Idle,
             assistant_step: 0,
             selection: crate::assistant::Selection::default(),
             assistant_installing: false,
@@ -551,7 +577,7 @@ impl Application for App {
         let task = match ouverture {
             Ouverture::Assistant => {
                 app.page = Page::Assistant;
-                app.nav.activate_position(6);
+                app.nav.activate_position(ASSISTANT_POSITION);
                 Task::none()
             }
             Ouverture::Recherche(terme) => {
@@ -618,6 +644,9 @@ impl Application for App {
                     Page::Sources if matches!(self.apt_sources, Loading::Idle) => {
                         self.load_sources()
                     }
+                    // Toujours relu: l'activation et les lecteurs se changent
+                    // aussi dans les Parametres du Shell, pendant que le Center est ouvert.
+                    Page::Features => self.load_features(),
                     _ => Task::none(),
                 }
             }
@@ -934,6 +963,31 @@ impl Application for App {
             Message::RemovePlasma => {
                 self.launch("Retrait de KDE Plasma".into(), crate::session::remove_plasma)
             }
+            // --- Fonctionnalites AuxiNux ---
+            Message::RefreshFeatures => self.load_features(),
+            Message::FeaturesLoaded(state) => {
+                self.finish();
+                self.features = Loading::Ready(state);
+                Task::none()
+            }
+            Message::SetDrives(enabled) => {
+                self.start();
+                background(move || crate::features::set_drives(enabled), Message::Done)
+            }
+            Message::SetDrivesDisplay(mode) => {
+                self.start();
+                background(move || crate::features::set_display(&mode), Message::Done)
+            }
+            Message::OpenDriveOptions => {
+                let r = crate::features::open_drive_options();
+                self.toast = (!r.ok).then_some(r);
+                Task::none()
+            }
+            Message::OpenShellSettings(page) => {
+                let r = crate::features::open_settings(&page);
+                self.toast = (!r.ok).then_some(r);
+                Task::none()
+            }
             Message::OpenSystemSettings => {
                 crate::system::open_system_settings();
                 Task::none()
@@ -949,7 +1003,7 @@ impl Application for App {
                 self.selection = crate::assistant::Selection::default();
                 self.assistant_bilan = None;
                 self.page = Page::Assistant;
-                self.nav.activate_position(6);
+                self.nav.activate_position(ASSISTANT_POSITION);
                 Task::none()
             }
             Message::AssistantNext => {
@@ -1150,6 +1204,7 @@ impl Application for App {
             Page::Health => health_page::view(self),
             Page::Recovery => recovery_page::view(self),
             Page::Sources => sources_page::view(self),
+            Page::Features => features_page::view(self),
             Page::Settings => settings_page::view(self),
             Page::Assistant => assistant_page::view(self),
         };

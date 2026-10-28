@@ -11,6 +11,7 @@ mod apparence;
 mod apps;
 mod assistant;
 mod cli;
+mod features;
 mod health;
 mod kernel;
 mod model;

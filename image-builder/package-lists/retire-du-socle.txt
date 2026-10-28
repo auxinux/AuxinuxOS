@@ -38,3 +38,11 @@ kwalletmanager
 # --- Remplaces par une application AuxiNux ----------------------------------
 # AuxiPDF (AuxiOffice) est le lecteur PDF.
 okular
+# AuxiFiles (AuxiNux Shell 0.3.12) est l'explorateur de fichiers, AuxiTerm
+# (0.3.23) le terminal (decision d'aporler, 0.5.0, 2026-10-27).
+dolphin
+konsole
+
+# --- Remplace par firewalld (0.5.0) ---------------------------------------
+# Le Shell ne pilote plus que firewalld; deux pare-feu se marcheraient dessus.
+ufw

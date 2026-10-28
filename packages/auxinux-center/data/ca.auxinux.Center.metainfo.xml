@@ -38,6 +38,25 @@
   </developer>
   <content_rating type="oars-1.1" />
   <releases>
+    <release version="0.2.12" date="2026-10-28">
+      <description>
+        <p>
+          AuxiNux OS 0.5.0: new « AuxiNux features » section. Turn the
+          Windows-style virtual drives (C:\, D:\… in AuxiFiles and in the
+          terminal) on or off, choose Linux or Windows paths in AuxiFiles, and see
+          the activation and PRO features (AuxiNuxOS Shield offered during the
+          beta), with a link to configure each one.
+        </p>
+        <p xml:lang="fr">
+          AuxiNux OS 0.5.0 : nouvelle section « Fonctionnalités AuxiNux ».
+          Activer ou désactiver les lecteurs virtuels à la Windows (C:\, D:\…
+          dans AuxiFiles et dans le terminal), choisir les chemins Linux ou
+          Windows dans AuxiFiles, et voir l'activation et les fonctions PRO
+          (AuxiNuxOS Shield offert pendant la bêta), avec un lien pour régler
+          chacune.
+        </p>
+      </description>
+    </release>
     <release version="0.2.11" date="2026-10-26">
       <description>
         <p>
