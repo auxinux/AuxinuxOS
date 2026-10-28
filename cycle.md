@@ -6,6 +6,10 @@
 > [os.auxinux.ca](https://os.auxinux.ca/auxinuxos).
 >
 > Dernière mise à jour : 2026-10-28
+>
+> Les mêmes informations existent en format lisible par machine dans
+> [`cycle.json`](cycle.json) (utilisé par le site). Les deux fichiers doivent
+> être modifiés ensemble ; `tests/test-cycle.sh` vérifie qu'ils concordent.
 
 ## Base Debian et mises à jour de sécurité
 

@@ -24,6 +24,7 @@ bash tests/test-user-dirs.sh
 bash tests/test-release-package.sh
 bash tests/test-auxi-os.sh
 bash tests/test-arm64-image.sh
+bash tests/test-cycle.sh
 (cd packages/auxinux-center && cargo test --no-default-features)
 ```
 
