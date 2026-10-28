@@ -59,6 +59,10 @@ Debian 14.
 - **Changement de version majeure** : à la sortie de la 2.0, la 1.x reste
   maintenue environ **3 mois** de plus, le temps de mettre à niveau
   (même principe pour les majeures suivantes).
+- **Limite Debian** : une version d'AuxiNux OS n'est jamais maintenue au-delà
+  de la fin du support de sa base Debian (sécurité puis LTS). Quand Debian
+  cesse de publier des mises à jour pour sa version, AuxiNux OS ne peut plus
+  en fournir non plus.
 - **Base Debian** : les mises à jour de sécurité de Debian continuent d'arriver
   tant que la version de Debian est maintenue (voir le premier tableau).
 
