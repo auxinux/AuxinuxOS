@@ -45,22 +45,20 @@ test : seule la dernière 0.x publiée est maintenue.
 | Version | Base Debian | Sortie visée | Statut |
 |---|---|---|---|
 | 0.5 | Debian 13 | 2026-10-27 | **Actuelle** (développement) |
-| 1.0 | Debian 13 | Début 2027 | Prévue — première version stable |
+| 1.0 | Debian 13 | Janvier-février 2027 | Prévue — première version stable |
 | 1.x | Debian 13 | 2027, aux 3 à 6 mois | Prévue |
-| 2.0 | Debian 14 | Début 2028 | Prévue — passage à Debian 14 |
-| 2.x | Debian 14 | 2028, aux 3 à 6 mois | Prévue |
-| 3.0 | Debian 14 | Début 2029 | Prévue |
+| 2.0 | Debian 14 | À déterminer | Prévue — passage à Debian 14 |
 
-Le passage à Debian 14 est prévu pour la 2.0, quelques mois après la sortie de
-Debian 14, le temps que ses premières mises à jour correctives soient publiées.
+La 2.0 sera construite sur Debian 14 ; sa date dépendra de la sortie de
+Debian 14.
 
 ## Durée de maintenance
 
 - **Version mineure** : maintenue (versions correctives) jusqu'à la sortie de
   la version mineure suivante.
-- **Version majeure** : la dernière mineure d'une version majeure reste
-  maintenue environ **3 mois** après la sortie de la majeure suivante, pour
-  laisser le temps de mettre à niveau.
+- **Changement de version majeure** : à la sortie de la 2.0, la 1.x reste
+  maintenue environ **3 mois** de plus, le temps de mettre à niveau
+  (même principe pour les majeures suivantes).
 - **Base Debian** : les mises à jour de sécurité de Debian continuent d'arriver
   tant que la version de Debian est maintenue (voir le premier tableau).
 
