@@ -22,6 +22,11 @@ wine
 # Wine refusait les programmes 32 bits -- presque tous les INSTALLATEURS
 # Windows, celui de 7-Zip 64 bits compris (« wine32 is missing »).
 wine32:i386
+# Wine 64 bits: meme piege, sens inverse. `wine` depend de « wine64 | wine32 »
+# et wine32 suffit a apt. L'image 0.4.0 l'avait par accident (rootfs reutilise);
+# le rootfs neuf de la 0.5.0 (2026-10-27) ne l'avait plus: aucun programme
+# Windows 64 bits ne se serait lance.
+wine64
 winetricks
 dxvk
 
