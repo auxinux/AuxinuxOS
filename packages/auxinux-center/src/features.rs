@@ -221,6 +221,29 @@ pub fn open_drive_options() -> ActionResult {
     spawn("auxi-files", &["--drives"])
 }
 
+/// « Applications Windows » d'AuxiNux Shell (auxiwine, depuis la 0.3.28):
+/// installer, retrouver, regler et desinstaller les programmes Windows, Wine
+/// et Bottles, tous ranges au meme endroit. Le bouton n'apparait que si le
+/// Shell qui la fournit est installe.
+pub fn windows_apps_available() -> bool {
+    static AVAILABLE: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *AVAILABLE.get_or_init(|| in_path("auxiwine"))
+}
+
+pub fn open_windows_apps() -> ActionResult {
+    spawn("auxiwine", &[])
+}
+
+fn in_path(cmd: &str) -> bool {
+    use std::os::unix::fs::PermissionsExt;
+    std::env::var_os("PATH").is_some_and(|path| {
+        std::env::split_paths(&path).any(|dir| {
+            std::fs::metadata(dir.join(cmd))
+                .is_ok_and(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
+        })
+    })
+}
+
 fn spawn(cmd: &str, args: &[&str]) -> ActionResult {
     use std::process::{Command, Stdio};
     match Command::new(cmd)
@@ -238,6 +261,12 @@ fn spawn(cmd: &str, args: &[&str]) -> ActionResult {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn in_path_finds_only_executables() {
+        assert!(in_path("sh"));
+        assert!(!in_path("commande-qui-n-existe-pas-auxinux"));
+    }
 
     #[test]
     fn drivecompat_reads_enabled_and_display() {

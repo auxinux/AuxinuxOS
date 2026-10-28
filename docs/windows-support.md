@@ -19,6 +19,38 @@ demande via **Applications Windows et jeux** (`auxinux-windows-setup`), qui les
 présente avec une explication de ce que chacun sert — un utilisateur non
 technique ne devinera jamais qu'il doit chercher « Bottles ».
 
+## Applications Windows (auxiwine), depuis AuxiNux Shell 0.3.28
+
+Installer un programme Windows créait un espace Wine ou une bouteille Bottles,
+mais rien ne les regroupait : pas de liste, pas de désinstallation, des
+dossiers cachés à deux endroits. **Applications Windows** (`auxiwine`, dans
+le paquet `auxinux-shell`) est désormais l'unique point d'entrée :
+
+- **Mes applications** : une fiche par application, quel que soit le moteur
+  (Wine ou Bottles) : ouvrir, épingler, raccourci, lecteur C:\,
+  désinstaller un programme, version de Windows, mise à l'échelle,
+  composants winetricks, supprimer l'espace.
+- **Installer** : le parcours de l'assistant ci-dessous, dans l'application ;
+  plus les lanceurs Flatpak (Bottles, Steam, Heroic, Lutris).
+- **Entretien** : place occupée, raccourcis orphelins, espaces vides, état de
+  Wine 32 bits et de Bottles.
+
+Toutes les installations sont au même endroit :
+
+```
+~/.local/share/auxinux/windows/
+├── wine/<application>/          préfixes Wine
+└── bouteilles/<application>/    bouteilles Bottles (custom_bottles_path)
+```
+
+Les anciens emplacements (`~/.local/share/auxinux/wine-prefixes`, dossier
+par défaut de Bottles) sont regroupés d'un clic. AuxiNux OS Center l'ouvre
+depuis Applications ; `auxiwine --installer FICHIER` est l'association des
+`.exe` et `.msi` dans la session AuxiNux.
+
+`auxinux-windows-wizard` passe la main à `auxiwine` dès qu'il est installé et
+ne reste qu'en secours (`AUXINUX_WIZARD_LEGACY=1` force l'ancien parcours).
+
 ## Ouverture d'un fichier `.exe`
 
 `auxinux-windows-wizard` est associé aux types MIME `application/x-ms-dos-executable`,

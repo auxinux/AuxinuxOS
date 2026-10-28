@@ -113,6 +113,9 @@ export ZENITY_LOG="${WORK}/zenity.log"
 : > "${ZENITY_LOG}"
 INSTALLER="Installer ce programme (recommandé)"
 
+# L'ancien parcours est teste tel quel, meme sur une machine ou auxiwine est
+# installe (cas 16: le relais vers auxiwine).
+export AUXINUX_WIZARD_LEGACY=1
 run_wizard() { PATH="${STUBS}:${PATH}" "${WIZARD}" "$@"; }
 
 fail=0
@@ -236,6 +239,21 @@ echo "== 15. Espace deja prepare: pas de nouvelle preparation =="
 ZENITY_LIST="${INSTALLER}" run_wizard "${WORK}/Setup Jeu (v2).exe" >/dev/null 2>&1
 check "aucun wineboot" "$(grep -c '^WINEBOOT' "${WINE_LOG}")" "0"
 check "le programme est lance" "$(grep -c '^TARGET=' "${WINE_LOG}")" "1"
+
+echo "== 16. Applications Windows installe: l'assistant lui passe la main =="
+: > "${WINE_LOG}"
+cat > "${STUBS}/auxiwine" <<'STUB'
+#!/usr/bin/env bash
+echo "auxiwine $*" >> "${WINE_LOG}"
+STUB
+chmod +x "${STUBS}/auxiwine"
+AUXINUX_WIZARD_LEGACY= ZENITY_LIST="${INSTALLER}" run_wizard "${WORK}/Setup Jeu (v2).exe" >/dev/null 2>&1
+check "sort en 0" "$?" "0"
+check "auxiwine --installer recoit le fichier" "$(grep -c "^auxiwine --installer ${WORK}/Setup Jeu (v2).exe$" "${WINE_LOG}")" "1"
+check "wine n'est pas lance par l'assistant" "$(grep -c '^TARGET=' "${WINE_LOG}")" "0"
+AUXINUX_WIZARD_LEGACY= run_wizard >/dev/null 2>&1
+check "sans fichier: auxiwine --installer seul" "$(grep -c '^auxiwine --installer$' "${WINE_LOG}")" "1"
+rm -f "${STUBS}/auxiwine"
 
 echo
 if [[ "${fail}" == "0" ]]; then echo "TOUS LES TESTS PASSENT"; else echo "DES TESTS ECHOUENT"; exit 1; fi

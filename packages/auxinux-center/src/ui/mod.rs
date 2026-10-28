@@ -202,6 +202,8 @@ pub enum Message {
     InstallPlasma,
     RemovePlasma,
     OpenSystemSettings,
+    /// Applications Windows d'AuxiNux Shell (auxiwine).
+    OpenWindowsApps,
     OpenUrl(String),
 
     // Assistant de premier demarrage
@@ -990,6 +992,11 @@ impl Application for App {
             }
             Message::OpenSystemSettings => {
                 crate::system::open_system_settings();
+                Task::none()
+            }
+            Message::OpenWindowsApps => {
+                let r = crate::features::open_windows_apps();
+                self.toast = (!r.ok).then_some(r);
                 Task::none()
             }
             Message::OpenUrl(url) => {

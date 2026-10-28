@@ -15,6 +15,18 @@ set -uo pipefail
 
 target="${1:-}"
 
+# Depuis AuxiNux Shell 0.3.28, « Applications Windows » (auxiwine) installe,
+# retrouve, regle et desinstalle les programmes Windows -- Wine et Bottles --
+# et les range tous au meme endroit (~/.local/share/auxinux/windows). Cet
+# assistant lui passe la main des qu'il est installe et ne sert plus que de
+# secours. AUXINUX_WIZARD_LEGACY=1 force l'ancien parcours (tests).
+if [[ -z "${AUXINUX_WIZARD_LEGACY:-}" ]] && command -v auxiwine >/dev/null 2>&1; then
+  if [[ -n "${target}" ]]; then
+    exec auxiwine --installer "${target}"
+  fi
+  exec auxiwine --installer
+fi
+
 BOTTLES_ID="com.usebottles.bottles"
 # Helper privilegie de l'assistant de premier demarrage: il installe un paquet
 # systeme sous sa propre action polkit. Sert ici a ajouter wine32.

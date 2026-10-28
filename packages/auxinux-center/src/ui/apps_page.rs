@@ -21,6 +21,26 @@ pub fn view(app: &App) -> Element<'_, Message> {
         .width(iced::Length::Fill);
 
     let kernel_view = app.apps_view == AppsView::Kernel;
+    let mut buttons: Vec<Element<Message>> = vec![
+        widget::button::standard("Suggestions")
+            .on_press(Message::ShowFeatured)
+            .into(),
+        widget::button::standard("Installées")
+            .on_press(Message::ShowInstalled)
+            .into(),
+        widget::button::standard("Noyau")
+            .on_press(Message::ShowKernel)
+            .into(),
+    ];
+    // Les programmes Windows (Wine, Bottles) se gerent dans l'application
+    // du Shell qui leur est dediee, pas dans le catalogue Flatpak/DEB.
+    if crate::features::windows_apps_available() {
+        buttons.push(
+            widget::button::standard("Applications Windows")
+                .on_press(Message::OpenWindowsApps)
+                .into(),
+        );
+    }
     let header = widgets::header(
         "Applications",
         if kernel_view {
@@ -30,17 +50,7 @@ pub fn view(app: &App) -> Element<'_, Message> {
         } else {
             "Applications Flatpak (Flathub)"
         },
-        vec![
-            widget::button::standard("Suggestions")
-                .on_press(Message::ShowFeatured)
-                .into(),
-            widget::button::standard("Installées")
-                .on_press(Message::ShowInstalled)
-                .into(),
-            widget::button::standard("Noyau")
-                .on_press(Message::ShowKernel)
-                .into(),
-        ],
+        buttons,
     );
 
     // Vue Noyau: ni recherche ni source Flatpak/DEB, qui n'ont pas de sens ici.
