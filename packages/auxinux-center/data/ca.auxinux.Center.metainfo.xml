@@ -38,6 +38,22 @@
   </developer>
   <content_rating type="oars-1.1" />
   <releases>
+    <release version="0.2.13" date="2026-10-29">
+      <description>
+        <p>
+          New « Windows Apps » button on the Applications page: it opens the
+          AuxiNux Shell app that installs, finds, configures and uninstalls Windows
+          programs (Wine and Bottles), all kept in one place. Opening an .exe file
+          now goes through that app too.
+        </p>
+        <p xml:lang="fr">
+          Nouveau bouton « Applications Windows » dans la page Applications : il
+          ouvre l'application d'AuxiNux Shell qui installe, retrouve, règle et
+          désinstalle les programmes Windows (Wine et Bottles), tous rangés au
+          même endroit. Ouvrir un fichier .exe passe aussi par cette application.
+        </p>
+      </description>
+    </release>
     <release version="0.2.12" date="2026-10-28">
       <description>
         <p>
