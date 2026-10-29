@@ -353,6 +353,8 @@ if [[ "${ARCH}" == "amd64" ]]; then
   need_exec /usr/bin/auxinux-windows-wizard "ouverture des fichiers .exe"
   need_package wine32:i386 "Wine ne lancerait aucun programme 32 bits, donc presque aucun installateur Windows"
   need_package wine64 "Wine ne lancerait aucun programme Windows 64 bits"
+  need_package fonts-wine "textes et menus des programmes Windows flous, polices de remplacement (Tahoma, Marlett)"
+  need_package libxrender1:i386 "installateurs Windows (32 bits) sans texte lisse"
   need_owned /usr/bin/auxinux-windows-wizard auxinux-center "l'assistant des .exe ne recevrait aucun correctif"
 fi
 need_setting /etc/xdg/kiorc '^behaviourOnLaunch=execute$' \

@@ -30,6 +30,36 @@ wine64
 winetricks
 dxvk
 
+# Ce que libwine RECOMMANDE pour AFFICHER correctement, et que l'image (sans
+# les recommandations) n'avait pas -- constate le 2026-10-29 avec 7-Zip : textes
+# et menus flous, polices de remplacement. fonts-wine = Tahoma, MS Sans Serif,
+# Marlett (boutons des fenetres) ; fonts-liberation = metriques d'Arial/Times ;
+# les extensions X que winex11 charge A LA DEMANDE (XRender = texte lisse,
+# XRandR, XInput, curseurs...) ; GnuTLS = telechargements HTTPS des
+# installateurs. En 64 ET 32 bits : presque tous les installateurs sont des
+# programmes 32 bits. Applications Windows (auxiwine, AuxiNux Shell 0.3.30)
+# propose de les installer sur les machines deja installees.
+fonts-wine
+fonts-liberation
+libxrender1
+libxrender1:i386
+libxrandr2
+libxrandr2:i386
+libxi6
+libxi6:i386
+libxcursor1
+libxcursor1:i386
+libxcomposite1
+libxcomposite1:i386
+libxinerama1
+libxinerama1:i386
+libxfixes3
+libxfixes3:i386
+libxxf86vm1
+libxxf86vm1:i386
+libgnutls30t64
+libgnutls30t64:i386
+
 # Lutris N'EST PAS ici, volontairement. Les LANCEURS (Steam, Heroic, Lutris,
 # Bottles) s'installent en Flatpak a la demande via auxinux-windows-setup, qui
 # les presente avec une explication; la couche jeu fournit la PILE
