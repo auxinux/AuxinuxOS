@@ -141,10 +141,10 @@ has "GRUB BIOS sur le disque" "grub-install --target=i386-pc /dev/nvme0n1"
 has "paquet grub-pc embarque" "paquets/bios/*.deb"
 
 echo "== 6. En ligne: mises a jour puis applications =="
-config "EN_LIGNE=1" "APPLICATIONS=--brave --flatpak org.videolan.VLC"; simuler
+config "EN_LIGNE=1" "APPLICATIONS=--flatpak com.brave.Browser --flatpak org.videolan.VLC"; simuler
 check "neuf etapes" "$(grep -c '^auxinux-etape:' "${T}/out")" "9"
 has "mises a jour" "auxi --yes --progress upgrade --deb"
-has "applications par le programme de l'assistant" "auxinux-assistant-apply --brave --flatpak org.videolan.VLC"
+has "applications par le programme de l'assistant" "auxinux-assistant-apply --flatpak com.brave.Browser --flatpak org.videolan.VLC"
 check "mises a jour AVANT le nettoyage final" "$(( $(ligne 'upgrade --deb') < $(ligne 'post-install-cleanup.sh') ))" "1"
 
 echo "== 7. Edition ARM (arm64): UEFI seulement =="

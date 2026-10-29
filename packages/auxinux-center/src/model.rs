@@ -115,7 +115,7 @@ pub struct AptSource {
     pub name: String,
     pub kind: String,
     pub enabled: bool,
-    /// Faux pour les depots systeme proteges (auxinux*, brave*).
+    /// Faux pour les depots systeme proteges (auxinux*).
     pub removable: bool,
 }
 

@@ -651,14 +651,17 @@ done < <("${PACKAGE_NAMES}" "${ARCH}" "${HORS_SOCLE_LIST}")
 while read -r pkg; do
   refuse_package "${pkg}" "retire du socle (retire-du-socle.txt): Plasma s'installe depuis le centre, l'application AuxiNux remplace son equivalent"
 done < <("${PACKAGE_NAMES}" "${ARCH}" "$(dirname "${HORS_SOCLE_LIST}")/retire-du-socle.txt")
-# Le depot Brave est livre, mais DESACTIVE: actif, il ferait contacter Brave a
-# chaque `apt update`, meme par qui ne l'a pas choisi.
+# Plus aucun depot Brave (2026-10-29): Brave vient de Flathub. Actif, ce depot
+# ferait contacter Brave a chaque `apt update`; desactive, c'est un reliquat.
 refuse_file /etc/apt/sources.list.d/brave-browser-release.sources \
-  "depot Brave actif sans que l'utilisateur ait choisi Brave"
-need_file /etc/apt/sources.list.d/brave-browser-release.sources.disabled \
-  "l'assistant ne pourrait pas activer le depot Brave quand Brave est choisi"
-need_file /usr/share/keyrings/brave-browser-archive-keyring.gpg \
-  "depot Brave sans sa cle: choisir Brave dans l'assistant echouerait (« Failed to parse keyring »)"
+  "depot Brave: Brave s'installe depuis Flathub (com.brave.Browser)"
+refuse_file /etc/apt/sources.list.d/brave-browser-release.sources.disabled \
+  "depot Brave (desactive): Brave s'installe depuis Flathub (com.brave.Browser)"
+refuse_file /usr/share/keyrings/brave-browser-archive-keyring.gpg \
+  "cle du depot Brave: Brave s'installe depuis Flathub (com.brave.Browser)"
+# La politique de confidentialite geree reste: le Flatpak la lit sur l'hote.
+need_file /etc/brave/policies/managed/auxinux-privacy.json \
+  "Brave (Flatpak) demarrerait sans la politique qui coupe sa telemetrie"
 need_exec /usr/libexec/auxinux/auxinux-assistant-apply \
   "l'assistant de premier demarrage ne pourrait rien installer"
 need_file /etc/xdg/autostart/auxinux-assistant.desktop \

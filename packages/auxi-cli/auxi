@@ -1908,8 +1908,8 @@ run_install() {
     # n'est pas activee. Un paquet deja installe passe: c'est ainsi que le
     # centre met a jour une application DEB (AuxiOffice), et pkexec ne
     # transmet aucune variable d'environnement. L'assistant de premier
-    # demarrage, qui installe ses propres paquets (Brave, depuis son depot),
-    # passe AUXI_DEB_SYSTEME=1.
+    # demarrage, qui installe ses propres paquets (option --deb), passe
+    # AUXI_DEB_SYSTEME=1.
     if ! deb_apps_enabled && [[ "${AUXI_DEB_SYSTEME:-0}" != "1" ]]; then
       local pkg
       for pkg in "${ARGS[@]}"; do

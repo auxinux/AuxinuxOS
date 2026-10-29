@@ -9,7 +9,7 @@
 #
 # Usage:
 #   auxinux-assistant-apply [--profil bureautique|multimedia|gaming]
-#                           [--brave] [--deb PAQUET]... [--flatpak APP_ID]...
+#                           [--deb PAQUET]... [--flatpak APP_ID]...
 #
 # Sortie: la sortie de `auxi --yes --progress`, plus une ligne
 #   auxinux-etape:N:TOTAL:LIBELLE
@@ -22,8 +22,6 @@ set -uo pipefail
 
 AUXI="/usr/bin/auxi"
 PROFILE_BIN="/usr/bin/auxinux-profile"
-SOURCES_DIR="/etc/apt/sources.list.d"
-BRAVE_SOURCE="brave-browser-release.sources"
 
 # Banc d'essai (tests/test-assistant-apply.sh): chemins remplaces par des
 # stubs. Honore UNIQUEMENT hors root -- en root, aucune variable
@@ -31,7 +29,6 @@ BRAVE_SOURCE="brave-browser-release.sources"
 if [[ "${EUID}" -ne 0 && -n "${AUXINUX_ASSISTANT_TEST_ROOT:-}" ]]; then
   AUXI="${AUXINUX_ASSISTANT_TEST_ROOT}/auxi"
   PROFILE_BIN="${AUXINUX_ASSISTANT_TEST_ROOT}/auxinux-profile"
-  SOURCES_DIR="${AUXINUX_ASSISTANT_TEST_ROOT}/sources.list.d"
 fi
 
 die() {
@@ -46,7 +43,6 @@ valid_id() {
 }
 
 PROFIL=""
-BRAVE=0
 DEBS=()
 FLATPAKS=()
 while [[ $# -gt 0 ]]; do
@@ -57,7 +53,6 @@ while [[ $# -gt 0 ]]; do
         *) die "profil inconnu: ${2:-}" ;;
       esac
       shift 2 ;;
-    --brave) BRAVE=1; shift ;;
     --deb)
       valid_id "${2:-}" || die "nom de paquet invalide: ${2:-}"
       DEBS+=("$2"); shift 2 ;;
@@ -67,13 +62,6 @@ while [[ $# -gt 0 ]]; do
     *) die "argument inconnu: $1" ;;
   esac
 done
-
-# Brave vient de son depot officiel, en DEB: c'est ce qui applique la
-# politique de confidentialite geree (/etc/brave/policies/managed). Le depot
-# est livre desactive; on ne l'active que maintenant, a la demande.
-if [[ "${BRAVE}" -eq 1 ]]; then
-  DEBS+=("brave-browser")
-fi
 
 TOTAL=0
 [[ -n "${PROFIL}" ]] && TOTAL=$((TOTAL + 1))
@@ -96,19 +84,12 @@ fi
 if [[ "${#DEBS[@]}" -gt 0 ]]; then
   step "Paquets système: ${DEBS[*]}"
   deb_ok=1
-  if [[ "${BRAVE}" -eq 1 && -e "${SOURCES_DIR}/${BRAVE_SOURCE}.disabled" ]]; then
-    mv -f "${SOURCES_DIR}/${BRAVE_SOURCE}.disabled" "${SOURCES_DIR}/${BRAVE_SOURCE}" \
-      || deb_ok=0
-  fi
-  # Les index sont rafraichis AVANT: ceux de l'image datent de sa construction,
-  # et le depot Brave vient peut-etre d'etre active.
-  # AUXI_DEB_SYSTEME: ces paquets sont choisis par l'assistant (Brave vient de
-  # son depot), pas par une recherche d'application -- ils s'installent meme
-  # quand l'installation DEB d'applications est desactivee (auxi set deb).
-  if [[ "${deb_ok}" -eq 1 ]]; then
-    "${AUXI}" --yes --progress update --deb && \
-      AUXI_DEB_SYSTEME=1 "${AUXI}" --yes --progress install --deb "${DEBS[@]}" || deb_ok=0
-  fi
+  # Les index sont rafraichis AVANT: ceux de l'image datent de sa construction.
+  # AUXI_DEB_SYSTEME: ces paquets sont choisis par l'assistant, pas par une
+  # recherche d'application -- ils s'installent meme quand l'installation DEB
+  # d'applications est desactivee (auxi set deb).
+  "${AUXI}" --yes --progress update --deb && \
+    AUXI_DEB_SYSTEME=1 "${AUXI}" --yes --progress install --deb "${DEBS[@]}" || deb_ok=0
   [[ "${deb_ok}" -eq 1 ]] || FAILED+=("${DEBS[@]}")
 fi
 

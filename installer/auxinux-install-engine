@@ -30,7 +30,7 @@
 #   MOT_DE_PASSE=/run/...      fichier du mot de passe
 #   EN_LIGNE=0|1               mises a jour + applications
 #   PROFIL=bureautique|multimedia|gaming
-#   APPLICATIONS=--flatpak org.mozilla.firefox --brave ...  (arguments de
+#   APPLICATIONS=--flatpak org.mozilla.firefox --flatpak ...  (arguments de
 #                              auxinux-assistant-apply, en ligne seulement)
 #
 # Sortie: « auxinux-etape:N:TOTAL:CODE » au debut de chaque etape (CODE:

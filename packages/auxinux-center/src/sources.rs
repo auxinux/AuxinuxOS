@@ -4,8 +4,10 @@
 //!
 //! Securite: toute ecriture sous /etc passe par `pkexec` (agent polkit). Les
 //! cles sont installees sous /etc/apt/keyrings avec `Signed-By` (jamais
-//! apt-key). Les depots systeme (auxinux*, brave*) sont proteges contre la
-//! suppression.
+//! apt-key). Les depots systeme (auxinux*) sont proteges contre la
+//! suppression. Le depot de Brave ne l'est plus depuis le 2026-10-29: Brave
+//! vient de Flathub, et son ancien depot DEB se retire comme n'importe quel
+//! autre.
 
 use std::fs;
 use std::path::Path;
@@ -30,7 +32,7 @@ fn pretty_name(file: &str) -> String {
 }
 
 fn is_protected(base: &str) -> bool {
-    base.starts_with("auxinux") || base.starts_with("brave")
+    base.starts_with("auxinux")
 }
 
 /// A GPG key URL is only ever fetched, in root context, by the preset/custom
@@ -433,7 +435,7 @@ mod tests {
     #[test]
     fn protected_system_sources_cannot_be_removed() {
         assert!(is_protected("auxinuxos-kernel.list"));
-        assert!(is_protected("brave-browser-release.sources"));
+        assert!(!is_protected("brave-browser-release.sources"));
         assert!(!is_protected("docker.sources"));
 
         let result = remove_apt_source("auxinuxos-kernel.list");

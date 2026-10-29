@@ -241,7 +241,6 @@ fn recap(app: &App) -> Element<'_, Message> {
     for entry in sel.applications() {
         let origin = match entry.source {
             assistant::Source::Flatpak => "Flatpak (Flathub)",
-            assistant::Source::Brave => "Dépôt officiel de Brave",
         };
         list = list.push(
             widget::Row::new()
