@@ -45,7 +45,7 @@ check "resume lisible" "$(field Description | head -n1)" "AuxiNux OS 0.5.0, édi
 check "nouveautes = description longue" \
   "$(dpkg-deb -f "${DEB}" Description | tail -n +2 | grep -c 'Programmes Windows')" "1"
 check "tire auxi et le centre de la livraison" \
-  "$(field Depends | grep -c "auxi (>= ${VERSION}), auxinux-center (>= ${VERSION}), kernel-auxinuxos")" "1"
+  "$(field Depends | grep -c "auxi (>= ${VERSION}), auxinux-center (>= ${VERSION}), auxinuxos-agent-update (>= ${VERSION}), kernel-auxinuxos")" "1"
 check "reprend kiorc au centre 0.2.2" "$(field Replaces)" "auxinux-center (<< 0.2.3)"
 check "os-release porte l'edition" \
   "$(dpkg-deb --fsys-tarfile "${DEB}" | tar -xO ./usr/lib/os-release | grep -c '^BUILD_ID=20261009.2$')" "1"
@@ -53,7 +53,7 @@ check "os-release dit toujours AuxiNux OS" \
   "$(dpkg-deb --fsys-tarfile "${DEB}" | tar -xO ./usr/lib/os-release | grep -c '^PRETTY_NAME="AuxiNux OS ')" "1"
 check "os-release nomme la variante pour AuxiPak" \
   "$(dpkg-deb --fsys-tarfile "${DEB}" | tar -xO ./usr/lib/os-release | grep -c '^VARIANT_ID=auxinuxos$')" "1"
-for dep in "auxinux-shell (>= 0.3.23)" auxioffice auxitext "auxipak (>= 1.0.11)" plymouth; do
+for dep in "auxinux-shell (>= 0.3.33)" auxioffice auxitext "auxipak (>= 1.0.11)" plymouth; do
   check "tire ${dep}" "$(field Depends | tr ',' '\n' | sed 's/^ *//' | grep -cxF "${dep}")" "1"
 done
 
@@ -115,6 +115,20 @@ check "postinst: le reste intact" "$(grep -c '^SNAPPER_CONFIGS="root"$' "${WORK}
 echo "== 3. Kiorc quitte le paquet du centre =="
 CDEB="${WORK}/out/auxinux-center_${VERSION}_amd64.deb"
 check "plus de /etc/xdg/kiorc dans auxinux-center" "$(dpkg-deb -c "${CDEB}" | grep -c 'etc/xdg/kiorc')" "0"
+
+echo "== 3 ter. Agent des mises a jour (2026-11-12) =="
+GDEB="${WORK}/out/auxinuxos-agent-update_${VERSION}_all.deb"
+check "paquet de l'agent construit" "$([[ -f ${GDEB} ]] && echo oui)" "oui"
+check "agent: architecture all" "$(dpkg-deb -f "${GDEB}" Architecture)" "all"
+check "agent: version de la livraison" "$(dpkg-deb -f "${GDEB}" Version)" "${VERSION}"
+check "agent: programme executable" \
+  "$(dpkg-deb -c "${GDEB}" | grep -c '^-rwxr-xr-x .* ./usr/libexec/auxinux/auxinuxos-agent-update$')" "1"
+check "agent: service utilisateur" \
+  "$(dpkg-deb -c "${GDEB}" | grep -c ' ./usr/lib/systemd/user/auxinuxos-agent-update.service$')" "1"
+check "agent: ACTIF par defaut (lien graphical-session.target.wants)" \
+  "$(dpkg-deb -c "${GDEB}" | grep -c 'graphical-session.target.wants/auxinuxos-agent-update.service -> ../auxinuxos-agent-update.service')" "1"
+check "agent: tire le helper du centre" \
+  "$(dpkg-deb -f "${GDEB}" Depends | tr ',' '\n' | sed 's/^ *//' | grep -cxF "auxinux-center (>= ${VERSION})")" "1"
 
 echo "== 3 bis. Edition par architecture (Edition ARM, 2026-10-25) =="
 check "paquet d'edition amd64 (plus « all »)" "$(dpkg-deb -f "${DEB}" Architecture)" "amd64"

@@ -13,6 +13,9 @@
 #                               l'assistant des .exe (amd64 seulement), les
 #                               dossiers personnels. ARCH = architecture native
 #                               de l'hote (amd64, ou arm64 pour l'Edition ARM).
+#   auxinuxos-agent-update_<V>_all.deb recherche des mises a jour toutes les
+#                               60 minutes, dans la session (zone de
+#                               notification -> Parametres > Mises a jour)
 #   auxinuxos-release_<R>_<arch>.deb la VERSION d'AuxiNux OS (une par ISO publiee,
 #                               R = 0.5.0+AAAAMMJJ[.N]) et les reglages du
 #                               systeme installe (packages/release/root/)
@@ -207,6 +210,39 @@ Description: AuxiNux OS Center, centre de controle d'AuxiNux OS
  reglages et restauration.
 EOF
 
+# --- auxinuxos-agent-update --------------------------------------------------
+# Depuis le 2026-11-12: cherche les mises a jour toutes les 60 minutes et les
+# signale (zone de notification + notification); un clic ouvre Parametres >
+# Mises a jour. Service utilisateur active pour tous les comptes par le lien
+# de graphical-session.target.wants (Shell comme Plasma). Meme version que le
+# Center: il appelle son auxinux-refresh-helper.
+AGENT_DIR="${SCRIPT_DIR}/agent-update"
+AGENT_ROOT="${WORK}/agent"
+install -D -m 0755 "${AGENT_DIR}/auxinuxos-agent-update" \
+  "${AGENT_ROOT}/usr/libexec/auxinux/auxinuxos-agent-update"
+install -D -m 0644 "${AGENT_DIR}/auxinuxos-agent-update.service" \
+  "${AGENT_ROOT}/usr/lib/systemd/user/auxinuxos-agent-update.service"
+install -d -m 0755 "${AGENT_ROOT}/usr/lib/systemd/user/graphical-session.target.wants"
+ln -s ../auxinuxos-agent-update.service \
+  "${AGENT_ROOT}/usr/lib/systemd/user/graphical-session.target.wants/auxinuxos-agent-update.service"
+install -d -m 0755 "${AGENT_ROOT}/DEBIAN"
+cat >"${AGENT_ROOT}/DEBIAN/control" <<EOF
+Package: auxinuxos-agent-update
+Version: ${VERSION}
+Architecture: all
+Maintainer: ${MAINTAINER}
+Section: admin
+Priority: optional
+Depends: python3, python3-gi, gir1.2-glib-2.0, auxinux-center (>= ${VERSION}), pkexec, polkitd, apt
+Recommends: auxinux-shell (>= 0.3.33), flatpak
+Homepage: ${HOMEPAGE}
+Description: recherche automatique des mises a jour d'AuxiNux OS
+ Toutes les 60 minutes, dans la session de chaque utilisateur, cherche les
+ mises a jour du systeme et des applications Flatpak et les signale dans la
+ zone de notification. Un clic ouvre Parametres > Mises a jour. Se desactive
+ dans cette meme page. N'installe rien.
+EOF
+
 # --- auxinuxos-release --------------------------------------------------------
 REL_ROOT="${WORK}/release"
 cp -a "${RELEASE_DIR}/root" "${REL_ROOT}"
@@ -245,7 +281,8 @@ NOTES="$(sed -e '/^[[:space:]]*$/d' -e 's/^/ /' "${RELEASE_DIR}/NOUVEAUTES")"
 # permet pas de conditionner ses Depends a l'architecture. La version amd64
 # tire les applications AuxiNux; la version arm64 seulement ce qui existe en
 # arm64 (les applications y entreront avec leurs paquets arm64).
-REL_DEPENDS="auxi (>= ${VERSION}), auxinux-center (>= ${VERSION}), kernel-auxinuxos, auxinux-shell (>= 0.3.23)"
+REL_DEPENDS="auxi (>= ${VERSION}), auxinux-center (>= ${VERSION}), auxinuxos-agent-update (>= ${VERSION})"
+REL_DEPENDS="${REL_DEPENDS}, kernel-auxinuxos, auxinux-shell (>= 0.3.33)"
 # Applications AuxiNux publiees pour les deux architectures (arm64 depuis le
 # 2026-10-26); AuxiMail n'existe encore qu'en amd64.
 REL_DEPENDS="${REL_DEPENDS}, auxioffice, auxitext, auxicorrect, auxipak (>= 1.0.11)"
@@ -271,9 +308,10 @@ EOF
 # Licence et journal des changements: exiges par la politique Debian
 # (/usr/share/doc/<paquet>/), et ce que lit quiconque se demande d'ou vient un
 # paquet installe.
-for pkg in auxi auxinux-center auxinuxos-release; do
+for pkg in auxi auxinux-center auxinuxos-agent-update auxinuxos-release; do
   case "${pkg}" in
     auxi) root="${AUXI_ROOT}"; ver="${VERSION}" ;;
+    auxinuxos-agent-update) root="${AGENT_ROOT}"; ver="${VERSION}" ;;
     auxinux-center) root="${CENTER_ROOT}"; ver="${VERSION}" ;;
     auxinuxos-release) root="${REL_ROOT}"; ver="${RELEASE}" ;;
   esac
@@ -298,7 +336,7 @@ COPYRIGHT
   chmod 0644 "${doc}/copyright" "${doc}/changelog.gz"
 done
 
-for root in "${AUXI_ROOT}" "${CENTER_ROOT}" "${REL_ROOT}"; do
+for root in "${AUXI_ROOT}" "${CENTER_ROOT}" "${AGENT_ROOT}" "${REL_ROOT}"; do
   (cd "${root}" && find . -type f ! -path './DEBIAN/*' -printf '%P\0' \
     | xargs -0 md5sum >DEBIAN/md5sums)
 done
@@ -307,9 +345,12 @@ AUXI_DEB="${OUT_DIR}/auxi_${VERSION}_all.deb"
 CENTER_DEB="${OUT_DIR}/auxinux-center_${VERSION}_${ARCH}.deb"
 dpkg-deb --root-owner-group -Zxz --build "${AUXI_ROOT}" "${AUXI_DEB}" >/dev/null
 dpkg-deb --root-owner-group -Zxz --build "${CENTER_ROOT}" "${CENTER_DEB}" >/dev/null
+AGENT_DEB="${OUT_DIR}/auxinuxos-agent-update_${VERSION}_all.deb"
+dpkg-deb --root-owner-group -Zxz --build "${AGENT_ROOT}" "${AGENT_DEB}" >/dev/null
 RELEASE_DEB="${OUT_DIR}/auxinuxos-release_${RELEASE}_${ARCH}.deb"
 dpkg-deb --root-owner-group -Zxz --build "${REL_ROOT}" "${RELEASE_DEB}" >/dev/null
 
 echo "${AUXI_DEB}"
 echo "${CENTER_DEB}"
+echo "${AGENT_DEB}"
 echo "${RELEASE_DEB}"

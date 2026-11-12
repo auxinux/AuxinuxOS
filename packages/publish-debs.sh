@@ -78,13 +78,13 @@ RELEASE_DEB="$(ssh "${BUILD_HOST}" "cd '${REMOTE_DIR}' && ls auxinuxos-release_*
 [[ -n "${RELEASE_DEB}" ]] || { echo "ERREUR: aucun auxinuxos-release_*_${ARCH}.deb dans ${BUILD_HOST}:${REMOTE_DIR}" >&2; exit 66; }
 RELEASE="${RELEASE_DEB#auxinuxos-release_}"; RELEASE="${RELEASE%_*.deb}"
 
-declare -A WANT=([auxi]="${VERSION}" [auxinux-center]="${VERSION}" [auxinuxos-release]="${RELEASE}")
-declare -A FILE=([auxi]="auxi_${VERSION}_all.deb" [auxinux-center]="auxinux-center_${VERSION}_${ARCH}.deb" [auxinuxos-release]="${RELEASE_DEB}")
+declare -A WANT=([auxi]="${VERSION}" [auxinux-center]="${VERSION}" [auxinuxos-agent-update]="${VERSION}" [auxinuxos-release]="${RELEASE}")
+declare -A FILE=([auxi]="auxi_${VERSION}_all.deb" [auxinux-center]="auxinux-center_${VERSION}_${ARCH}.deb" [auxinuxos-agent-update]="auxinuxos-agent-update_${VERSION}_all.deb" [auxinuxos-release]="${RELEASE_DEB}")
 
 echo "==> Index publie: ${PACKAGES_URL}"
 INDEX="$(curl -fsS "${PACKAGES_URL}")" || { echo "index APPS illisible" >&2; exit 69; }
 PKGS=()
-for pkg in auxi auxinux-center auxinuxos-release; do
+for pkg in auxi auxinux-center auxinuxos-agent-update auxinuxos-release; do
   current="$(published_version "${pkg}" "${INDEX}")"
   echo "    ${pkg}: publie ${current:-(aucun)}, a publier ${WANT[${pkg}]}"
   if [[ -z "${current}" ]] || dpkg --compare-versions "${WANT[${pkg}]}" gt "${current}"; then
@@ -147,7 +147,7 @@ ssh "${REPO_HOST}" "cd '${PUB_DIR}' && ./publish-repo.sh ${ARGS[*]} --deploy"
 echo "==> Verification de l'index servi"
 INDEX="$(curl -fsS "${PACKAGES_URL}")"
 fail=0
-for pkg in auxi auxinux-center auxinuxos-release; do
+for pkg in auxi auxinux-center auxinuxos-agent-update auxinuxos-release; do
   got="$(published_version "${pkg}" "${INDEX}")"
   echo "    ${pkg}: ${got:-(absent)}"
   [[ "${got}" == "${WANT[${pkg}]}" ]] || fail=1

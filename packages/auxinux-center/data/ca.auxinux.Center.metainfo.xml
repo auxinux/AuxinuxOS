@@ -38,6 +38,16 @@
   </developer>
   <content_rating type="oars-1.1" />
   <releases>
+    <release version="0.2.14" date="2026-11-12">
+      <description>
+        <p>
+          Same delivery as the new auxinuxos-agent-update package: every 60
+          minutes it checks for updates, shows them in the notification area,
+          and a click opens Settings &gt; Updates. Automatic checking can be
+          turned off on that page.
+        </p>
+      </description>
+    </release>
     <release version="0.2.13" date="2026-10-29">
       <description>
         <p>

@@ -233,6 +233,9 @@ need_exec /usr/bin/auxi "commande d'administration principale"
 need_exec /usr/bin/auxinux-center "centre de controle"
 need_owned /usr/bin/auxi auxi "auxi ne se mettrait jamais a jour (suite APPS)"
 need_owned /usr/bin/auxinux-center auxinux-center "le centre de controle ne se mettrait jamais a jour (suite APPS)"
+need_exec /usr/libexec/auxinux/auxinuxos-agent-update "aucune recherche automatique des mises a jour"
+need_owned /usr/libexec/auxinux/auxinuxos-agent-update auxinuxos-agent-update "l agent des mises a jour ne recevrait aucun correctif"
+need_file /usr/lib/systemd/user/graphical-session.target.wants/auxinuxos-agent-update.service "la recherche automatique des mises a jour (active par defaut) ne demarrerait jamais"
 # os-release est DETOURNE de base-files (dpkg -S repond alors
 # « auxinuxos-release, base-files: ... »): c'est le detournement qu'on verifie.
 if sudo chroot "${ROOTFS}" dpkg-divert --list /usr/lib/os-release 2>/dev/null | grep -q 'by auxinuxos-release'; then

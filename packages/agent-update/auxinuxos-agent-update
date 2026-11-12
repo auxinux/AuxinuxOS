@@ -1,0 +1,541 @@
+#!/usr/bin/python3 -I
+"""auxinuxos-agent-update : recherche des mises à jour toutes les 60 minutes, dans la session de l'utilisateur.
+
+DEMANDE A L'ORIGINE (2026-11-12, aporler) : regarder toutes les 60 minutes si des mises à jour sont disponibles ;
+si oui, le signaler dans la zone de notification, et un clic ouvre les Paramètres du Shell, section « Mises à
+jour ». La recherche automatique se désactive dans cette même page ; elle est ACTIVE par défaut.
+
+Fonctionnement :
+- Toutes les 5 minutes, l'agent regarde la date de la dernière recherche (la sienne OU celle faite à la main dans
+  les Paramètres : même fichier) ; au-delà de 60 minutes, il recherche.
+- Rechercher = exactement ce que fait la page Mises à jour du Shell : « pkexec auxinux-refresh-helper » (action
+  ca.auxinux.center.refresh, accordée SANS mot de passe à la session active ; l'agent vérifie d'abord par pkcheck,
+  sans interaction, qu'aucune invite ne s'ouvrirait), puis simulation apt sans droits et liste des Flatpak.
+- Le résultat est écrit dans le cache de la page (~/.cache/auxinux-shell/updates.json, même format) : un clic sur
+  la notification ouvre une page qui montre déjà la liste, sans nouvelle recherche.
+- S'il y a des mises à jour : une icône dans la zone de notification (StatusNotifierItem) tant qu'elles sont en
+  attente, et une notification la première fois qu'un ensemble de mises à jour est trouvé (rappel au plus une
+  fois par jour). Clic sur l'une ou l'autre = « auxinux-settings mises-a-jour » (AuxiNux OS Center à défaut).
+- Réglage : clé « updates.auto_check » de la configuration du Shell (~/.config/auxinux-shell/config.json, défaut
+  dans /usr/share/auxinux-shell/config.json, sinon vrai). Relu dès que le fichier change : l'icône disparaît
+  aussitôt l'interrupteur coupé.
+- Le cache est surveillé lui aussi : après une installation faite dans les Paramètres, l'icône disparaît.
+
+Rien n'est installé par l'agent : il ne fait que chercher et prévenir.
+
+Variables (tests) : AUXINUX_AGENT_INTERVAL (secondes entre deux recherches, défaut 3600),
+AUXINUX_AGENT_TICK (secondes entre deux vérifications, défaut 300), AUXINUX_AGENT_FIRST (délai avant la première
+vérification, défaut 180), AUXINUX_AGENT_HELPERS (dossier des helpers), AUXINUX_AGENT_ONESHOT=1 (une recherche
+puis fin, sans D-Bus : affiche le résultat en JSON).
+"""
+import hashlib
+import json
+import logging
+import os
+import shutil
+import sys
+import time
+from pathlib import Path
+
+from gi.repository import Gio, GLib
+
+log = logging.getLogger("auxinuxos-agent-update")
+
+APP_ID = "auxinuxos-agent-update"
+INTERVAL = int(os.environ.get("AUXINUX_AGENT_INTERVAL", "3600"))
+TICK = int(os.environ.get("AUXINUX_AGENT_TICK", "300"))
+FIRST = int(os.environ.get("AUXINUX_AGENT_FIRST", "180"))
+REMIND = 24 * 3600
+
+HELPERS = Path(os.environ.get("AUXINUX_AGENT_HELPERS", "/usr/libexec/auxinux"))
+REFRESH_HELPER = HELPERS / "auxinux-refresh-helper"
+REFRESH_ACTION = "ca.auxinux.center.refresh"
+APT_REAL = "/usr/lib/auxinux/apt-real/apt-get"
+RELEASE_PACKAGE = "auxinuxos-release"
+
+HOME = Path.home()
+CONFIG_FILE = Path(os.environ.get("XDG_CONFIG_HOME") or HOME / ".config") / "auxinux-shell" / "config.json"
+DEFAULT_CONFIG = Path("/usr/share/auxinux-shell/config.json")
+CACHE = Path(os.environ.get("XDG_CACHE_HOME") or HOME / ".cache") / "auxinux-shell" / "updates.json"
+STATE = Path(os.environ.get("XDG_STATE_HOME") or HOME / ".local" / "state") / APP_ID / "state.json"
+
+SETTINGS_PAGE = "mises-a-jour"
+ICON = "software-update-available"
+
+TEXTS = {
+    "fr": {
+        "title": "Mises à jour disponibles",
+        "one": "Une mise à jour est prête à être installée.",
+        "many": "%d mises à jour sont prêtes à être installées.",
+        "release": "Nouvelle version d'AuxiNux OS : %s",
+        "open": "Voir les mises à jour",
+        "tooltip_one": "1 mise à jour disponible",
+        "tooltip_many": "%d mises à jour disponibles",
+        "hint": "Cliquez pour ouvrir Paramètres > Mises à jour",
+    },
+    "en": {
+        "title": "Updates available",
+        "one": "One update is ready to install.",
+        "many": "%d updates are ready to install.",
+        "release": "New AuxiNux OS version: %s",
+        "open": "View updates",
+        "tooltip_one": "1 update available",
+        "tooltip_many": "%d updates available",
+        "hint": "Click to open Settings > Updates",
+    },
+}
+
+
+# ---------------------------------------------------------------- utilitaires purs (testés)
+
+def parse_apt_simulation(text):
+    """Lignes « Inst nom [ancienne] (nouvelle dépôt [arch]) » d'apt-get -s → [[nom, ancienne, nouvelle]].
+    Même lecture que services/updates.py du Shell : le cache doit être identique."""
+    packages = []
+    for line in text.splitlines():
+        if not line.startswith("Inst "):
+            continue
+        name, _sep, rest = line[5:].partition(" ")
+        old = ""
+        if rest.startswith("["):
+            old, _sep, rest = rest[1:].partition("] ")
+        new = rest[1:].split(" ", 1)[0] if rest.startswith("(") else ""
+        packages.append([name, old, new])
+    return packages
+
+
+def parse_flatpak_updates(text):
+    """« flatpak remote-ls --updates --columns=application,name,version » → [[id, nom, version]]."""
+    apps = []
+    for line in text.splitlines():
+        fields = line.split("\t")
+        if not fields[0].strip() or "." not in fields[0]:
+            continue
+        fields += ["", ""]
+        apps.append([fields[0].strip(), fields[1].strip() or fields[0].strip(), fields[2].strip()])
+    return apps
+
+
+def release_summary(text):
+    for line in text.splitlines():
+        if line.startswith("Description:"):
+            return line.partition(":")[2].strip()
+    return ""
+
+
+def _merge(base, override):
+    for key, value in override.items():
+        if isinstance(value, dict) and isinstance(base.get(key), dict):
+            _merge(base[key], value)
+        else:
+            base[key] = value
+    return base
+
+
+def _read_json(path):
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def auto_check_enabled(config_file=CONFIG_FILE, default_config=DEFAULT_CONFIG):
+    """Clé updates.auto_check de la configuration du Shell (utilisateur puis défaut du paquet) ; vrai à défaut."""
+    data = _merge(_read_json(default_config), _read_json(config_file))
+    value = data.get("updates", {}).get("auto_check", True) if isinstance(data.get("updates"), dict) else True
+    return value is not False
+
+
+def signature(packages, flatpaks):
+    """Empreinte d'un ensemble de mises à jour : une nouvelle notification seulement s'il a changé."""
+    items = sorted(f"deb:{p[0]}={p[2]}" for p in packages) + sorted(f"flatpak:{a[0]}={a[2]}" for a in flatpaks)
+    return hashlib.sha256("\n".join(items).encode()).hexdigest()[:16] if items else ""
+
+
+def should_notify(sig, state, now):
+    """Notifier : ensemble nouveau, ou rappel une fois par jour s'il attend toujours."""
+    if not sig:
+        return False
+    if state.get("notified_signature") != sig:
+        return True
+    return now - float(state.get("notified_at", 0)) >= REMIND
+
+
+def language():
+    shell_lang = _merge(_read_json(DEFAULT_CONFIG), _read_json(CONFIG_FILE)).get("language", "auto")
+    if isinstance(shell_lang, str) and shell_lang[:2] in TEXTS:
+        return shell_lang[:2]
+    for var in ("LANGUAGE", "LC_ALL", "LC_MESSAGES", "LANG"):
+        value = os.environ.get(var, "")
+        if value:
+            return "en" if value.startswith("en") else "fr"
+    return "fr"
+
+
+def texts():
+    return TEXTS[language()]
+
+
+def is_live():
+    try:
+        return "boot=live" in Path("/proc/cmdline").read_text().split()
+    except OSError:
+        return False
+
+
+def write_json_atomic(path, data):
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_name("." + path.name + ".tmp")
+        tmp.write_text(json.dumps(data), encoding="utf-8")
+        os.replace(tmp, path)
+    except OSError as e:
+        log.warning("%s non écrit : %s", path, e)
+
+
+# ---------------------------------------------------------------- recherche
+
+def run(argv, callback, env=None):
+    """Lance argv sans bloquer ; callback(code, sortie, erreurs) dans la boucle principale."""
+    launcher = Gio.SubprocessLauncher.new(Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE)
+    for key, value in (env or {}).items():
+        launcher.setenv(key, value, True)
+    try:
+        proc = launcher.spawnv(argv)
+    except GLib.Error as e:
+        callback(-1, "", e.message)
+        return
+
+    def done(p, result):
+        try:
+            _ok, out, err = p.communicate_utf8_finish(result)
+            callback(p.get_exit_status(), out or "", err or "")
+        except GLib.Error as e:
+            callback(-1, "", e.message)
+    proc.communicate_utf8_async(None, None, done)
+
+
+class Checker:
+    """Une recherche : actualiser (si permis sans invite), simuler apt, lister les Flatpak, lire la version."""
+
+    def __init__(self, on_done):
+        self.on_done = on_done
+        self.packages = []
+
+    def start(self):
+        if not (REFRESH_HELPER.exists() and shutil.which("pkexec") and shutil.which("pkcheck")):
+            self._list()
+            return
+        # Jamais d'invite d'authentification surgie d'un service d'arrière-plan : pkcheck sans
+        # --allow-user-interaction répond 0 seulement si l'action est accordée d'office.
+        run(["pkcheck", "--action-id", REFRESH_ACTION, "--process", str(os.getpid())], self._on_pkcheck)
+
+    def _on_pkcheck(self, status, _out, err):
+        if status != 0:
+            log.info("Actualisation non accordée sans invite (pkcheck %s) : listes du système", status)
+            self._list()
+            return
+        run(["pkexec", str(REFRESH_HELPER)], self._on_refreshed)
+
+    def _on_refreshed(self, status, _out, err):
+        if status != 0:
+            log.info("Actualisation des listes : code %s %s", status, err.strip()[-300:])
+        self._list()
+
+    def _list(self):
+        apt_get = APT_REAL if os.access(APT_REAL, os.X_OK) else "apt-get"
+        run([apt_get, "-s", "-o", "Debug::NoLocking=1", "upgrade", "--with-new-pkgs"], self._on_apt,
+            {"LC_ALL": "C"})
+
+    def _on_apt(self, status, out, err):
+        if status != 0:
+            log.warning("Simulation apt : code %s %s", status, err.strip()[-300:])
+            self.on_done(None)
+            return
+        self.packages = parse_apt_simulation(out)
+        if shutil.which("flatpak"):
+            run(["flatpak", "remote-ls", "--updates", "--columns=application,name,version"], self._on_flatpak)
+        else:
+            self._on_flatpak(0, "", "")
+
+    def _on_flatpak(self, status, out, err):
+        if status != 0:
+            log.info("flatpak remote-ls : %s", err.strip()[-300:])
+        self.flatpaks = parse_flatpak_updates(out) if status == 0 else []
+        if any(p[0] == RELEASE_PACKAGE for p in self.packages):
+            run(["apt-cache", "show", "--no-all-versions", RELEASE_PACKAGE],
+                lambda s, o, e: self._finish(release_summary(o) if s == 0 else ""), {"LC_ALL": "C"})
+        else:
+            self._finish(None)
+
+    def _finish(self, release):
+        self.on_done({"last_check": time.time(), "packages": self.packages, "flatpaks": self.flatpaks,
+                      "release": release})
+
+
+# ---------------------------------------------------------------- zone de notification
+
+SNI_XML = """
+<node>
+  <interface name="org.kde.StatusNotifierItem">
+    <property name="Category" type="s" access="read"/>
+    <property name="Id" type="s" access="read"/>
+    <property name="Title" type="s" access="read"/>
+    <property name="Status" type="s" access="read"/>
+    <property name="IconName" type="s" access="read"/>
+    <property name="IconThemePath" type="s" access="read"/>
+    <property name="ToolTip" type="(sa(iiay)ss)" access="read"/>
+    <property name="ItemIsMenu" type="b" access="read"/>
+    <property name="Menu" type="o" access="read"/>
+    <method name="Activate"><arg type="i" direction="in"/><arg type="i" direction="in"/></method>
+    <method name="SecondaryActivate"><arg type="i" direction="in"/><arg type="i" direction="in"/></method>
+    <method name="ContextMenu"><arg type="i" direction="in"/><arg type="i" direction="in"/></method>
+    <method name="Scroll"><arg type="i" direction="in"/><arg type="s" direction="in"/></method>
+    <signal name="NewTitle"/>
+    <signal name="NewIcon"/>
+    <signal name="NewToolTip"/>
+    <signal name="NewStatus"><arg type="s"/></signal>
+  </interface>
+</node>
+"""
+SNI_PATH = "/StatusNotifierItem"
+
+
+class TrayIcon:
+    """Icône de la zone de notification : « Passive » (cachée) sans mise à jour, « Active » sinon."""
+
+    def __init__(self, bus, on_activate):
+        self.bus, self.on_activate = bus, on_activate
+        self.status, self.tooltip = "Passive", ""
+        info = Gio.DBusNodeInfo.new_for_xml(SNI_XML).interfaces[0]
+        self.iface = info.name
+        bus.register_object(SNI_PATH, info, self._on_call, self._on_get, None)
+        Gio.bus_watch_name_on_connection(bus, "org.kde.StatusNotifierWatcher", Gio.BusNameWatcherFlags.NONE,
+                                         lambda *_: self._register(), None)
+
+    def _register(self):
+        def done(bus, result):
+            try:
+                bus.call_finish(result)
+            except GLib.Error as e:
+                log.info("Zone de notification indisponible : %s", e.message)
+        self.bus.call("org.kde.StatusNotifierWatcher", "/StatusNotifierWatcher", "org.kde.StatusNotifierWatcher",
+                      "RegisterStatusNotifierItem", GLib.Variant("(s)", (self.bus.get_unique_name(),)), None,
+                      Gio.DBusCallFlags.NONE, 3000, None, done)
+
+    def _on_call(self, _bus, _sender, _path, _iface, method, _params, invocation):
+        if method in ("Activate", "SecondaryActivate", "ContextMenu"):
+            self.on_activate()
+        invocation.return_value(None)
+
+    def _on_get(self, _bus, _sender, _path, _iface, prop):
+        t = texts()
+        values = {
+            "Category": GLib.Variant("s", "SystemServices"),
+            "Id": GLib.Variant("s", APP_ID),
+            "Title": GLib.Variant("s", t["title"]),
+            "Status": GLib.Variant("s", self.status),
+            "IconName": GLib.Variant("s", ICON),
+            "IconThemePath": GLib.Variant("s", ""),
+            "ToolTip": GLib.Variant("(sa(iiay)ss)", (ICON, [], self.tooltip or t["title"], t["hint"])),
+            "ItemIsMenu": GLib.Variant("b", False),
+            "Menu": GLib.Variant("o", "/"),
+        }
+        return values.get(prop)
+
+    def set(self, count):
+        t = texts()
+        status = "Active" if count else "Passive"
+        tooltip = (t["tooltip_one"] if count == 1 else t["tooltip_many"] % count) if count else ""
+        if (status, tooltip) == (self.status, self.tooltip):
+            return
+        self.status, self.tooltip = status, tooltip
+        self._emit("NewToolTip", None)
+        self._emit("NewStatus", GLib.Variant("(s)", (status,)))
+
+    def _emit(self, name, params):
+        try:
+            self.bus.emit_signal(None, SNI_PATH, self.iface, name, params)
+        except GLib.Error as e:
+            log.debug("Signal %s : %s", name, e.message)
+
+
+# ---------------------------------------------------------------- agent
+
+def open_updates_page():
+    """Paramètres du Shell, section Mises à jour ; AuxiNux OS Center si le Shell n'est pas là."""
+    if shutil.which("auxinux-settings"):
+        argv = ["auxinux-settings", SETTINGS_PAGE]
+    elif shutil.which("auxinux-center"):
+        argv = ["auxinux-center"]
+    else:
+        log.warning("Ni auxinux-settings ni auxinux-center : rien à ouvrir")
+        return
+    try:
+        Gio.Subprocess.new(argv, Gio.SubprocessFlags.NONE)
+    except GLib.Error as e:
+        log.warning("%s : %s", argv[0], e.message)
+
+
+class Agent:
+    def __init__(self, bus):
+        self.bus = bus
+        self.checking = False
+        self.last_attempt = 0.0      # une recherche ratée (apt illisible) n'est retentée qu'après INTERVAL
+        self.enabled = auto_check_enabled()
+        self.notification_id = 0
+        self.state = _read_json(STATE)
+        self.tray = TrayIcon(bus, open_updates_page)
+        bus.signal_subscribe("org.freedesktop.Notifications", "org.freedesktop.Notifications", None,
+                             "/org/freedesktop/Notifications", None, Gio.DBusSignalFlags.NONE, self._on_notif_signal)
+        self._monitors = [self._watch(CONFIG_FILE, self._on_config_changed),
+                          self._watch(CACHE, self._on_cache_changed)]
+        self._on_cache_changed()
+
+    def _watch(self, path, callback):
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            monitor = Gio.File.new_for_path(str(path)).monitor_file(Gio.FileMonitorFlags.WATCH_MOVES, None)
+        except (OSError, GLib.Error) as e:
+            log.info("Surveillance de %s impossible : %s", path, e)
+            return None
+        monitor.set_rate_limit(500)
+        monitor.connect("changed", lambda *_: callback())
+        return monitor
+
+    # ---------- réglage et cache ----------
+
+    def _on_config_changed(self):
+        enabled = auto_check_enabled()
+        if enabled == self.enabled:
+            return
+        self.enabled = enabled
+        log.info("Recherche automatique %s", "activée" if enabled else "désactivée")
+        if enabled:
+            self.last_attempt = 0.0
+            GLib.timeout_add_seconds(10, lambda: self.tick() and False)
+        else:
+            self._close_notification()
+        self._on_cache_changed()
+
+    def _cached(self):
+        data = _read_json(CACHE)
+        packages = data.get("packages") if isinstance(data.get("packages"), list) else []
+        flatpaks = data.get("flatpaks") if isinstance(data.get("flatpaks"), list) else []
+        try:
+            last = float(data.get("last_check", 0))
+        except (TypeError, ValueError):
+            last = 0.0
+        return last, packages, flatpaks, data.get("release")
+
+    def _on_cache_changed(self):
+        _last, packages, flatpaks, _release = self._cached()
+        count = len(packages) + len(flatpaks)
+        self.tray.set(count if self.enabled else 0)
+        if not count:
+            self._close_notification()
+
+    # ---------- recherche périodique ----------
+
+    def tick(self):
+        if self.enabled and not self.checking:
+            last, *_rest = self._cached()
+            now = time.time()
+            if now - last >= INTERVAL and now - self.last_attempt >= INTERVAL:
+                self.check()
+        return True
+
+    def check(self):
+        self.checking = True
+        self.last_attempt = time.time()
+        log.info("Recherche des mises à jour")
+        Checker(self._on_checked).start()
+
+    def _on_checked(self, result):
+        self.checking = False
+        if result is None:
+            return
+        write_json_atomic(CACHE, result)
+        count = len(result["packages"]) + len(result["flatpaks"])
+        log.info("%d mise(s) à jour disponible(s)", count)
+        if not self.enabled:
+            return
+        self.tray.set(count)
+        sig = signature(result["packages"], result["flatpaks"])
+        now = time.time()
+        if should_notify(sig, self.state, now):
+            self._notify(count, result.get("release"))
+            self.state = {"notified_signature": sig, "notified_at": now}
+            write_json_atomic(STATE, self.state)
+
+    # ---------- notification ----------
+
+    def _notify(self, count, release):
+        t = texts()
+        body = t["one"] if count == 1 else t["many"] % count
+        if release:
+            body = (t["release"] % release) + "\n" + body
+        hints = {"desktop-entry": GLib.Variant("s", "ca.auxinux.Settings"),
+                 "urgency": GLib.Variant("y", 1)}
+
+        def done(bus, result):
+            try:
+                self.notification_id = bus.call_finish(result).unpack()[0]
+            except GLib.Error as e:
+                log.info("Notification non affichée : %s", e.message)
+        self.bus.call("org.freedesktop.Notifications", "/org/freedesktop/Notifications",
+                      "org.freedesktop.Notifications", "Notify",
+                      GLib.Variant("(susssasa{sv}i)", ("AuxiNux OS", self.notification_id, ICON, t["title"], body,
+                                                       ["default", t["open"], "open", t["open"]], hints, -1)),
+                      GLib.VariantType("(u)"), Gio.DBusCallFlags.NONE, 5000, None, done)
+
+    def _close_notification(self):
+        if not self.notification_id:
+            return
+        self.bus.call("org.freedesktop.Notifications", "/org/freedesktop/Notifications",
+                      "org.freedesktop.Notifications", "CloseNotification",
+                      GLib.Variant("(u)", (self.notification_id,)), None, Gio.DBusCallFlags.NONE, 3000, None, None)
+        self.notification_id = 0
+
+    def _on_notif_signal(self, _bus, _sender, _path, _iface, signal, params):
+        nid = params.unpack()[0]
+        if not self.notification_id or nid != self.notification_id:
+            return
+        if signal == "ActionInvoked":
+            open_updates_page()
+        elif signal == "NotificationClosed":
+            self.notification_id = 0
+
+
+def main():
+    logging.basicConfig(level=logging.INFO, format="%(name)s: %(message)s")
+    if os.environ.get("AUXINUX_AGENT_ONESHOT") == "1":
+        loop = GLib.MainLoop()
+        out = {}
+
+        def done(result):
+            out["result"] = result
+            loop.quit()
+        Checker(done).start()
+        loop.run()
+        print(json.dumps(out.get("result")))
+        return 0 if out.get("result") is not None else 1
+    if is_live():
+        log.info("Session live : pas de recherche automatique")
+        return 0
+    try:
+        bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
+    except GLib.Error as e:
+        log.error("Bus de session indisponible : %s", e.message)
+        return 1
+    agent = Agent(bus)
+    GLib.timeout_add_seconds(FIRST, lambda: agent.tick() and False)
+    GLib.timeout_add_seconds(TICK, agent.tick)
+    GLib.MainLoop().run()
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
