@@ -1,0 +1,22 @@
+# AuxiNux Virtua Desktop (0.6.0, decision d'aporler du 2026-11-12): machines
+# virtuelles, LXC et Docker, en local ou sur un serveur Virtua. Son mode
+# UNIFIE ouvre les applications d'une VM Windows 11 dans leurs propres
+# fenetres sur le bureau AuxiNux (RDP RemoteApp par FreeRDP 3): des programmes
+# Windows qui tournent VRAIMENT sous Windows, la ou Wine ne suffit pas.
+#
+# Depot Virtua (dep.auxinux.ca/VIRTUA, suite virtua, MEME cle que le depot
+# AuxiNux), pose par configure-apt-sources.sh: liste installee APRES lui
+# (EXTRA_LISTS de build-image.sh). amd64 seulement: le paquet n'existe qu'en
+# amd64.
+#
+# Les RECOMMANDATIONS du paquet sont nommees ici, car l'image installe sans
+# elles: sans QEMU, OVMF (UEFI) et swtpm (TPM 2.0), pas de Windows 11; sans
+# FreeRDP 3, pas de mode Unifie. Le pont X11 de FreeRDP passe par xwayland
+# (bureau-auxinux.txt).
+auxinux-virtua-desktop
+qemu-system-x86
+qemu-utils
+ovmf
+swtpm
+freerdp3-x11
+libglib2.0-bin

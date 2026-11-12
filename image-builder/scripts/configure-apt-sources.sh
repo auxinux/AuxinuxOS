@@ -6,6 +6,9 @@ ROOTFS="${1:?usage: configure-apt-sources.sh ROOTFS}"
 # Architecture native de l'image (exportee par build-image.sh). Les depots
 # AuxiNux sont declares pour elle seule; i386 n'existe qu'en amd64.
 ARCH="${AUXINUX_ARCH:-$(dpkg --print-architecture 2>/dev/null || echo amd64)}"
+# Racine du projet: le fichier de source Virtua est celui du paquet
+# auxinuxos-release (packages/release/root), une seule copie.
+PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 # ----------------------------------------------------------------------------
 # Empreintes SHA-256 attendues des artefacts telecharges.
@@ -163,6 +166,22 @@ Components: main
 Architectures: ${ARCH}
 Signed-By: /usr/share/keyrings/auxinuxos-archive-keyring.gpg
 EOF
+
+# AuxiNux Virtua Desktop (0.6.0, 2026-11-12): depot Virtua, suite virtua.
+# MEME cle que le depot AuxiNux (verifiee plus haut par son empreinte): la
+# source en ligne (dep.auxinux.ca/VIRTUA/virtua.sources) l'embarque en clair,
+# on pointe le meme trousseau. Le NOM du fichier est celui de la consigne
+# Virtua (« curl ... -o /etc/apt/sources.list.d/virtua.sources »): qui la
+# suit remplace ce fichier au lieu d'en creer un second, ce qui donnerait
+# deux Signed-By differents pour la meme source -- et un apt update en erreur.
+# Le meme fichier est livre par auxinuxos-release (machines deja installees).
+# amd64 seulement: le depot ne publie que cette architecture.
+if [[ "${ARCH}" == "amd64" ]]; then
+  sudo install -m 0644 "${PROJECT_DIR}/packages/release/root/etc/apt/sources.list.d/virtua.sources" \
+    "${ROOTFS}/etc/apt/sources.list.d/virtua.sources"
+else
+  sudo rm -f "${ROOTFS}/etc/apt/sources.list.d/virtua.sources"
+fi
 
 # Noyaux en essai (suite kernel-dev). Livre DESACTIVE: c'est un choix de ceux
 # qui veulent tester un noyau avant sa sortie, pas le cas general.

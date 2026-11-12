@@ -12,7 +12,7 @@ on:
   workflow_dispatch:
     inputs:
       release:
-        description: "Edition (AUXINUX_RELEASE), ex. 0.5.1+20261112 ; vide = date du jour"
+        description: "Edition (AUXINUX_RELEASE), ex. 0.6.0+20261112 ; vide = date du jour"
         required: false
       vm:
         description: "Installer l'ISO en VM (KVM) apres la construction"

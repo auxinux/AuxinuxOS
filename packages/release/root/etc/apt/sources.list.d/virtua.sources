@@ -1,0 +1,8 @@
+# AuxiNux Virtua Desktop: machines virtuelles (Windows 11 et son mode Unifie,
+# Linux), LXC et Docker. Meme cle que le depot AuxiNux.
+Types: deb
+URIs: https://dep.auxinux.ca/VIRTUA
+Suites: virtua
+Components: main
+Architectures: amd64
+Signed-By: /usr/share/keyrings/auxinuxos-archive-keyring.gpg

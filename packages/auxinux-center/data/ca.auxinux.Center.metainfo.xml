@@ -45,6 +45,9 @@
           minutes it checks for updates, shows them in the notification area,
           and a click opens Settings &gt; Updates. Automatic checking can be
           turned off on that page.
+          AuxiNux OS 0.6.0: when a new AuxiNux OS version adds a software
+          source (AuxiNux Virtua Desktop), the system update refreshes the
+          lists and installs what the new version recommends.
         </p>
       </description>
     </release>

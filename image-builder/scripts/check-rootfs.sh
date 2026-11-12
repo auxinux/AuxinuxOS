@@ -236,6 +236,18 @@ need_owned /usr/bin/auxinux-center auxinux-center "le centre de controle ne se m
 need_exec /usr/libexec/auxinux/auxinuxos-agent-update "aucune recherche automatique des mises a jour"
 need_owned /usr/libexec/auxinux/auxinuxos-agent-update auxinuxos-agent-update "l agent des mises a jour ne recevrait aucun correctif"
 need_file /usr/lib/systemd/user/graphical-session.target.wants/auxinuxos-agent-update.service "la recherche automatique des mises a jour (active par defaut) ne demarrerait jamais"
+# AuxiNux Virtua Desktop (0.6.0, amd64): VM Windows 11 et mode Unifie.
+if [[ "${ARCH}" == "amd64" ]]; then
+  need_file /etc/apt/sources.list.d/virtua.sources "Virtua Desktop ne recevrait aucune mise a jour"
+  need_owned /etc/apt/sources.list.d/virtua.sources auxinuxos-release "la source Virtua ne suivrait pas les versions d AuxiNux OS"
+  for pkg in auxinux-virtua-desktop qemu-system-x86 qemu-utils ovmf swtpm freerdp3-x11; do
+    if sudo chroot "${ROOTFS}" dpkg-query -W -f='${Status}' "${pkg}" 2>/dev/null | grep -q 'install ok installed'; then
+      ok "${pkg} installe"
+    else
+      fail "${pkg} absent: pas de Windows 11 ni de mode Unifie dans Virtua Desktop"
+    fi
+  done
+fi
 # os-release est DETOURNE de base-files (dpkg -S repond alors
 # « auxinuxos-release, base-files: ... »): c'est le detournement qu'on verifie.
 if sudo chroot "${ROOTFS}" dpkg-divert --list /usr/lib/os-release 2>/dev/null | grep -q 'by auxinuxos-release'; then

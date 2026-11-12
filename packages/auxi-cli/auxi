@@ -824,9 +824,11 @@ run_update() {
 run_osupdate() {
   require_root_for_deb "os upgrade" "$@"
   apt_get update
-  local candidate summary snap=0
+  local candidate summary snap=0 recs_before="" sources_before=""
   candidate="$(release_candidate)"
   if [[ -n "${candidate}" ]]; then
+    recs_before="$(release_recommends)"
+    sources_before="$(sources_fingerprint)"
     summary="$(release_summary)"
     say "Nouvelle version: ${summary:-AuxiNux OS ${candidate}}" "New version: ${summary:-AuxiNux OS ${candidate}}"
     if os_snapshot "Avant ${summary:-AuxiNux OS ${candidate}}"; then
@@ -837,11 +839,13 @@ run_osupdate() {
     AUXI_NO_SNAPSHOT=1 apt_get upgrade --with-new-pkgs
     AUXI_NO_SNAPSHOT=1 release_catch_up
     AUXI_NO_SNAPSHOT=1 release_ensure_installed
+    [[ -z "${candidate}" ]] || AUXI_NO_SNAPSHOT=1 release_new_recommends "${recs_before}" "${sources_before}"
     AUXI_NO_SNAPSHOT=1 kernel_update_channels
   else
     apt_get upgrade --with-new-pkgs
     release_catch_up
     release_ensure_installed
+    [[ -z "${candidate}" ]] || release_new_recommends "${recs_before}" "${sources_before}"
     kernel_update_channels
   fi
   if [[ -n "${candidate}" ]]; then
@@ -953,6 +957,60 @@ release_ensure_installed() {
   say "Installation de la version d'AuxiNux OS (auxinuxos-release)." \
       "Installing the AuxiNux OS release (auxinuxos-release)."
   apt_get install -- auxinuxos-release
+}
+
+# Recommandations de la version installee d'AuxiNux OS, un paquet par ligne
+# (premiere alternative de chaque groupe).
+release_recommends() {
+  dep_groups "$(dpkg-query -W -f='${Recommends}' auxinuxos-release 2>/dev/null || true)" | cut -d'|' -f1
+}
+
+# Empreinte des sources apt: change quand la mise a jour en ajoute une.
+sources_fingerprint() {
+  # Fichiers absents (aucun .list, par exemple): cat echoue, pipefail suivrait.
+  { cat "${SOURCES_D}"/*.sources "${SOURCES_D}"/*.list "${APT_SOURCES_LIST:-/etc/apt/sources.list}" 2>/dev/null || true; } \
+    | md5sum | cut -d' ' -f1
+}
+
+# Ce qu'une NOUVELLE version d'AuxiNux OS ajoute a ses recommandations
+# (2026-11-12, AuxiNux OS 0.6.0: AuxiNux Virtua Desktop et QEMU).
+#
+# POURQUOI apt ne le fait pas seul: la nouvelle version LIVRE la source de son
+# depot (virtua.sources). Au moment ou apt resout la mise a jour, cette source
+# n'existe pas encore: la recommandation est introuvable, donc ignoree sans un
+# mot, et apt ne la reconsidere plus jamais (elle n'est « nouvelle » qu'une
+# fois). Un Depends aurait ete pire: toute la nouvelle version retenue.
+#
+# Donc, apres la mise a jour: si les sources ont change, relire les listes;
+# puis installer les recommandations qui N'ETAIENT PAS dans la version
+# precedente (comme apt le fait). Une recommandation deja connue et absente a
+# ete retiree par l'utilisateur: on ne la remet pas. Un echec (depot
+# injoignable) n'annule pas la mise a jour, deja faite: il est signale.
+release_new_recommends() {
+  local before="$1" sources_before="$2" name
+  local -a wanted=()
+  if [[ "$(sources_fingerprint)" != "${sources_before}" ]]; then
+    say "Nouvelles sources de logiciels: actualisation des listes." "New software sources: refreshing the lists."
+    apt_get update || true
+  fi
+  while read -r name; do
+    [[ -n "${name}" ]] || continue
+    grep -Fxq -- "${name}" <<<"${before}" && continue
+    deb_installed "${name}" && continue
+    apt_cache show --no-all-versions -- "${name}" >/dev/null 2>&1 || continue
+    wanted+=("${name}")
+  done < <(release_recommends)
+  [[ ${#wanted[@]} -gt 0 ]] || return 0
+  say "Nouveau dans cette version d'AuxiNux OS: ${wanted[*]}" "New in this AuxiNux OS version: ${wanted[*]}"
+  if apt_get install -- "${wanted[@]}"; then
+    # Installes POUR la version: retires avec elle par apt autoremove, gardes
+    # tant qu'elle les recommande.
+    apt-mark auto -- "${wanted[@]}" >/dev/null 2>&1 || true
+  else
+    say_err "Installation impossible pour l'instant: ${wanted[*]}. Réessayez plus tard: sudo auxi install --allow-deb --deb ${wanted[*]}" \
+            "Could not install for now: ${wanted[*]}. Try again later: sudo auxi install --allow-deb --deb ${wanted[*]}"
+  fi
+  return 0
 }
 
 # « AuxiNux OS 0.2.0, edition du 2026-10-09 » (os-release, champ BUILD_ID).

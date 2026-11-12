@@ -17,7 +17,7 @@
 #                               60 minutes, dans la session (zone de
 #                               notification -> Parametres > Mises a jour)
 #   auxinuxos-release_<R>_<arch>.deb la VERSION d'AuxiNux OS (une par ISO publiee,
-#                               R = 0.5.1+AAAAMMJJ[.N]) et les reglages du
+#                               R = 0.6.0+AAAAMMJJ[.N]) et les reglages du
 #                               systeme installe (packages/release/root/)
 #
 # auxinuxos-release (depuis le 2026-10-09): chaque ISO publiee est une
@@ -39,7 +39,7 @@
 #   packages/build-debs.sh [--out DIR]
 # Variables:
 #   AUXINUX_CENTER_BIN  binaire du Center deja compile (sinon target/release)
-#   AUXINUX_RELEASE     version d'AuxiNux OS: 0.5.1+AAAAMMJJ[.N]
+#   AUXINUX_RELEASE     version d'AuxiNux OS: 0.6.0+AAAAMMJJ[.N]
 #                       (defaut: version de os-release + date du jour)
 #   AUXINUX_STRIP=0     ne pas stripper le binaire (tests avec un faux binaire)
 #   AUXINUX_ARCH        architecture du paquet auxinux-center (defaut: celle
@@ -88,7 +88,7 @@ if [[ "${BIN_VERSION}" != "auxinux-center ${VERSION}" ]]; then
   exit 65
 fi
 
-# Version d'AuxiNux OS: celle de os-release (0.5.1), plus l'edition (la date
+# Version d'AuxiNux OS: celle de os-release (0.6.0), plus l'edition (la date
 # de l'ISO, et .N pour une seconde ISO le meme jour).
 RELEASE_DIR="${SCRIPT_DIR}/release"
 OS_VERSION="$(sed -n 's/^VERSION="\([^ "]*\).*/\1/p' "${RELEASE_DIR}/root/usr/lib/os-release")"
@@ -250,6 +250,12 @@ cp -a "${RELEASE_DIR}/root" "${REL_ROOT}"
 # dans un dossier setgid donne des repertoires en 2755, que dpkg-deb refuse).
 find "${REL_ROOT}" -type d -exec chmod 0755 {} + -exec chmod g-s {} +
 find "${REL_ROOT}" -type f -exec chmod go-w,a+r {} +
+# Source du depot Virtua (AuxiNux Virtua Desktop, 0.6.0): amd64 seulement, le
+# depot ne publie que cette architecture.
+if [[ "${ARCH}" != "amd64" ]]; then
+  rm -f "${REL_ROOT}/etc/apt/sources.list.d/virtua.sources"
+  rmdir --ignore-fail-on-non-empty "${REL_ROOT}/etc/apt/sources.list.d"
+fi
 # L'edition est ecrite dans os-release (champ standard BUILD_ID): c'est ce que
 # le centre affiche, et ce qu'il compare a la version disponible.
 printf 'BUILD_ID=%s\n' "${BUILD_ID}" >>"${REL_ROOT}/usr/lib/os-release"
@@ -290,6 +296,15 @@ if [[ "${ARCH}" == "amd64" ]]; then
   REL_DEPENDS="${REL_DEPENDS}, auxi-mail"
 fi
 REL_DEPENDS="${REL_DEPENDS}, plymouth, base-files"
+# AuxiNux Virtua Desktop (0.6.0): RECOMMANDE et non exige. Son depot (Virtua)
+# arrive AVEC ce paquet: une machine qui monte de version ne le connait pas
+# encore au moment ou apt resout la mise a jour, et un Depends retiendrait
+# toute la nouvelle version. `auxi os upgrade` relit les listes apres coup et
+# installe les recommandations NOUVELLES de la version (release_new_recommends).
+REL_RECOMMENDS=""
+if [[ "${ARCH}" == "amd64" ]]; then
+  REL_RECOMMENDS="auxinux-virtua-desktop, qemu-system-x86, qemu-utils, ovmf, swtpm, freerdp3-x11"
+fi
 cat >"${REL_ROOT}/DEBIAN/control" <<EOF
 Package: auxinuxos-release
 Version: ${RELEASE}
@@ -298,12 +313,16 @@ Maintainer: ${MAINTAINER}
 Section: admin
 Priority: important
 Depends: ${REL_DEPENDS}
+${REL_RECOMMENDS:+Recommends: ${REL_RECOMMENDS}}
 Replaces: auxinux-center (<< 0.2.3)
 Breaks: auxinux-center (<< 0.2.3)
 Homepage: ${HOMEPAGE}
 Description: AuxiNux OS ${OS_VERSION}, édition du ${EDITION}
 ${NOTES}
 EOF
+# Sans recommandation (arm64), la ligne ${REL_RECOMMENDS:+...} reste vide: une
+# ligne vide terminerait le paragraphe de control.
+sed -i '/^$/d' "${REL_ROOT}/DEBIAN/control"
 
 # Licence et journal des changements: exiges par la politique Debian
 # (/usr/share/doc/<paquet>/), et ce que lit quiconque se demande d'ou vient un
