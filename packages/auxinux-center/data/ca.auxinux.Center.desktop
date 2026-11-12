@@ -6,7 +6,7 @@ GenericName[fr]=Centre de contrôle
 Comment=Applications, updates, system health, sources, settings and recovery
 Comment[fr]=Applications, mises à jour, santé du système, sources, réglages et restauration
 Exec=auxinux-center
-Icon=auxinuxos
+Icon=auxinux-center
 Terminal=false
 # Qt et KDE retirés: depuis la 0.2 l'application est en libcosmic, pas en
 # Kirigami. Les laisser ferait apparaître le Center dans les regroupements
