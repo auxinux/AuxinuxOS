@@ -146,6 +146,11 @@ if [[ "${AUXINUX_STRIP:-1}" != 0 ]] && command -v strip >/dev/null 2>&1; then
 fi
 install -D -m 0644 "${CENTER_DIR}/data/ca.auxinux.Center.desktop" \
   "${CENTER_ROOT}/usr/share/applications/ca.auxinux.Center.desktop"
+# Icone propre au Center (0.2.15, 2026-11-12): carre plein, lisible en
+# 16-24 px. L'icone « auxinuxos » (logo AuxiNux en toutes lettres dans un
+# carre presque vide) devenait un trait illisible dans la barre des taches.
+install -D -m 0644 "${CENTER_DIR}/data/icons/auxinux-center.svg" \
+  "${CENTER_ROOT}/usr/share/icons/hicolor/scalable/apps/auxinux-center.svg"
 install -D -m 0644 "${CENTER_DIR}/data/ca.auxinux.Center.metainfo.xml" \
   "${CENTER_ROOT}/usr/share/metainfo/ca.auxinux.Center.metainfo.xml"
 install -D -m 0644 "${CENTER_DIR}/data/auxinux-assistant.desktop" \

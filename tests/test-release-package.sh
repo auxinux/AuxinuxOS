@@ -115,6 +115,10 @@ check "postinst: le reste intact" "$(grep -c '^SNAPPER_CONFIGS="root"$' "${WORK}
 echo "== 3. Kiorc quitte le paquet du centre =="
 CDEB="${WORK}/out/auxinux-center_${VERSION}_amd64.deb"
 check "plus de /etc/xdg/kiorc dans auxinux-center" "$(dpkg-deb -c "${CDEB}" | grep -c 'etc/xdg/kiorc')" "0"
+check "icone carree du centre livree" \
+  "$(dpkg-deb -c "${CDEB}" | grep -c ' ./usr/share/icons/hicolor/scalable/apps/auxinux-center.svg$')" "1"
+check "le .desktop du centre utilise son icone" \
+  "$(dpkg-deb --fsys-tarfile "${CDEB}" | tar -xO ./usr/share/applications/ca.auxinux.Center.desktop | grep -cx 'Icon=auxinux-center')" "1"
 
 echo "== 3 quater. AuxiNux Virtua Desktop (0.6.0) =="
 check "amd64: recommande Virtua Desktop et QEMU (pas exige: depot livre par ce paquet)" \
