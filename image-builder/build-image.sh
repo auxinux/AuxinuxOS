@@ -27,7 +27,7 @@ else
 fi
 OUTPUT_DIR="${PROJECT_DIR}/image-builder/output"
 WORK_DIR="${AUXINUX_NORMAL_BUILD_DIR:-${DEFAULT_WORK_DIR}}"
-PROFILE="0.5.0-live"
+PROFILE="0.5.1-live"
 FORCE=0
 REUSE_ROOTFS=0
 
@@ -35,7 +35,7 @@ usage() {
   cat <<EOF
 usage: $0 [--work-dir PATH] [--force] [--reuse-rootfs]
 
-Builds AuxiNux OS 0.5.0 live ISO (architecture: ${ARCH}).
+Builds AuxiNux OS 0.5.1 live ISO (architecture: ${ARCH}).
 
 Defaults:
   arch     : ${ARCH} (host architecture, AUXINUX_ARCH to override)
@@ -70,10 +70,10 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# Edition d'AuxiNux OS construite: 0.5.0+AAAAMMJJ[.N]. Fixee UNE fois ici et
+# Edition d'AuxiNux OS construite: 0.5.1+AAAAMMJJ[.N]. Fixee UNE fois ici et
 # exportee: le paquet auxinuxos-release (packages/build-debs.sh) la porte, l'ISO
 # l'enregistre dans /.disk/auxinux-release, et publish-iso.sh en tire le nom
-# publie. Une seconde ISO le meme jour: AUXINUX_RELEASE=0.5.0+AAAAMMJJ.2.
+# publie. Une seconde ISO le meme jour: AUXINUX_RELEASE=0.5.1+AAAAMMJJ.2.
 OS_VERSION="$(sed -n 's/^VERSION="\([^ "]*\).*/\1/p' "${PROJECT_DIR}/packages/release/root/usr/lib/os-release")"
 export AUXINUX_RELEASE="${AUXINUX_RELEASE:-${OS_VERSION}+$(date +%Y%m%d)}"
 echo "==> Edition: ${AUXINUX_RELEASE}"
@@ -145,7 +145,7 @@ purge_build_dir() {
 BUILD_DIR="${WORK_DIR}/${PROFILE}"
 ROOTFS_DIR="${BUILD_DIR}/rootfs"
 ISO_ROOT="${BUILD_DIR}/iso-root"
-OUTPUT_ISO="${OUTPUT_DIR}/auxinuxos-0.5.0-${ARCH}.iso"
+OUTPUT_ISO="${OUTPUT_DIR}/auxinuxos-0.5.1-${ARCH}.iso"
 
 if [[ "${FORCE}" -eq 1 && "${REUSE_ROOTFS}" -eq 1 ]]; then
   echo "--force and --reuse-rootfs cannot be used together" >&2
@@ -721,12 +721,12 @@ cat >"${ISO_ROOT}/boot/grub/grub.cfg" <<'EOF'
 set timeout=10
 set default=0
 
-menuentry "Installer AuxiNux OS 0.5.0 maintenant  /  Install AuxiNux OS 0.5.0 now" {
+menuentry "Installer AuxiNux OS 0.5.1 maintenant  /  Install AuxiNux OS 0.5.1 now" {
     linux /live/vmlinuz boot=live components username=auxinux hostname=auxinuxos-live pci=noaer pcie_aspm=off quiet splash loglevel=3 systemd.unit=multi-user.target auxinux.install=1
     initrd /live/initrd.img
 }
 
-menuentry "Essayer AuxiNux OS 0.5.0 (bureau live)  /  Try AuxiNux OS 0.5.0 (live desktop)" {
+menuentry "Essayer AuxiNux OS 0.5.1 (bureau live)  /  Try AuxiNux OS 0.5.1 (live desktop)" {
     linux /live/vmlinuz boot=live components username=auxinux hostname=auxinuxos-live pci=noaer pcie_aspm=off quiet splash loglevel=3
     initrd /live/initrd.img
 }
@@ -743,7 +743,7 @@ menuentry "Essayer, copie en memoire  /  Try, copy to RAM (toram)" {
 EOF
 
 cat >"${ISO_ROOT}/README.txt" <<'EOF'
-AuxiNux OS 0.5.0
+AuxiNux OS 0.5.1
 
 Live user: auxinux
 Live password: auxinux

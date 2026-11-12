@@ -145,7 +145,7 @@ if command -v dpkg-deb >/dev/null; then
   printf '#!/bin/sh\necho "auxinux-center %s"\n' "${VERSION}" > "${WORK}/center"; chmod +x "${WORK}/center"
   for arch in arm64 amd64; do
     AUXINUX_ARCH="${arch}" AUXINUX_STRIP=0 AUXINUX_CENTER_BIN="${WORK}/center" \
-      AUXINUX_RELEASE="0.4.0+20261025" "${ROOT}/packages/build-debs.sh" --out "${WORK}/debs-${arch}" \
+      AUXINUX_RELEASE="0.5.1+20261025" "${ROOT}/packages/build-debs.sh" --out "${WORK}/debs-${arch}" \
       >/dev/null 2>"${WORK}/debs.err"
     check "${arch}: construit" "$?" "0"
     CDEB="${WORK}/debs-${arch}/auxinux-center_${VERSION}_${arch}.deb"

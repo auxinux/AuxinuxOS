@@ -17,7 +17,7 @@
 #                               60 minutes, dans la session (zone de
 #                               notification -> Parametres > Mises a jour)
 #   auxinuxos-release_<R>_<arch>.deb la VERSION d'AuxiNux OS (une par ISO publiee,
-#                               R = 0.5.0+AAAAMMJJ[.N]) et les reglages du
+#                               R = 0.5.1+AAAAMMJJ[.N]) et les reglages du
 #                               systeme installe (packages/release/root/)
 #
 # auxinuxos-release (depuis le 2026-10-09): chaque ISO publiee est une
@@ -39,7 +39,7 @@
 #   packages/build-debs.sh [--out DIR]
 # Variables:
 #   AUXINUX_CENTER_BIN  binaire du Center deja compile (sinon target/release)
-#   AUXINUX_RELEASE     version d'AuxiNux OS: 0.5.0+AAAAMMJJ[.N]
+#   AUXINUX_RELEASE     version d'AuxiNux OS: 0.5.1+AAAAMMJJ[.N]
 #                       (defaut: version de os-release + date du jour)
 #   AUXINUX_STRIP=0     ne pas stripper le binaire (tests avec un faux binaire)
 #   AUXINUX_ARCH        architecture du paquet auxinux-center (defaut: celle
@@ -88,7 +88,7 @@ if [[ "${BIN_VERSION}" != "auxinux-center ${VERSION}" ]]; then
   exit 65
 fi
 
-# Version d'AuxiNux OS: celle de os-release (0.5.0), plus l'edition (la date
+# Version d'AuxiNux OS: celle de os-release (0.5.1), plus l'edition (la date
 # de l'ISO, et .N pour une seconde ISO le meme jour).
 RELEASE_DIR="${SCRIPT_DIR}/release"
 OS_VERSION="$(sed -n 's/^VERSION="\([^ "]*\).*/\1/p' "${RELEASE_DIR}/root/usr/lib/os-release")"
