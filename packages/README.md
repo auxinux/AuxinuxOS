@@ -14,6 +14,7 @@ ISO.
 |---|---|
 | `auxi_<V>_all.deb` | `/usr/bin/auxi`, le bouclier apt, le hook d'instantané |
 | `auxinux-center_<V>_<arch>.deb` (amd64, ou arm64 pour l’Édition ARM) | le Center, ses deux helpers, son action polkit, l'autostart de l'assistant |
+| `auxinuxos-agent-update_<V>_all.deb` (depuis la 0.2.14) | l'agent des mises à jour : toutes les 60 minutes, dans la session, il cherche les mises à jour (helper d'actualisation du Center, accordé sans mot de passe, vérifié par `pkcheck` : jamais d'invite en arrière-plan), les signale dans la zone de notification et par une notification ; un clic ouvre Paramètres > Mises à jour du Shell (le Center à défaut). Service utilisateur actif par défaut ; interrupteur dans cette même page (clé `updates.auto_check` de la configuration du Shell). N'installe rien. Test : `tests/test-agent-update.sh` |
 
 Une seule version pour les deux : celle de `auxinux-center/Cargo.toml`. Le
 Center exige le `auxi` de la même livraison.

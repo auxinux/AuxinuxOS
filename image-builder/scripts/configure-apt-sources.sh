@@ -6,6 +6,9 @@ ROOTFS="${1:?usage: configure-apt-sources.sh ROOTFS}"
 # Architecture native de l'image (exportee par build-image.sh). Les depots
 # AuxiNux sont declares pour elle seule; i386 n'existe qu'en amd64.
 ARCH="${AUXINUX_ARCH:-$(dpkg --print-architecture 2>/dev/null || echo amd64)}"
+# Racine du projet: le fichier de source Virtua est celui du paquet
+# auxinuxos-release (packages/release/root), une seule copie.
+PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 # ----------------------------------------------------------------------------
 # Empreintes SHA-256 attendues des artefacts telecharges.
@@ -30,8 +33,6 @@ ARCH="${AUXINUX_ARCH:-$(dpkg --print-architecture 2>/dev/null || echo amd64)}"
 # sur le serveur: scripts/.install-auxinux-sources-DEB.sh.avant-arm64-20261025.
 DEB_SOURCES_SHA256="86389b0a10a9a46040b8f024dae14c6ab3644034f3eb5ab1fe3f0aa609972a07"
 AUXINUXOS_KEYRING_SHA256="963f569b4a74f9c76e0c56dd9fa288222b344ff6b102d26fc5eabf6e3ca3f410"
-BRAVE_KEYRING_SHA256="c85e85aa3d1783ffaa649ee8dbbc22af7f87192d304602d37e3018226b394788"
-BRAVE_SOURCES_SHA256="afb89575e544c6da0e2ba4f850931be800b442507a0ad9be3e12d0439566fb1f"
 
 ALLOW_UNVERIFIED="${AUXINUX_ALLOW_UNVERIFIED:-0}"
 
@@ -166,6 +167,22 @@ Architectures: ${ARCH}
 Signed-By: /usr/share/keyrings/auxinuxos-archive-keyring.gpg
 EOF
 
+# AuxiNux Virtua Desktop (0.6.0, 2026-11-12): depot Virtua, suite virtua.
+# MEME cle que le depot AuxiNux (verifiee plus haut par son empreinte): la
+# source en ligne (dep.auxinux.ca/VIRTUA/virtua.sources) l'embarque en clair,
+# on pointe le meme trousseau. Le NOM du fichier est celui de la consigne
+# Virtua (« curl ... -o /etc/apt/sources.list.d/virtua.sources »): qui la
+# suit remplace ce fichier au lieu d'en creer un second, ce qui donnerait
+# deux Signed-By differents pour la meme source -- et un apt update en erreur.
+# Le meme fichier est livre par auxinuxos-release (machines deja installees).
+# amd64 seulement: le depot ne publie que cette architecture.
+if [[ "${ARCH}" == "amd64" ]]; then
+  sudo install -m 0644 "${PROJECT_DIR}/packages/release/root/etc/apt/sources.list.d/virtua.sources" \
+    "${ROOTFS}/etc/apt/sources.list.d/virtua.sources"
+else
+  sudo rm -f "${ROOTFS}/etc/apt/sources.list.d/virtua.sources"
+fi
+
 # Noyaux en essai (suite kernel-dev). Livre DESACTIVE: c'est un choix de ceux
 # qui veulent tester un noyau avant sa sortie, pas le cas general.
 #
@@ -214,23 +231,15 @@ if [[ "${ARCH}" == "amd64" ]]; then
     "${ROOTFS}/etc/apt/sources.list.d/debian-i386.sources.disabled"
 fi
 
-# Brave: methode officielle (brave.com/linux), avec verification d'empreinte.
-#
-# Le depot est livre DESACTIVE (.disabled) depuis le 2026-10-02: Brave n'est
-# plus impose, c'est un choix de l'assistant de premier demarrage. Actif, ce
-# depot ferait contacter les serveurs de Brave a chaque `apt update`, chez des
-# utilisateurs qui ne s'en servent pas. L'assistant l'active (simple
-# renommage, cle deja verifiee ici) quand Brave est choisi -- en DEB et non en
-# Flatpak, pour que la politique de confidentialite geree
-# (/etc/brave/policies/managed/auxinux-privacy.json) s'applique.
-fetch_verified \
-  https://brave-browser-apt-release.s3.brave.com/brave-browser-archive-keyring.gpg \
-  "${ROOTFS}/usr/share/keyrings/brave-browser-archive-keyring.gpg" \
-  "${BRAVE_KEYRING_SHA256}"
-fetch_verified \
-  https://brave-browser-apt-release.s3.brave.com/brave-browser.sources \
+# Plus de depot Brave (decision d'aporler, 2026-10-29): Brave s'installe
+# depuis Flathub (com.brave.Browser, publie et verifie par Brave Software),
+# comme les autres navigateurs de l'assistant. Sa politique de confidentialite
+# geree (/etc/brave/policies/managed/auxinux-privacy.json) s'applique aussi au
+# Flatpak, qui lit les politiques de l'hote (permission host-etc). Livre
+# jusqu'a la 0.5.0 desactive avec sa cle: un rootfs reutilise peut encore les
+# porter, on les retire.
+sudo rm -f "${ROOTFS}/etc/apt/sources.list.d/brave-browser-release.sources" \
   "${ROOTFS}/etc/apt/sources.list.d/brave-browser-release.sources.disabled" \
-  "${BRAVE_SOURCES_SHA256}"
-sudo rm -f "${ROOTFS}/etc/apt/sources.list.d/brave-browser-release.sources"
+  "${ROOTFS}/usr/share/keyrings/brave-browser-archive-keyring.gpg"
 
 sudo chroot "${ROOTFS}" apt-get update

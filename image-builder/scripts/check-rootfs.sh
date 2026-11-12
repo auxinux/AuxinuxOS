@@ -233,6 +233,21 @@ need_exec /usr/bin/auxi "commande d'administration principale"
 need_exec /usr/bin/auxinux-center "centre de controle"
 need_owned /usr/bin/auxi auxi "auxi ne se mettrait jamais a jour (suite APPS)"
 need_owned /usr/bin/auxinux-center auxinux-center "le centre de controle ne se mettrait jamais a jour (suite APPS)"
+need_exec /usr/libexec/auxinux/auxinuxos-agent-update "aucune recherche automatique des mises a jour"
+need_owned /usr/libexec/auxinux/auxinuxos-agent-update auxinuxos-agent-update "l agent des mises a jour ne recevrait aucun correctif"
+need_file /usr/lib/systemd/user/graphical-session.target.wants/auxinuxos-agent-update.service "la recherche automatique des mises a jour (active par defaut) ne demarrerait jamais"
+# AuxiNux Virtua Desktop (0.6.0, amd64): VM Windows 11 et mode Unifie.
+if [[ "${ARCH}" == "amd64" ]]; then
+  need_file /etc/apt/sources.list.d/virtua.sources "Virtua Desktop ne recevrait aucune mise a jour"
+  need_owned /etc/apt/sources.list.d/virtua.sources auxinuxos-release "la source Virtua ne suivrait pas les versions d AuxiNux OS"
+  for pkg in auxinux-virtua-desktop qemu-system-x86 qemu-utils ovmf swtpm freerdp3-x11; do
+    if sudo chroot "${ROOTFS}" dpkg-query -W -f='${Status}' "${pkg}" 2>/dev/null | grep -q 'install ok installed'; then
+      ok "${pkg} installe"
+    else
+      fail "${pkg} absent: pas de Windows 11 ni de mode Unifie dans Virtua Desktop"
+    fi
+  done
+fi
 # os-release est DETOURNE de base-files (dpkg -S repond alors
 # « auxinuxos-release, base-files: ... »): c'est le detournement qu'on verifie.
 if sudo chroot "${ROOTFS}" dpkg-divert --list /usr/lib/os-release 2>/dev/null | grep -q 'by auxinuxos-release'; then
@@ -651,14 +666,17 @@ done < <("${PACKAGE_NAMES}" "${ARCH}" "${HORS_SOCLE_LIST}")
 while read -r pkg; do
   refuse_package "${pkg}" "retire du socle (retire-du-socle.txt): Plasma s'installe depuis le centre, l'application AuxiNux remplace son equivalent"
 done < <("${PACKAGE_NAMES}" "${ARCH}" "$(dirname "${HORS_SOCLE_LIST}")/retire-du-socle.txt")
-# Le depot Brave est livre, mais DESACTIVE: actif, il ferait contacter Brave a
-# chaque `apt update`, meme par qui ne l'a pas choisi.
+# Plus aucun depot Brave (2026-10-29): Brave vient de Flathub. Actif, ce depot
+# ferait contacter Brave a chaque `apt update`; desactive, c'est un reliquat.
 refuse_file /etc/apt/sources.list.d/brave-browser-release.sources \
-  "depot Brave actif sans que l'utilisateur ait choisi Brave"
-need_file /etc/apt/sources.list.d/brave-browser-release.sources.disabled \
-  "l'assistant ne pourrait pas activer le depot Brave quand Brave est choisi"
-need_file /usr/share/keyrings/brave-browser-archive-keyring.gpg \
-  "depot Brave sans sa cle: choisir Brave dans l'assistant echouerait (« Failed to parse keyring »)"
+  "depot Brave: Brave s'installe depuis Flathub (com.brave.Browser)"
+refuse_file /etc/apt/sources.list.d/brave-browser-release.sources.disabled \
+  "depot Brave (desactive): Brave s'installe depuis Flathub (com.brave.Browser)"
+refuse_file /usr/share/keyrings/brave-browser-archive-keyring.gpg \
+  "cle du depot Brave: Brave s'installe depuis Flathub (com.brave.Browser)"
+# La politique de confidentialite geree reste: le Flatpak la lit sur l'hote.
+need_file /etc/brave/policies/managed/auxinux-privacy.json \
+  "Brave (Flatpak) demarrerait sans la politique qui coupe sa telemetrie"
 need_exec /usr/libexec/auxinux/auxinux-assistant-apply \
   "l'assistant de premier demarrage ne pourrait rien installer"
 need_file /etc/xdg/autostart/auxinux-assistant.desktop \

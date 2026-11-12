@@ -1,0 +1,21 @@
+# Recherche des mises a jour toutes les 60 minutes et les signale dans la zone
+# de notification (voir /usr/libexec/auxinux/auxinuxos-agent-update).
+# Active pour tous les comptes par le lien de graphical-session.target.wants
+# pose par le paquet ; se coupe dans Paramètres > Mises à jour (le service
+# reste lance mais ne cherche plus).
+[Unit]
+Description=AuxiNux OS : recherche automatique des mises à jour
+PartOf=graphical-session.target
+After=graphical-session.target
+ConditionKernelCommandLine=!boot=live
+
+[Service]
+Type=simple
+ExecStart=/usr/libexec/auxinux/auxinuxos-agent-update
+Restart=on-failure
+RestartSec=30
+Nice=10
+Slice=background.slice
+
+[Install]
+WantedBy=graphical-session.target

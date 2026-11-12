@@ -382,7 +382,7 @@ Windows. Aucune ISO arm64 n'a encore été construite ni démarrée.
 - Démarrage sous UTM (QEMU), VMware Fusion et Parallels ; presse-papiers et
   redimensionnement de l'écran.
 - Applications proposées par l'assistant : certaines n'existent sur Flathub
-  qu'en x86_64 ; le dépôt de Brave doit déclarer arm64.
+  qu'en x86_64 (Brave, en Flatpak depuis le 2026-10-29, existe en aarch64).
 - Dépôts tiers du centre (`auxinux-source-helper` : VS Code, Docker, Mullvad,
   Signal) déclarés `Architectures: amd64` : inutilisables en arm64 tels quels.
 - `firmware-qcom-soc` (portables Snapdragon), écarté de `firmware.txt`, sera
@@ -410,7 +410,7 @@ Windows. Aucune ISO arm64 n'a encore été construite ni démarrée.
   système (18 paquets) avec progression et journal. Les pages Applications
   (installation), Sources et Restauration n’ont pas été rejouées en VM.
 - **Assistant de premier démarrage** (2026-10-02) : il demande une connexion
-  Internet (tout s’installe depuis Flathub, Brave depuis son dépôt). Hors
+  Internet (tout s’installe depuis Flathub, Brave compris depuis le 2026-10-29). Hors
   ligne, l’installation échoue avec son journal ; on relance l’assistant depuis
   Réglages une fois connecté. Il **installe** ce qu’on coche mais ne
   **désinstalle** jamais ce qu’on décoche en le relançant : la page

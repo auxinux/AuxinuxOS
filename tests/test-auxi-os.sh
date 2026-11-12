@@ -30,6 +30,8 @@ chmod +x "${WORK}/apt-get"
 printf 'PRETTY_NAME="AuxiNux OS 0.2.0"\nBUILD_ID=20261008.2\n' >"${WORK}/os-release"
 export AUXI_OS_RELEASE="${WORK}/os-release"
 
+mkdir -p "${WORK}/sources.list.d"
+export AUXI_SOURCES_D="${WORK}/sources.list.d" APT_SOURCES_LIST="${WORK}/sources.list"
 source "${AUXI_BIN}" >/dev/null
 set +e
 apt_real() { echo "${WORK}/apt-get"; }
@@ -130,6 +132,60 @@ has "instantane nomme" "snapper -c root create"
 echo "== 9. Commande os sans sous-commande =="
 run run_os
 check "sort en 64" "${rc}" "64"
+
+echo "== 10. Nouvelle version avec un NOUVEAU depot (0.6.0: Virtua Desktop) =="
+# Etat simule: la version 0.5.1 ne recommandait que qemu-utils (deja connu),
+# la 0.6.0 recommande aussi auxinux-virtua-desktop, et livre virtua.sources.
+RECS_OLD=$'qemu-utils'
+RECS_NEW=$'auxinux-virtua-desktop\nqemu-utils\nswtpm'
+RECS="${RECS_OLD}"
+release_recommends() { printf '%s\n' "${RECS}"; }
+apt_get() {
+  echo "apt-get $* NOSNAP=${AUXI_NO_SNAPSHOT:-}" >>"${CALLS}"
+  if [[ "$1" == "upgrade" ]]; then
+    RECS="${RECS_NEW}"
+    echo "Types: deb" >"${AUXI_SOURCES_D}/virtua.sources"
+  fi
+  if [[ "$1" == "install" && "$*" == *auxinux-virtua-desktop* ]]; then return "${INSTALL_RC:-0}"; fi
+  return 0
+}
+apt-mark() { echo "apt-mark $*" >>"${CALLS}"; }
+INSTALLED_PKGS="auxinuxos-release swtpm"
+deb_installed() { [[ " ${INSTALLED_PKGS} " == *" $1 "* ]]; }
+UNKNOWN_PKGS=""
+apt_cache() {
+  case "$1" in
+    policy) printf 'auxinuxos-release:\n  Installed: %s\n  Candidate: %s\n' "${INSTALLED}" "${CANDIDATE}" ;;
+    show) for a in "$@"; do [[ " ${UNKNOWN_PKGS} " == *" ${a} "* ]] && return 100; done
+          printf 'Package: auxinuxos-release\nVersion: %s\nDescription: AuxiNux OS 0.6.0\n' "${CANDIDATE}" ;;
+  esac
+}
+CANDIDATE="0.6.0+20261112"; INSTALLED="0.5.1+20261112"
+run run_osupdate
+check "sort en 0" "${rc}" "0"
+check "listes relues apres l'ajout de la source (2 update)" "$(grep -c '^apt-get update' "${CALLS}")" "2"
+has "la nouveaute est installee, sous le meme instantane" "install -- auxinux-virtua-desktop NOSNAP=1"
+lacks "une recommandation deja connue n'est pas reinstallee" "qemu-utils NOSNAP"
+lacks "un paquet deja installe n'est pas reinstalle" "swtpm NOSNAP"
+has "marque automatique (suit la version)" "apt-mark auto -- auxinux-virtua-desktop"
+
+echo "== 11. Depot injoignable: la mise a jour reste faite, l'echec est dit =="
+rm -f "${AUXI_SOURCES_D}/virtua.sources"; RECS="${RECS_OLD}"; UNKNOWN_PKGS="auxinux-virtua-desktop"
+run run_osupdate
+check "sort en 0" "${rc}" "0"
+lacks "rien d'introuvable n'est demande" "install -- auxinux-virtua-desktop"
+UNKNOWN_PKGS=""
+rm -f "${AUXI_SOURCES_D}/virtua.sources"; RECS="${RECS_OLD}"; INSTALL_RC=0
+INSTALL_RC=100
+run run_osupdate
+INSTALL_RC=0
+check "echec d'installation: sort quand meme en 0" "${rc}" "0"
+check "echec signale avec la commande a lancer" "$(grep -c 'auxi install --allow-deb --deb auxinux-virtua-desktop' <<<"${out}")" "1"
+
+echo "== 12. Pas de nouvelle version: aucune recommandation ajoutee (retrait respecte) =="
+rm -f "${AUXI_SOURCES_D}/virtua.sources"; RECS="${RECS_NEW}"; CANDIDATE="${INSTALLED}"
+run run_osupdate
+lacks "rien d'installe" "install -- auxinux-virtua-desktop"
 
 if [[ "${fail}" -eq 0 ]]; then echo "test-auxi-os: OK"; else echo "test-auxi-os: ECHEC"; fi
 exit "${fail}"

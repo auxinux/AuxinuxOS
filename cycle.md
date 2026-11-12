@@ -54,7 +54,7 @@ test : seule la dernière 0.x publiée est maintenue.
 
 | Version | Base Debian | Sortie visée | Statut |
 |---|---|---|---|
-| 0.5 | Debian 13 | 2026-10-27 | **Actuelle** (développement) |
+| 0.6 | Debian 13 | 2026-11-12 | **Actuelle** (développement) |
 | 1.0 | Debian 13 | Janvier-février 2027 | Prévue — première version stable |
 | 1.x | Debian 13 | 2027, aux 3 à 6 mois | Prévue |
 | 2.0 | Debian 14 | À déterminer | Prévue — passage à Debian 14 |

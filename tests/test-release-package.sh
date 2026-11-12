@@ -35,17 +35,17 @@ build() {
 }
 
 echo "== 1. Edition du jour, seconde ISO du meme jour =="
-build "0.5.0+20261009.2" "${WORK}/out"
+build "0.6.0+20261009.2" "${WORK}/out"
 check "construit" "$?" "0"
-DEB="${WORK}/out/auxinuxos-release_0.5.0+20261009.2_amd64.deb"
+DEB="${WORK}/out/auxinuxos-release_0.6.0+20261009.2_amd64.deb"
 check "paquet d'edition present" "$([[ -f ${DEB} ]] && echo oui)" "oui"
 field() { dpkg-deb -f "${DEB}" "$1"; }
-check "version" "$(field Version)" "0.5.0+20261009.2"
-check "resume lisible" "$(field Description | head -n1)" "AuxiNux OS 0.5.0, édition du 2026-10-09 (2)"
+check "version" "$(field Version)" "0.6.0+20261009.2"
+check "resume lisible" "$(field Description | head -n1)" "AuxiNux OS 0.6.0, édition du 2026-10-09 (2)"
 check "nouveautes = description longue" \
   "$(dpkg-deb -f "${DEB}" Description | tail -n +2 | grep -c 'Programmes Windows')" "1"
 check "tire auxi et le centre de la livraison" \
-  "$(field Depends | grep -c "auxi (>= ${VERSION}), auxinux-center (>= ${VERSION}), kernel-auxinuxos")" "1"
+  "$(field Depends | grep -c "auxi (>= ${VERSION}), auxinux-center (>= ${VERSION}), auxinuxos-agent-update (>= ${VERSION}), kernel-auxinuxos")" "1"
 check "reprend kiorc au centre 0.2.2" "$(field Replaces)" "auxinux-center (<< 0.2.3)"
 check "os-release porte l'edition" \
   "$(dpkg-deb --fsys-tarfile "${DEB}" | tar -xO ./usr/lib/os-release | grep -c '^BUILD_ID=20261009.2$')" "1"
@@ -53,7 +53,7 @@ check "os-release dit toujours AuxiNux OS" \
   "$(dpkg-deb --fsys-tarfile "${DEB}" | tar -xO ./usr/lib/os-release | grep -c '^PRETTY_NAME="AuxiNux OS ')" "1"
 check "os-release nomme la variante pour AuxiPak" \
   "$(dpkg-deb --fsys-tarfile "${DEB}" | tar -xO ./usr/lib/os-release | grep -c '^VARIANT_ID=auxinuxos$')" "1"
-for dep in "auxinux-shell (>= 0.3.23)" auxioffice auxitext "auxipak (>= 1.0.11)" plymouth; do
+for dep in "auxinux-shell (>= 0.3.33)" auxioffice auxitext "auxipak (>= 1.0.11)" plymouth; do
   check "tire ${dep}" "$(field Depends | tr ',' '\n' | sed 's/^ *//' | grep -cxF "${dep}")" "1"
 done
 
@@ -116,13 +116,43 @@ echo "== 3. Kiorc quitte le paquet du centre =="
 CDEB="${WORK}/out/auxinux-center_${VERSION}_amd64.deb"
 check "plus de /etc/xdg/kiorc dans auxinux-center" "$(dpkg-deb -c "${CDEB}" | grep -c 'etc/xdg/kiorc')" "0"
 
+echo "== 3 quater. AuxiNux Virtua Desktop (0.6.0) =="
+check "amd64: recommande Virtua Desktop et QEMU (pas exige: depot livre par ce paquet)" \
+  "$(dpkg-deb -f "${DEB}" Recommends)" "auxinux-virtua-desktop, qemu-system-x86, qemu-utils, ovmf, swtpm, freerdp3-x11"
+check "amd64: Virtua n'est PAS dans Depends (retiendrait la version)" \
+  "$(dpkg-deb -f "${DEB}" Depends | grep -c virtua)" "0"
+check "amd64: source du depot Virtua livree" \
+  "$(dpkg-deb -c "${DEB}" | grep -c ' ./etc/apt/sources.list.d/virtua.sources$')" "1"
+check "amd64: source Virtua = conffile" \
+  "$(dpkg-deb --ctrl-tarfile "${DEB}" | tar -xO ./conffiles | grep -cx /etc/apt/sources.list.d/virtua.sources)" "1"
+check "source Virtua: meme trousseau que le depot AuxiNux" \
+  "$(dpkg-deb --fsys-tarfile "${DEB}" | tar -xO ./etc/apt/sources.list.d/virtua.sources | grep -cx 'Signed-By: /usr/share/keyrings/auxinuxos-archive-keyring.gpg')" "1"
+check "control sans ligne vide" "$(dpkg-deb --ctrl-tarfile "${DEB}" | tar -xO ./control | grep -c '^$')" "0"
+
+echo "== 3 ter. Agent des mises a jour (2026-11-12) =="
+GDEB="${WORK}/out/auxinuxos-agent-update_${VERSION}_all.deb"
+check "paquet de l'agent construit" "$([[ -f ${GDEB} ]] && echo oui)" "oui"
+check "agent: architecture all" "$(dpkg-deb -f "${GDEB}" Architecture)" "all"
+check "agent: version de la livraison" "$(dpkg-deb -f "${GDEB}" Version)" "${VERSION}"
+check "agent: programme executable" \
+  "$(dpkg-deb -c "${GDEB}" | grep -c '^-rwxr-xr-x .* ./usr/libexec/auxinux/auxinuxos-agent-update$')" "1"
+check "agent: service utilisateur" \
+  "$(dpkg-deb -c "${GDEB}" | grep -c ' ./usr/lib/systemd/user/auxinuxos-agent-update.service$')" "1"
+check "agent: ACTIF par defaut (lien graphical-session.target.wants)" \
+  "$(dpkg-deb -c "${GDEB}" | grep -c 'graphical-session.target.wants/auxinuxos-agent-update.service -> ../auxinuxos-agent-update.service')" "1"
+check "agent: tire le helper du centre" \
+  "$(dpkg-deb -f "${GDEB}" Depends | tr ',' '\n' | sed 's/^ *//' | grep -cxF "auxinux-center (>= ${VERSION})")" "1"
+
 echo "== 3 bis. Edition par architecture (Edition ARM, 2026-10-25) =="
 check "paquet d'edition amd64 (plus « all »)" "$(dpkg-deb -f "${DEB}" Architecture)" "amd64"
-AUXINUX_ARCH=arm64 AUXINUX_STRIP=0 AUXINUX_CENTER_BIN="${WORK}/center" AUXINUX_RELEASE="0.5.0+20261009.2" \
+AUXINUX_ARCH=arm64 AUXINUX_STRIP=0 AUXINUX_CENTER_BIN="${WORK}/center" AUXINUX_RELEASE="0.6.0+20261009.2" \
   "${ROOT}/packages/build-debs.sh" --out "${WORK}/arm" >/dev/null 2>"${WORK}/err"
-ADEB="${WORK}/arm/auxinuxos-release_0.5.0+20261009.2_arm64.deb"
+ADEB="${WORK}/arm/auxinuxos-release_0.6.0+20261009.2_arm64.deb"
 check "paquet d'edition arm64 construit" "$([[ -f ${ADEB} ]] && echo oui)" "oui"
 check "architecture arm64" "$(dpkg-deb -f "${ADEB}" Architecture)" "arm64"
+check "arm64: aucune recommandation Virtua (amd64 seulement)" "$(dpkg-deb -f "${ADEB}" Recommends)" ""
+check "arm64: pas de source Virtua" "$(dpkg-deb -c "${ADEB}" | grep -c virtua.sources)" "0"
+check "arm64: control sans ligne vide" "$(dpkg-deb --ctrl-tarfile "${ADEB}" | tar -xO ./control | grep -c '^$')" "0"
 # 2026-10-26: AuxiOffice, AuxiText, AuxiCorrect et AuxiPak publies en arm64;
 # AuxiMail pas encore.
 check "arm64: tire AuxiOffice, AuxiText, AuxiCorrect, AuxiPak" \
@@ -133,7 +163,7 @@ check "arm64: noyau, Shell et Plymouth tires" \
   "$(dpkg-deb -f "${ADEB}" Depends | tr ',' '\n' | grep -cE 'kernel-auxinuxos|auxinux-shell|plymouth')" "3"
 
 echo "== 4. Editions refusees =="
-for bad in "0.4.0+20261009" "0.5.0" "0.5.0+2026109" "0.5.0+20261009-2"; do
+for bad in "0.5.1+20261009" "0.6.0" "0.6.0+2026109" "0.6.0+20261009-2"; do
   build "${bad}" "${WORK}/bad"
   check "« ${bad} » refusee" "$?" "65"
 done

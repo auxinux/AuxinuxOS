@@ -43,8 +43,8 @@ n’est pas confondue avec l’option globale.
 
 `test-assistant-apply.sh` couvre ce que l’assistant de premier démarrage
 exécute en root. Cas critiques : une application indisponible sur Flathub ne
-prive pas la personne des autres, le dépôt Brave n’est activé que si Brave est
-choisi, et un identifiant commençant par un tiret est refusé avant d’atteindre
+prive pas la personne des autres, Brave s’installe en Flatpak (l’ancienne
+option `--brave` du dépôt DEB est refusée), et un identifiant commençant par un tiret est refusé avant d’atteindre
 apt ou flatpak.
 
 `test-install-engine.sh` exécute le moteur de l’installateur maison en

@@ -25,6 +25,13 @@
 #   --version  version a publier (defaut: celle de packages/auxinux-center/Cargo.toml)
 #   --arch     architecture du paquet auxinux-center et de l'index verifie
 #              (binary-<ARCH>): amd64 (defaut) ou arm64 (Edition ARM)
+#   --sans-edition  ne publie PAS auxinuxos-release (aucun n'est exige dans
+#              le dossier): les outils d'abord, la nouvelle version d'AuxiNux
+#              OS plus tard, avec son ISO validee (2026-11-12, 0.6.0: tant que
+#              l'edition n'est pas en ligne, aucune machine ne monte de version)
+#   --extra F  publie aussi le paquet F du dossier (ex. auxinux-shell_0.3.33_all.deb,
+#              construit par tools/build-deb.sh du Shell); repetable. Meme regle:
+#              plus recent que la version en ligne, sinon refus
 #   --deploy   publie reellement; sans cette option, le script verifie et
 #              affiche ce qu'il ferait
 set -euo pipefail
@@ -39,6 +46,8 @@ REMOTE_DIR=""
 VERSION=""
 ARCH="amd64"
 DEPLOY=0
+EDITION=1
+EXTRA=()
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -46,7 +55,9 @@ while [[ $# -gt 0 ]]; do
     --version) VERSION="${2:?--version demande une version}"; shift 2 ;;
     --arch)    ARCH="${2:?--arch demande une architecture}"; shift 2 ;;
     --deploy)  DEPLOY=1; shift ;;
-    -h|--help) sed -n '2,31p' "$0"; exit 0 ;;
+    --sans-edition) EDITION=0; shift ;;
+    --extra)   EXTRA+=("${2:?--extra demande un fichier .deb}"); shift 2 ;;
+    -h|--help) sed -n '2,38p' "$0"; exit 0 ;;
     *) echo "argument inconnu: $1" >&2; exit 64 ;;
   esac
 done
@@ -74,17 +85,30 @@ published_version() {
 # jusqu'au 2026-10-25, encore accepte; depuis le
 # 2026-10-09): une par ISO, elle doit TOUJOURS etre plus recente que celle en
 # ligne -- c'est elle qui annonce la nouvelle version aux machines installees.
-RELEASE_DEB="$(ssh "${BUILD_HOST}" "cd '${REMOTE_DIR}' && ls auxinuxos-release_*_${ARCH}.deb auxinuxos-release_*_all.deb 2>/dev/null; true" | sort -V | tail -n1)"
-[[ -n "${RELEASE_DEB}" ]] || { echo "ERREUR: aucun auxinuxos-release_*_${ARCH}.deb dans ${BUILD_HOST}:${REMOTE_DIR}" >&2; exit 66; }
-RELEASE="${RELEASE_DEB#auxinuxos-release_}"; RELEASE="${RELEASE%_*.deb}"
-
-declare -A WANT=([auxi]="${VERSION}" [auxinux-center]="${VERSION}" [auxinuxos-release]="${RELEASE}")
-declare -A FILE=([auxi]="auxi_${VERSION}_all.deb" [auxinux-center]="auxinux-center_${VERSION}_${ARCH}.deb" [auxinuxos-release]="${RELEASE_DEB}")
+declare -A WANT=([auxi]="${VERSION}" [auxinux-center]="${VERSION}" [auxinuxos-agent-update]="${VERSION}")
+declare -A FILE=([auxi]="auxi_${VERSION}_all.deb" [auxinux-center]="auxinux-center_${VERSION}_${ARCH}.deb" [auxinuxos-agent-update]="auxinuxos-agent-update_${VERSION}_all.deb")
+CANDIDATES=(auxi auxinux-center auxinuxos-agent-update)
+RELEASE="(non publiee)"
+if [[ "${EDITION}" -eq 1 ]]; then
+  RELEASE_DEB="$(ssh "${BUILD_HOST}" "cd '${REMOTE_DIR}' && ls auxinuxos-release_*_${ARCH}.deb auxinuxos-release_*_all.deb 2>/dev/null; true" | sort -V | tail -n1)"
+  [[ -n "${RELEASE_DEB}" ]] || { echo "ERREUR: aucun auxinuxos-release_*_${ARCH}.deb dans ${BUILD_HOST}:${REMOTE_DIR}" >&2; exit 66; }
+  RELEASE="${RELEASE_DEB#auxinuxos-release_}"; RELEASE="${RELEASE%_*.deb}"
+  WANT[auxinuxos-release]="${RELEASE}"; FILE[auxinuxos-release]="${RELEASE_DEB}"
+  CANDIDATES+=(auxinuxos-release)
+fi
+# Paquets en plus (--extra): nom et version lus DANS le fichier.
+for deb in "${EXTRA[@]}"; do
+  [[ "${deb}" == */* ]] && { echo "--extra attend un nom de fichier du dossier, pas un chemin: ${deb}" >&2; exit 64; }
+  read -r name ver <<<"$(ssh "${BUILD_HOST}" "cd '${REMOTE_DIR}' && printf '%s %s' \"\$(dpkg-deb -f '${deb}' Package)\" \"\$(dpkg-deb -f '${deb}' Version)\"")"
+  [[ -n "${ver:-}" ]] || { echo "ERREUR: ${deb} illisible sur ${BUILD_HOST}:${REMOTE_DIR}" >&2; exit 66; }
+  WANT["${name}"]="${ver}"; FILE["${name}"]="${deb}"
+  CANDIDATES+=("${name}")
+done
 
 echo "==> Index publie: ${PACKAGES_URL}"
 INDEX="$(curl -fsS "${PACKAGES_URL}")" || { echo "index APPS illisible" >&2; exit 69; }
 PKGS=()
-for pkg in auxi auxinux-center auxinuxos-release; do
+for pkg in "${CANDIDATES[@]}"; do
   current="$(published_version "${pkg}" "${INDEX}")"
   echo "    ${pkg}: publie ${current:-(aucun)}, a publier ${WANT[${pkg}]}"
   if [[ -z "${current}" ]] || dpkg --compare-versions "${WANT[${pkg}]}" gt "${current}"; then
@@ -147,7 +171,7 @@ ssh "${REPO_HOST}" "cd '${PUB_DIR}' && ./publish-repo.sh ${ARGS[*]} --deploy"
 echo "==> Verification de l'index servi"
 INDEX="$(curl -fsS "${PACKAGES_URL}")"
 fail=0
-for pkg in auxi auxinux-center auxinuxos-release; do
+for pkg in "${CANDIDATES[@]}"; do
   got="$(published_version "${pkg}" "${INDEX}")"
   echo "    ${pkg}: ${got:-(absent)}"
   [[ "${got}" == "${WANT[${pkg}]}" ]] || fail=1

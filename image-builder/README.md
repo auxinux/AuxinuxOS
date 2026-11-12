@@ -25,7 +25,7 @@ Depuis la racine du dépôt, sur l’hôte Linux :
 ./image-builder/build-image.sh --work-dir /mnt/build/Auxinuxos-normal
 ```
 
-La sortie est `image-builder/output/auxinuxos-0.5.0-amd64.iso`, et les paquets
+La sortie est `image-builder/output/auxinuxos-0.6.0-amd64.iso`, et les paquets
 qu'elle contient (`auxi`, `auxinux-center`, `auxinuxos-release` de son édition)
 sont dans `image-builder/output/debs/`. Publication : d'abord ces paquets
 (`packages/publish-debs.sh --dir …/image-builder/output/debs --deploy`), puis
@@ -61,8 +61,8 @@ L’image est un **socle** : système, KDE Plasma et ses outils de base, codecs,
 pare-feu et couche Windows. Aucune application d’usage (navigateur,
 bureautique, lecteur, jeux, outils de vie privée) n’est imposée : l’assistant
 de premier démarrage du centre de contrôle les propose, en Flatpak de
-préférence, et se relance depuis Réglages. Le dépôt Brave est livré
-**désactivé** ; l’assistant ne l’active que si Brave est choisi.
+préférence, et se relance depuis Réglages. Brave s’installe en
+Flatpak, comme les autres navigateurs : aucun dépôt Brave n’est livré.
 
 ## Sources et caches
 
