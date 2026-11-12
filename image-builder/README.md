@@ -61,8 +61,8 @@ L’image est un **socle** : système, KDE Plasma et ses outils de base, codecs,
 pare-feu et couche Windows. Aucune application d’usage (navigateur,
 bureautique, lecteur, jeux, outils de vie privée) n’est imposée : l’assistant
 de premier démarrage du centre de contrôle les propose, en Flatpak de
-préférence, et se relance depuis Réglages. Le dépôt Brave est livré
-**désactivé** ; l’assistant ne l’active que si Brave est choisi.
+préférence, et se relance depuis Réglages. Brave s’installe en
+Flatpak, comme les autres navigateurs : aucun dépôt Brave n’est livré.
 
 ## Sources et caches
 

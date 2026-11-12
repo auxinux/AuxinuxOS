@@ -51,13 +51,17 @@ controle STATIQUE: il ne regarde aucun trafic reseau.
   l'assistant de premier demarrage PROPOSE navigateur, bureautique, lecteur,
   applications du profil et outils de vie privee. Rien n'est installe avant le
   recapitulatif, et Steam n'est jamais coche d'avance.
-- Depot Brave livre DESACTIVE: actif, il ferait contacter Brave a chaque
-  `apt update`, meme par qui ne l'utilise pas. L'assistant ne l'active que si
-  Brave est choisi (check-rootfs.sh refuse une image ou il est actif).
+- Plus aucun depot Brave dans les sources APT (2026-10-29): Brave s'installe
+  depuis Flathub (com.brave.Browser, publie et verifie par Brave Software),
+  comme les autres navigateurs. check-rootfs.sh refuse une image qui porte
+  encore le depot ou sa cle. Le DEB reste possible si on le force (depot
+  ajoute a la main + `auxi install --allow-deb`).
 - Brave: policy managee `/etc/brave/policies/managed/auxinux-privacy.json`
   desactivant les rapports de metriques, la collecte anonymisee, Sync, Rewards,
   Wallet, VPN et le service de conversation intégré. A confirmer: clef exacte de desactivation P3A selon
-  la liste de politiques Brave en vigueur.
+  la liste de politiques Brave en vigueur. Le Flatpak l'applique aussi: son
+  lanceur (brave.sh, flathub/com.brave.Browser) relie les politiques de
+  l'hote (/run/host/etc/brave/policies) grace a la permission host-etc.
 
 - Heure (NTP), decision du 2026-10-05: `systemd-timesyncd` interroge les
   serveurs du Conseil national de recherches du Canada (`time.nrc.ca`,

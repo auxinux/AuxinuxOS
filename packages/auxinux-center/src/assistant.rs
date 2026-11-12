@@ -14,9 +14,12 @@
 //! Applications.
 //!
 //! Flatpak d'abord (arbitrage du meme jour): versions recentes, isolees,
-//! desinstallables sans toucher au systeme. Une seule exception, Brave, en
-//! DEB: c'est ce qui applique la politique de confidentialite geree livree
-//! dans /etc/brave/policies/managed.
+//! desinstallables sans toucher au systeme. Brave a longtemps ete l'exception,
+//! en DEB depuis son depot; depuis le 2026-10-29 (decision d'aporler) il vient
+//! lui aussi de Flathub, ou il est publie et verifie par Brave Software
+//! (com.brave.Browser, x86_64 et aarch64). La politique de confidentialite
+//! geree de /etc/brave/policies/managed s'applique toujours: le Flatpak lit
+//! les politiques de l'hote (permission host-etc).
 //!
 //! Ce module ne depend pas de l'interface: le catalogue, le plan
 //! d'installation et la regle du premier demarrage sont testes par
@@ -32,8 +35,6 @@ pub const APPLY_HELPER: &str = "/usr/libexec/auxinux/auxinux-assistant-apply";
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Source {
     Flatpak,
-    /// Brave: depot officiel, active a la demande par l'assistant.
-    Brave,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -82,12 +83,11 @@ pub fn toujours_pour(arch: &str) -> &'static [App] {
 
 pub const NAVIGATEURS: [App; 5] = [
     flatpak("org.mozilla.firefox", "Firefox", "Navigateur libre de la fondation Mozilla"),
-    App {
-        id: "brave-browser",
-        name: "Brave",
-        summary: "Bloqueur de publicités intégré; télémétrie coupée par AuxiNux",
-        source: Source::Brave,
-    },
+    flatpak(
+        "com.brave.Browser",
+        "Brave",
+        "Bloqueur de publicités intégré; télémétrie coupée par AuxiNux",
+    ),
     flatpak(
         "io.gitlab.librewolf-community",
         "LibreWolf",
@@ -286,7 +286,6 @@ impl Selection {
         let mut args = Vec::new();
         for app in self.applications() {
             match app.source {
-                Source::Brave => args.push("--brave".into()),
                 Source::Flatpak => {
                     args.push("--flatpak".into());
                     args.push(app.id.into());
@@ -302,10 +301,6 @@ impl App {
     /// apparait une fois installee.
     pub fn desktop_file(&self) -> (String, std::path::PathBuf) {
         match self.source {
-            Source::Brave => (
-                "brave-browser.desktop".into(),
-                "/usr/share/applications/brave-browser.desktop".into(),
-            ),
             Source::Flatpak => {
                 let name = format!("{}.desktop", self.id);
                 let path = std::path::Path::new("/var/lib/flatpak/exports/share/applications").join(&name);
@@ -485,12 +480,13 @@ mod tests {
     }
 
     #[test]
-    fn brave_goes_through_its_repository_not_flatpak() {
+    fn brave_comes_from_flathub_not_its_deb_repository() {
         let mut sel = Selection::default();
         sel.navigateur = NAVIGATEURS.iter().position(|a| a.name == "Brave");
         let args = sel.helper_args();
-        assert!(args.contains(&"--brave".to_string()));
-        assert!(!args.iter().any(|a| a == "brave-browser"));
+        let i = args.iter().position(|a| a == "com.brave.Browser").expect("Brave absent");
+        assert_eq!(args[i - 1], "--flatpak");
+        assert!(!args.iter().any(|a| a == "--brave" || a == "brave-browser"));
         assert!(!args.iter().any(|a| a == "org.mozilla.firefox"));
     }
 
@@ -541,12 +537,12 @@ mod tests {
     }
 
     #[test]
-    fn browser_launchers_are_where_flatpak_and_brave_put_them() {
+    fn browser_launchers_are_where_flatpak_puts_them() {
         let (name, path) = NAVIGATEURS[0].desktop_file();
         assert_eq!(name, "org.mozilla.firefox.desktop");
         assert!(path.starts_with("/var/lib/flatpak/exports/share/applications"));
-        let brave = NAVIGATEURS.iter().find(|a| a.source == Source::Brave).unwrap();
-        assert_eq!(brave.desktop_file().0, "brave-browser.desktop");
+        let brave = NAVIGATEURS.iter().find(|a| a.name == "Brave").unwrap();
+        assert_eq!(brave.desktop_file().0, "com.brave.Browser.desktop");
     }
 
     #[test]

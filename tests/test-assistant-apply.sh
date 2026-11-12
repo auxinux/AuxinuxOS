@@ -41,26 +41,29 @@ fail=0
 check() {
   if [[ "$2" == "$3" ]]; then echo "  OK   $1"; else echo "  ECHEC $1: attendu [$3] obtenu [$2]"; fail=1; fi
 }
-reset() { : >"${CALLS}"; rm -f "${T}"/sources.list.d/*; touch "${T}/sources.list.d/brave-browser-release.sources.disabled"; }
+reset() { : >"${CALLS}"; }
 
-echo "== 1. Selection complete, avec Brave =="
+echo "== 1. Selection complete, avec Brave (Flatpak depuis le 2026-10-29) =="
 reset
-out="$(bash "${HELPER}" --profil gaming --brave --flatpak org.mozilla.Thunderbird --flatpak com.usebottles.bottles 2>&1)"
+out="$(bash "${HELPER}" --profil gaming --flatpak com.brave.Browser --flatpak org.mozilla.Thunderbird --flatpak com.usebottles.bottles 2>&1)"
 check "code de sortie" "$?" "0"
 check "quatre etapes annoncees" "$(grep -c '^auxinux-etape:' <<<"${out}")" "4"
 check "premiere etape" "$(grep -m1 '^auxinux-etape:' <<<"${out}")" "auxinux-etape:1:4:Profil d'usage: gaming"
 check "profil applique" "$(grep -c '^auxinux-profile set gaming$' "${CALLS}")" "1"
-check "depot Brave active" "$(ls "${T}/sources.list.d")" "brave-browser-release.sources"
-check "index rafraichis AVANT l'installation DEB" "$(sed -n 2p "${CALLS}")" "auxi --yes --progress update --deb"
-check "Brave installe en DEB" "$(sed -n 3p "${CALLS}")" "auxi --yes --progress install --deb brave-browser"
-check "un appel par Flatpak" "$(grep -c 'install --flatpak' "${CALLS}")" "2"
-
-echo "== 2. Sans Brave, le depot reste desactive et apt n'est pas touche =="
-reset
-bash "${HELPER}" --flatpak org.mozilla.firefox >/dev/null 2>&1
-check "code de sortie" "$?" "0"
-check "depot Brave toujours desactive" "$(ls "${T}/sources.list.d")" "brave-browser-release.sources.disabled"
+check "Brave installe en Flatpak" "$(grep -c 'install --flatpak com.brave.Browser' "${CALLS}")" "1"
+check "un appel par Flatpak" "$(grep -c 'install --flatpak' "${CALLS}")" "3"
 check "aucun appel apt" "$(grep -c -- '--deb' "${CALLS}")" "0"
+
+echo "== 2. L'ancienne option --brave (depot DEB) est refusee =="
+reset
+bash "${HELPER}" --brave >/dev/null 2>&1
+check "--brave refuse" "$?" "64"
+check "rien n'a ete execute" "$(wc -l <"${CALLS}" | tr -d ' ')" "0"
+reset
+bash "${HELPER}" --deb vlc >/dev/null 2>&1
+check "--deb: code de sortie" "$?" "0"
+check "--deb: index rafraichis AVANT l'installation" "$(sed -n 1p "${CALLS}")" "auxi --yes --progress update --deb"
+check "--deb: paquet installe" "$(sed -n 2p "${CALLS}")" "auxi --yes --progress install --deb vlc"
 
 echo "== 3. Une application indisponible n'emporte pas les autres =="
 reset

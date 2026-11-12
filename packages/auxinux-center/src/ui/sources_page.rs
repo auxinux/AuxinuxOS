@@ -1,7 +1,7 @@
 //! Page SOURCES: depots APT, depots connus et remotes Flatpak.
 //!
-//! Les depots systeme (auxinux*, brave*) sont affiches mais non supprimables:
-//! les retirer casserait les mises a jour du noyau et du navigateur, sans
+//! Les depots systeme (auxinux*) sont affiches mais non supprimables:
+//! les retirer casserait les mises a jour du noyau et du systeme, sans
 //! signal clair pour l'utilisateur avant la panne suivante.
 
 use cosmic::{iced, widget, Element};

@@ -269,13 +269,11 @@ mount_chroot_api_filesystems
 # Applications sorties de l'image (hors-socle.txt). Sur un rootfs reutilise,
 # les retirer des listes ne les desinstalle pas.
 #
-# AVANT configure-apt-sources.sh, et pas apres: le paquet brave-browser
-# POSSEDE /usr/share/keyrings/brave-browser-archive-keyring.gpg. Purge apres
-# coup, il emportait la cle que configure-apt-sources.sh venait de poser, et
-# l'assistant ne pouvait plus installer Brave (« Failed to parse keyring »,
-# constate en VM le 2026-10-02). On ne purge que ce qui est
-# reellement installe: apt-get refuse un nom qu'il ne trouve dans aucun index
-# -- c'est le cas de brave-browser, dont le depot est desormais desactive.
+# AVANT configure-apt-sources.sh (historique: le paquet brave-browser
+# possedait la cle du depot Brave, que ce script posait). On ne purge que ce
+# qui est reellement installe: apt-get refuse un nom qu'il ne trouve dans
+# aucun index -- c'est le cas de brave-browser, dont le depot n'est plus livre
+# (Brave vient de Flathub depuis le 2026-10-29).
 # Meme traitement pour retire-du-socle.txt: le bureau Plasma (2026-10-23) et
 # les equivalents des applications AuxiNux.
 mapfile -t HORS_SOCLE < <(package_names \

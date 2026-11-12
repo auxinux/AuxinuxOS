@@ -12,7 +12,8 @@
 #     des listes ne suffit pas, ils resteraient installes;
 #   - check-rootfs.sh REFUSE une image qui en contient un.
 
-# Navigateur (l'assistant propose Firefox, Brave, LibreWolf, Chromium, Vivaldi)
+# Navigateur (l'assistant propose Firefox, Brave, LibreWolf, Chromium, Vivaldi,
+# tous en Flatpak; Brave en DEB jusqu'a la 0.5.0)
 brave-browser
 
 # Vie privee (proposes, coches par defaut, dans l'assistant)

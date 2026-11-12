@@ -5,7 +5,7 @@ PRETTY_NAME="AuxiNux OS 0.5.0"
 VERSION="0.5.0 (trixie)"
 VERSION_ID="13"
 VERSION_CODENAME=trixie
-# ID reste debian volontairement: les depots, Brave et apt ciblent Debian 13.
+# ID reste debian volontairement: les depots et apt ciblent Debian 13.
 # Seul l'affichage (NAME/PRETTY_NAME) est rebrande AuxiNux pour KDE Discover,
 # qui affiche sinon "From Debian GNU/Linux" comme source des paquets DEB.
 ID=debian
