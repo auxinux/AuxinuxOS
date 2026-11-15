@@ -824,11 +824,11 @@ run_update() {
 run_osupdate() {
   require_root_for_deb "os upgrade" "$@"
   apt_get update
-  local candidate summary snap=0 recs_before="" sources_before=""
+  local candidate summary snap=0 recs_before="" sources_before
   candidate="$(release_candidate)"
+  sources_before="$(sources_fingerprint)"
   if [[ -n "${candidate}" ]]; then
     recs_before="$(release_recommends)"
-    sources_before="$(sources_fingerprint)"
     summary="$(release_summary)"
     say "Nouvelle version: ${summary:-AuxiNux OS ${candidate}}" "New version: ${summary:-AuxiNux OS ${candidate}}"
     if os_snapshot "Avant ${summary:-AuxiNux OS ${candidate}}"; then
@@ -839,13 +839,13 @@ run_osupdate() {
     AUXI_NO_SNAPSHOT=1 apt_get upgrade --with-new-pkgs
     AUXI_NO_SNAPSHOT=1 release_catch_up
     AUXI_NO_SNAPSHOT=1 release_ensure_installed
-    [[ -z "${candidate}" ]] || AUXI_NO_SNAPSHOT=1 release_new_recommends "${recs_before}" "${sources_before}"
+    AUXI_NO_SNAPSHOT=1 release_new_recommends "$(recommends_known "${candidate}" "${recs_before}")" "${sources_before}"
     AUXI_NO_SNAPSHOT=1 kernel_update_channels
   else
     apt_get upgrade --with-new-pkgs
     release_catch_up
     release_ensure_installed
-    [[ -z "${candidate}" ]] || release_new_recommends "${recs_before}" "${sources_before}"
+    release_new_recommends "$(recommends_known "${candidate}" "${recs_before}")" "${sources_before}"
     kernel_update_channels
   fi
   if [[ -n "${candidate}" ]]; then
@@ -972,6 +972,39 @@ sources_fingerprint() {
     | md5sum | cut -d' ' -f1
 }
 
+# Recommandations de la version deja traitees, une par ligne (premiere ligne:
+# la version d'AuxiNux OS). Ecrit apres chaque passage reussi.
+#
+# POURQUOI (2026-11-15): une machine en 0.5.0 passe en 0.6.0 par SON auxi, le
+# 0.2.13, qui ne connait pas release_new_recommends: le nouvel auxi arrive
+# PENDANT cette mise a jour, trop tard pour elle. Virtua Desktop n'etait donc
+# jamais installe. Avec ce fichier, le premier passage du nouvel auxi rattrape
+# une seule fois ce qu'il n'a jamais traite; un logiciel retire ensuite
+# figure dans la liste et n'est pas remis.
+RECOMMENDS_STATE="${AUXI_RECOMMENDS_STATE:-/var/lib/auxinux/release-recommends}"
+
+# Recommandations a considerer comme deja connues: la liste traitee la
+# derniere fois si elle existe; sinon, lors d'une montee de version, celles de
+# la version precedente (comme apt); sinon rien (premier passage d'un auxi
+# recent: tout ce qui manque est rattrape une fois).
+recommends_known() {
+  local candidate="$1" before="$2"
+  if [[ -r "${RECOMMENDS_STATE}" ]]; then
+    tail -n +2 "${RECOMMENDS_STATE}"
+  elif [[ -n "${candidate}" ]]; then
+    printf '%s\n' "${before}"
+  fi
+}
+
+recommends_remember() {
+  local version
+  version="$(dpkg-query -W -f='${Version}' auxinuxos-release 2>/dev/null || true)"
+  [[ -n "${version}" ]] || return 0
+  mkdir -p "$(dirname "${RECOMMENDS_STATE}")" 2>/dev/null || true
+  { printf '%s\n' "${version}"; release_recommends; } >"${RECOMMENDS_STATE}.tmp" 2>/dev/null \
+    && mv -f "${RECOMMENDS_STATE}.tmp" "${RECOMMENDS_STATE}" 2>/dev/null || true
+}
+
 # Ce qu'une NOUVELLE version d'AuxiNux OS ajoute a ses recommandations
 # (2026-11-12, AuxiNux OS 0.6.0: AuxiNux Virtua Desktop et QEMU).
 #
@@ -1000,12 +1033,16 @@ release_new_recommends() {
     apt_cache show --no-all-versions -- "${name}" >/dev/null 2>&1 || continue
     wanted+=("${name}")
   done < <(release_recommends)
-  [[ ${#wanted[@]} -gt 0 ]] || return 0
+  if [[ ${#wanted[@]} -eq 0 ]]; then
+    recommends_remember
+    return 0
+  fi
   say "Nouveau dans cette version d'AuxiNux OS: ${wanted[*]}" "New in this AuxiNux OS version: ${wanted[*]}"
   if apt_get install -- "${wanted[@]}"; then
     # Installes POUR la version: retires avec elle par apt autoremove, gardes
     # tant qu'elle les recommande.
     apt-mark auto -- "${wanted[@]}" >/dev/null 2>&1 || true
+    recommends_remember
   else
     say_err "Installation impossible pour l'instant: ${wanted[*]}. Réessayez plus tard: sudo auxi install --allow-deb --deb ${wanted[*]}" \
             "Could not install for now: ${wanted[*]}. Try again later: sudo auxi install --allow-deb --deb ${wanted[*]}"
