@@ -38,6 +38,16 @@
   </developer>
   <content_rating type="oars-1.1" />
   <releases>
+    <release version="0.2.16" date="2026-11-15">
+      <description>
+        <p>
+          System update: a computer that moved to AuxiNux OS 0.6.0 with an
+          older auxi now gets AuxiNux Virtua Desktop (and the other new
+          recommendations of its version) once; software removed afterwards
+          is not reinstalled.
+        </p>
+      </description>
+    </release>
     <release version="0.2.15" date="2026-11-12">
       <description>
         <p>

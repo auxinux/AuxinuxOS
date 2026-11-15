@@ -32,6 +32,7 @@ export AUXI_OS_RELEASE="${WORK}/os-release"
 
 mkdir -p "${WORK}/sources.list.d"
 export AUXI_SOURCES_D="${WORK}/sources.list.d" APT_SOURCES_LIST="${WORK}/sources.list"
+export AUXI_RECOMMENDS_STATE="${WORK}/release-recommends"
 source "${AUXI_BIN}" >/dev/null
 set +e
 apt_real() { echo "${WORK}/apt-get"; }
@@ -182,10 +183,28 @@ INSTALL_RC=0
 check "echec d'installation: sort quand meme en 0" "${rc}" "0"
 check "echec signale avec la commande a lancer" "$(grep -c 'auxi install --allow-deb --deb auxinux-virtua-desktop' <<<"${out}")" "1"
 
-echo "== 12. Pas de nouvelle version: aucune recommandation ajoutee (retrait respecte) =="
+echo "== 12. Pas de nouvelle version, deja traitee: un retrait est respecte =="
 rm -f "${AUXI_SOURCES_D}/virtua.sources"; RECS="${RECS_NEW}"; CANDIDATE="${INSTALLED}"
+printf '0.6.0+20261112\n%s\n' "${RECS_NEW}" >"${AUXI_RECOMMENDS_STATE}"
 run run_osupdate
 lacks "rien d'installe" "install -- auxinux-virtua-desktop"
+
+echo "== 13. Machine passee en 0.6.0 par l'ancien auxi (rien de traite): rattrapage UNE fois =="
+rm -f "${AUXI_RECOMMENDS_STATE}"
+dpkg-query() { if [[ "$*" == *Version* ]]; then printf '0.6.0+20261112'; else command dpkg-query "$@"; fi; }
+run run_osupdate
+check "sort en 0" "${rc}" "0"
+has "Virtua Desktop rattrape" "install -- auxinux-virtua-desktop"
+check "etat ecrit: version" "$(head -n1 "${AUXI_RECOMMENDS_STATE}" 2>/dev/null)" "0.6.0+20261112"
+check "etat ecrit: recommandations" "$(grep -c '^auxinux-virtua-desktop$' "${AUXI_RECOMMENDS_STATE}" 2>/dev/null)" "1"
+run run_osupdate
+lacks "deuxieme passage: plus rien (retrait futur respecte)" "install -- auxinux-virtua-desktop"
+
+echo "== 14. Echec d'installation: rien n'est memorise, on reessaiera =="
+rm -f "${AUXI_RECOMMENDS_STATE}"; INSTALL_RC=100
+run run_osupdate
+INSTALL_RC=0
+check "pas d'etat apres un echec" "$([[ -e "${AUXI_RECOMMENDS_STATE}" ]] && echo oui || echo non)" "non"
 
 if [[ "${fail}" -eq 0 ]]; then echo "test-auxi-os: OK"; else echo "test-auxi-os: ECHEC"; fi
 exit "${fail}"
